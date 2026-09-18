@@ -1,56 +1,116 @@
-# Radar de Producto — Proyecto completo
+# Radar de Producto
 
-Este paquete junta las dos partes del proyecto en un solo lugar, listo para
-clonar a tu PC, subir a GitHub y correr con Docker.
+Radar de Producto es una plataforma de análisis de oportunidades comerciales que reúne productos de Mercado Libre, Amazon y TikTok Shop, los normaliza en PostgreSQL y calcula un score de oportunidad para facilitar decisiones de promoción y reventa.
+
+## Arquitectura actual
+
+- **Frontend:** HTML/CSS/JavaScript en `product-analyzer/frontend`, publicado en Netlify.
+- **Backend:** FastAPI + worker de ingesta en `product-analyzer/app`, publicado como contenedor en Railway.
+- **Base de datos:** PostgreSQL.
+- **Fuentes:** Mercado Libre (búsqueda pública), Amazon Creators API y TikTok Shop Open API para la tienda autorizada.
+- **Monetización:** seguimiento de clics, estructura para dropshipping y suscripciones SaaS.
+
+## Flujo de producción
+
+```
+Mercado Libre / Amazon / TikTok Shop
+                ↓
+          pipeline Python
+                ↓
+            PostgreSQL
+                ↓
+        FastAPI /products
+        FastAPI /opportunities/top
+        FastAPI /comparison
+                ↓
+             Netlify
+```
+
+El frontend **no contiene productos de ejemplo como respaldo**. Cuando una fuente falla, se informa el estado de la API y no se inventan productos.
 
 ## Estructura
 
 ```
-proyecto-completo/
-├── product-analyzer/     <- Backend (FastAPI + Postgres) + frontend + landing
-│   ├── app/               API, ingesta, scoring, integraciones Amazon/TikTok
-│   ├── frontend/           Dashboard (index.html) - diseño gamer
-│   ├── landing/            Landing para Amazon Associates
-│   ├── sql/                 Esquema de base de datos
-│   ├── docker-compose.yml
-│   └── README.md            Instrucciones detalladas del backend
-│
-└── deploy_frontend/       <- Copia suelta de index.html, solo para Netlify Drop
-    └── index.html
+Central/
+├── Dockerfile
+├── netlify.toml
+├── .github/workflows/
+└── product-analyzer/
+    ├── app/
+    │   ├── api.py
+    │   ├── amazon_paapi.py
+    │   ├── db.py
+    │   ├── diagnose_pipeline.py
+    │   ├── ingest.py
+    │   ├── init_db.py
+    │   ├── main.py
+    │   ├── monetization.py
+    │   ├── notifications.py
+    │   ├── tiktok_shop.py
+    │   └── sql/
+    ├── frontend/
+    │   ├── index.html
+    │   └── _redirects
+    ├── docker-compose.yml
+    └── .env.example
 ```
 
-`frontend/index.html` y `deploy_frontend/index.html` son el mismo archivo.
-Se mantienen separados porque Netlify Drop necesita el `index.html` solo,
-sin subcarpetas.
+## Desarrollo local
 
-## Para correr en tu PC (Docker)
+1. Copia `.env.example` como `.env` y completa las credenciales.
+2. Ejecuta:
 
 ```bash
 cd product-analyzer
-cp .env.example .env
-# completá tus credenciales reales en .env
-docker-compose up --build
+docker compose up --build -d
 ```
 
-API en `http://localhost:8000`. Dashboard: abrí `frontend/index.html` en el navegador.
+3. Dashboard: `http://localhost:3000`
+4. API: `http://localhost:8000`
+5. Salud del backend: `http://localhost:8000/health`
+6. Resumen del pipeline: `http://localhost:8000/pipeline/summary`
 
-## Para subir a GitHub
+## Producción
 
-```bash
-cd proyecto-completo
-git init
-git add .
-git commit -m "Proyecto inicial: backend + frontend + landing"
-git branch -M main
-git remote add origin https://github.com/TU_USUARIO/TU_REPO.git
-git push -u origin main
+### Railway
+
+El servicio backend usa el `Dockerfile` de la raíz del repositorio. Railway debe apuntar al repositorio `JHbotero-deve/Central`, rama `main` y directorio raíz `/`.
+
+Configura las variables de entorno de producción en Railway. **Nunca subas el archivo `.env` ni credenciales reales al repositorio.**
+
+Variables importantes:
+
+- `DATABASE_URL`
+- Amazon: `AMAZON_CREDENTIAL_ID`, `AMAZON_CREDENTIAL_SECRET`, `AMAZON_CREDENTIAL_VERSION`, `AMAZON_PARTNER_TAG`, `AMAZON_MARKETPLACE`
+- TikTok Shop: `TIKTOK_APP_KEY`, `TIKTOK_APP_SECRET`, `TIKTOK_ACCESS_TOKEN`, `TIKTOK_SHOP_CIPHER`
+- `SCORE_THRESHOLD`
+- Telegram: `BOT_TOKEN`, `CHAT_ID`
+
+### Netlify
+
+Netlify publica:
+
+```
+product-analyzer/frontend
 ```
 
-Reemplazá `TU_USUARIO/TU_REPO` por el repositorio que crees en GitHub.
-El `.gitignore` ya excluye el `.env` real, así que tus credenciales no se suben.
+El frontend usa `/api` en producción. El archivo `product-analyzer/frontend/_redirects` envía esas llamadas al backend de Railway y evita tener la URL de Railway escrita dentro de la interfaz.
 
-## Para publicar el frontend en Netlify
+Conecta Netlify al repositorio y a la rama `main` para que cada cambio validado se publique automáticamente.
 
-Arrastrá la carpeta `deploy_frontend/` (o el `index.html` de adentro) a
-Netlify Drop, o conectá el repo de GitHub y configurá `deploy_frontend`
-como carpeta de publicación.
+## Diagnóstico
+
+Antes de buscar un problema en la interfaz, comprueba:
+
+```
+GET /health
+GET /pipeline/summary
+GET /products
+GET /opportunities/top
+```
+
+Si `/health` responde correctamente pero `/pipeline/summary` muestra cero productos, el problema está en la ingesta o en la base de datos. Si hay productos en la API pero no en Netlify, el problema está en el frontend, el proxy o el despliegue.
+
+## Seguridad
+
+Las credenciales de Amazon, TikTok, Mercado Libre, Telegram y la base de datos se manejan únicamente en variables de entorno del backend. No deben aparecer en `index.html`, GitHub ni commits.
