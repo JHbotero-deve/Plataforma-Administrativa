@@ -1,44 +1,80 @@
-# 🚀 Radar de Producto: AI-Driven Fashion Analyzer
+# Backend y dashboard — Radar de Producto
 
-**Radar de Producto** es una plataforma de inteligencia de mercado diseñada para detectar oportunidades de arbitraje y monetización en el sector de la moda. El sistema rastrea en tiempo real las tres plataformas más grandes del mundo: **Mercado Libre**, **Amazon** y **TikTok Shop**.
+## Componentes
 
-## 💰 Modelo de Generación de Ingresos
+- FastAPI + worker de ingesta en `app/`
+- PostgreSQL y migraciones SQL
+- Dashboard estático en `frontend/`
+- Docker Compose para desarrollo local
+- Railway para el backend
+- Netlify para el frontend
 
-Este proyecto no es solo una herramienta técnica, es una máquina de monetización basada en tres pilares:
+## Ejecutar localmente
 
-1.  **Afiliación Inteligente:** El sistema detecta productos con alta demanda y bajo precio, generando enlaces de afiliado automáticos.
-2.  **Dropshipping Optimizado:** Calcula el margen real entre el costo del proveedor y el precio de venta sugerido, identificando productos "Legendarios".
-3.  **SaaS de Datos:** El dashboard puede ser ofrecido como suscripción para otros vendedores que busquen saber qué productos importar o vender.
+Desde esta carpeta:
 
-## ✨ Características Principales
+```bash
+cp .env.example .env
+docker compose up --build -d
+```
 
--   **Scoring de Oportunidad:** Algoritmo propio que combina precio relativo, volumen de ventas y tendencia para asignar una "Rareza" (Común, Rara, Épica, Legendaria).
--   **Visualización 3D:** Integración de modelos GLB/glTF y visor genérico basado en Three.js para inspeccionar la calidad del producto sin salir de la web.
--   **Alertas en Tiempo Real:** Notificaciones instantáneas vía Telegram cuando un producto supera el umbral de oportunidad.
--   **Comparador Multi-Plataforma:** Análisis lado a lado del mismo producto en diferentes mercados para detectar el mejor margen.
+Dashboard: http://localhost:3000  
+API: http://localhost:8000  
+Health: http://localhost:8000/health  
+Pipeline: http://localhost:8000/pipeline/summary
 
-## 🛠️ Stack Tecnológico
+## Producción
 
--   **Backend:** Python 3.11 + FastAPI (Alta performance).
--   **Base de Datos:** PostgreSQL 16 (Relacional, robusta).
--   **Frontend:** HTML5 / CSS3 / JavaScript (Vanilla) + Three.js (Modelado 3D).
--   **Infraestructura:** Docker & Docker Compose.
--   **Despliegue sugerido:** Railway.app (Backend) & Netlify (Frontend).
+### Railway
 
-## 🚀 Guía de Inicio Rápido
+El despliegue de producción usa el `Dockerfile` de la raíz del repositorio `Central`. El servicio debe apuntar al repositorio, rama `main` y directorio raíz.
 
-### Local (Desarrollo)
-1. Clonar el repo.
-2. Crear archivo .env basado en .env.example.
-3. Ejecutar:
-   \\\ash
-   docker compose up --build -d
-   \\\
-4. Acceder a la interfaz en http://localhost:3000.
+Las credenciales reales se cargan como variables de entorno en Railway. Nunca se guardan en GitHub.
 
-### Cloud (Producción)
-1. **Backend:** Conectar repositorio a **Railway.app** y configurar las variables de entorno.
-2. **Frontend:** Conectar repositorio a **Netlify** y actualizar la API_BASE en index.html con la URL de Railway.
+### Netlify
 
-## 📜 Licencia
-Propiedad privada. Todos los derechos reservados.
+Netlify publica exactamente:
+
+```
+product-analyzer/frontend
+```
+
+En producción el dashboard llama a `/api`. El archivo `frontend/_redirects` hace el proxy hacia Railway, por lo que la URL del backend no está escrita dentro de la aplicación.
+
+El archivo `netlify.toml` evita que el navegador conserve indefinidamente una versión antigua de `index.html` y desactiva el cache del proxy de API.
+
+## Fuentes de productos
+
+### Mercado Libre
+
+Se consulta el buscador público de Mercado Libre Colombia (MCO). Para recursos privados de una cuenta se necesitaría el OAuth correspondiente.
+
+### Amazon
+
+La integración usa Amazon Creators API con Credential ID, Credential Secret, versión regional de credenciales, marketplace y Partner Tag. PA-API 5.0 no se usa.
+
+### TikTok Shop
+
+La integración usa TikTok Shop Open API para el catálogo de la tienda autorizada, con App Key, App Secret, access token y shop cipher. Esta integración no significa acceso al catálogo público completo de terceros.
+
+## Regla de datos reales
+
+El sistema no genera productos ficticios cuando una fuente falla.
+
+Un error de Amazon, TikTok o Mercado Libre queda registrado en el pipeline y esa fuente no aporta productos a la base de datos. El frontend tampoco vuelve a mostrar un catálogo de demostración.
+
+## Diagnóstico rápido
+
+1. `GET /health` debe responder `status=ok` y `database=ok`.
+2. `GET /pipeline/summary` muestra cuántos productos activos existen por plataforma y cuándo fue la última actualización.
+3. `GET /products?platform=mercadolibre` permite confirmar los datos almacenados.
+4. `GET /opportunities/top` permite comprobar que el scoring está funcionando.
+5. Si la API tiene productos pero Netlify no los muestra, revisa el deploy de Netlify y el proxy `/api`.
+
+## Seguridad
+
+No subas `.env`, tokens, Credential Secret, App Secret, contraseñas de PostgreSQL ni tokens de Telegram.
+
+## Monetización
+
+La aplicación registra clics mediante `/monetize/click/{product_id}`, pero la confirmación de conversiones y las comisiones reales dependen del programa de afiliados de cada plataforma. El dashboard no debe presentar ingresos ficticios como ingresos reales.
