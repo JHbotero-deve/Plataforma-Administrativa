@@ -48,7 +48,7 @@ def health():
             detail={
                 "status": "degraded",
                 "database": "error",
-                "message": str(exc)[:300],
+                "message": "Base de datos no disponible",
             },
         )
 
