@@ -8,6 +8,7 @@ GET /comparison                -> compara el mismo tipo de producto entre plataf
 GET /opportunities/top         -> top productos por opportunity_score (los m                                     interesantes para promocionar/vender)
 """
 
+import os
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,7 +28,7 @@ app.include_router(monetization_router)
 # Habilitado abierto para poder conectar un frontend fácilmente; restringir en producción
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",") if origin.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -35,7 +36,42 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+        conn.close()
+        return {"status": "ok", "database": "ok"}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "status": "degraded",
+                "database": "error",
+                "message": str(exc)[:300],
+            },
+        )
+
+
+@app.get("/pipeline/summary")
+def pipeline_summary():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    pl.name AS platform,
+                    COUNT(p.id) AS product_count,
+                    MAX(p.updated_at) AS last_update
+                FROM platforms pl
+                LEFT JOIN products p
+                    ON p.platform_id = pl.id AND p.is_active = TRUE
+                GROUP BY pl.name
+                ORDER BY pl.name
+            """)
+            return cur.fetchall()
+    finally:
+        conn.close()
 
 
 @app.get("/products")
