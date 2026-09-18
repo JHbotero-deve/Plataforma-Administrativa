@@ -17,6 +17,7 @@ SEARCH_CONFIG = [
     ("calzado", "zapatillas urbanas"),
 ]
 AMAZON_TAG = os.getenv("AMAZON_PARTNER_TAG", "jh0c35-20")
+SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
 
 
 def build_url(platform, title, product_url):
@@ -62,7 +63,12 @@ def run_pipeline():
                 print(f"[{platform_name}] sin resultados reales para '{term}'.")
                 continue
 
-            for product in products:
+            valid_products = [
+                p for p in products
+                if p.get("external_id") and p.get("title") and p.get("price") not in (None, 0, "0", "0.0")
+            ]
+            print(f"[{platform_name}] {len(valid_products)} productos válidos para guardar.")
+            for product in valid_products:
                 try:
                     pid = upsert_product(conn, platform_name, category, product)
                     product_ids.append(pid)
@@ -95,7 +101,7 @@ def run_pipeline():
         avg_price = averages.get((row["category"], row["currency"]), 0)
         score = score_product(conn, pid, avg_price)
         print(f"Producto {pid} -> opportunity_score = {score}")
-        if score >= 50:
+        if score >= SCORE_THRESHOLD:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT p.title, p.current_price, p.product_url, pl.name AS platform FROM products p JOIN platforms pl ON pl.id = p.platform_id WHERE p.id = %s",
