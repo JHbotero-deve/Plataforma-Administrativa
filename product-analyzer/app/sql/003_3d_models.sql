@@ -16,6 +16,7 @@ SELECT
     p.title,
     pl.name AS platform,
     p.current_price,
+    p.currency,
     p.rating,
     p.product_url,
     p.image_url,

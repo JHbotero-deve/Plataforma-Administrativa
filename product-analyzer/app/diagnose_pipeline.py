@@ -9,9 +9,8 @@ def check_env():
     print("--- 🔍 Verificando Variables de Entorno ---")
     required = [
         'DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD',
-        'MELI_CLIENT_ID', 'MELI_CLIENT_SECRET',
-        'AMAZON_API_KEY', 'AMAZON_PARTNER_TAG',
-        'TIKTOK_API_KEY', 'TIKTOK_ACCESS_TOKEN',
+        'AMAZON_CREDENTIAL_ID', 'AMAZON_CREDENTIAL_SECRET', 'AMAZON_PARTNER_TAG',
+        'TIKTOK_APP_KEY', 'TIKTOK_APP_SECRET', 'TIKTOK_ACCESS_TOKEN', 'TIKTOK_SHOP_CIPHER',
         'BOT_TOKEN', 'CHAT_ID'
     ]
     all_ok = True

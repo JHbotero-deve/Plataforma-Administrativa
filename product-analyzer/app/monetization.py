@@ -18,7 +18,7 @@ router = APIRouter(prefix="/monetize", tags=["monetización"])
 
 # ---------- Afiliados ----------
 
-@router.post("/click/{product_id}")
+@router.get("/click/{product_id}")
 def register_click(product_id: int, user_id: int | None = None):
     """
     Registra el click de afiliado y redirige al producto real en la

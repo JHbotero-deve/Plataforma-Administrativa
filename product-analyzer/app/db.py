@@ -42,10 +42,14 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
             ON CONFLICT (platform_id, external_id)
             DO UPDATE SET
                 title = EXCLUDED.title,
+                image_url = COALESCE(EXCLUDED.image_url, products.image_url),
+                product_url = COALESCE(EXCLUDED.product_url, products.product_url),
                 current_price = EXCLUDED.current_price,
+                currency = EXCLUDED.currency,
                 rating = EXCLUDED.rating,
                 reviews_count = EXCLUDED.reviews_count,
                 sales_estimate = EXCLUDED.sales_estimate,
+                is_active = TRUE,
                 updated_at = NOW()
             RETURNING id;
             """,

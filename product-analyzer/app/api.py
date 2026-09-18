@@ -159,7 +159,7 @@ def top_opportunities(limit: int = Query(20, le=100)):
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT p.id, p.title, pl.name AS platform, p.current_price,
+            SELECT p.id, p.title, pl.name AS platform, p.current_price, p.currency,
                     p.rating, s.price_score, s.demand_score, s.trend_score,
                     s.opportunity_score, p.product_url, p.image_url,
                     p.model_url, p.model_shape

@@ -653,8 +653,8 @@
     API_BASE: window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
               ? "http://localhost:8000" 
               : "https://gracious-renewal-production-00eb.up.railway.app",
-    VERSION: "1.0.0",
-    DEBUG_MODE: true
+    VERSION: "1.1.0-live",
+    DEBUG_MODE: false
   };
 
   // ---------- Rareza / score ----------
@@ -692,26 +692,61 @@
     return new Intl.NumberFormat("es-AR", { style: "currency", currency: currency || "ARS" }).format(price);
   }
 
+  async function apiGet(path) {
+    const response = await fetch(`${CONFIG.API_BASE}${path}`, {
+      cache: "no-store",
+      headers: { "Accept": "application/json" }
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      throw new Error(`${path} -> HTTP ${response.status}: ${body.slice(0, 240)}`);
+    }
+    try {
+      return JSON.parse(body);
+    } catch {
+      throw new Error(`${path} -> respuesta no JSON`);
+    }
+  }
+
   async function loadDashboard() {
     const statusEl = document.getElementById("conn-status");
-    try {
-      const [top, comparison, revenue] = await Promise.all([
-        fetch(`${CONFIG.API_BASE}/opportunities/top?limit=8`).then(r => r.json()),
-        fetch(`${CONFIG.API_BASE}/comparison?limit=25`).then(r => r.json()),
-        fetch(`${CONFIG.API_BASE}/monetize/revenue-summary`).then(r => r.json()),
-      ]);
+    const results = await Promise.allSettled([
+      apiGet("/opportunities/top?limit=8"),
+      apiGet("/comparison?limit=25"),
+      apiGet("/monetize/revenue-summary")
+    ]);
 
-      statusEl.innerHTML = `<span class="status-dot status-live"></span>Conectado a la API`;
-      renderTop(top);
-      renderFeatured(top);
-      renderComparison(comparison);
-      renderRevenue(revenue);
-    } catch (err) {
-      statusEl.innerHTML = `<span class="status-dot status-demo"></span>Datos de ejemplo`;
-      renderTop(sampleTop());
-      renderFeatured(sampleTop());
-      renderComparison(sampleComparison());
-      renderRevenue(sampleRevenue());
+    const [topResult, comparisonResult, revenueResult] = results;
+
+    if (topResult.status === "fulfilled") {
+      renderTop(topResult.value);
+      renderFeatured(topResult.value);
+    } else {
+      renderTop([]);
+      renderFeatured([]);
+    }
+
+    if (comparisonResult.status === "fulfilled") {
+      renderComparison(comparisonResult.value);
+    } else {
+      renderComparison([]);
+    }
+
+    if (revenueResult.status === "fulfilled") {
+      renderRevenue(revenueResult.value);
+    } else {
+      renderRevenue([]);
+    }
+
+    const failures = results.filter(r => r.status === "rejected");
+    if (failures.length === 0) {
+      statusEl.innerHTML = '<span class="status-dot status-live"></span>Conectado · datos reales';
+      statusEl.title = "Todas las fuentes de la API respondieron correctamente.";
+    } else {
+      const details = failures.map(r => r.reason?.message || "Error de API").join(" | ");
+      console.error("Errores de dashboard:", details);
+      statusEl.innerHTML = '<span class="status-dot status-demo"></span>API parcialmente disponible';
+      statusEl.title = details;
     }
   }
 
@@ -746,10 +781,10 @@
             ${platformTag(it.platform)}
             <span class="mono">★ ${it.rating ?? '—'}</span>
           </div>
-          <div class="loot-price">${formatPrice(it.current_price)}</div>
+          <div class="loot-price">${formatPrice(it.current_price, it.currency)}</div>
           <div class="loot-actions">
             <button class="btn btn-ghost btn-sm btn-block" onclick="openFeaturedViewer(${it.id})"><svg class="icon"><use href="#ic-cube"/></svg>Ver en 3D</button>
-            <a class="btn btn-primary btn-sm btn-block" href="${it.platform === "amazon" ? `https://www.amazon.com/s?k=${encodeURIComponent(it.title)}&tag=jh0c35-20` : it.platform === "mercadolibre" ? `https://listado.mercadolibre.com.co/${encodeURIComponent(it.title)}` : it.product_url || '#'}" target="_blank" rel="noopener" onclick="awardXP(20,'Primer salto','Seguiste un producto hasta la plataforma original.')">Ir al producto</a>
+            <a class="btn btn-primary btn-sm btn-block" href="${it.product_url ? `${CONFIG.API_BASE}/monetize/click/${it.id}` : '#'}" target="_blank" rel="noopener" onclick="awardXP(20,'Primer salto','Seguiste un producto hasta la plataforma original.')">Ir al producto</a>
           </div>
         </div>
       </div>
@@ -798,7 +833,7 @@
     document.getElementById("top-title").textContent = best.title;
     document.getElementById("top-score").textContent = `${Math.round(best.opportunity_score)} pts`;
     document.getElementById("top-meta").innerHTML =
-      `${platformTag(best.platform)} · ${formatPrice(best.current_price)} · rating ${best.rating ?? "—"}`;
+      `${platformTag(best.platform)} · ${formatPrice(best.current_price, best.currency)} · rating ${best.rating ?? "—"}`;
 
     const maxScore = Math.max(...items.map(i => i.opportunity_score));
     const list = document.getElementById("rank-list");
@@ -821,7 +856,7 @@
     list.innerHTML = rows.map(r => `
       <div class="rank-row" style="grid-template-columns: 1fr auto auto;">
         <div>${labels[r.channel] || r.channel}</div>
-        <div class="price">${formatPrice(r.total_revenue)}</div>
+        <div class="price">${formatPrice(r.total_revenue, r.currency || "COP")}</div>
         <div class="bar-track"><div class="bar-fill" style="width:${(r.total_revenue / maxRevenue) * 100}%"></div></div>
       </div>
     `).join("");
@@ -830,11 +865,15 @@
   function renderComparison(rows) {
     const body = document.getElementById("comparison-body");
     window.__products = rows;
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="5">No hay productos reales disponibles en este momento.</td></tr>';
+      return;
+    }
     body.innerHTML = rows.map(r => `
       <tr id="row-${r.id}">
         <td>${r.title}</td>
         <td>${platformTag(r.platform)}</td>
-        <td class="price">${formatPrice(r.current_price)}</td>
+        <td class="price">${formatPrice(r.current_price, r.currency)}</td>
         <td>${r.rating ?? "—"}</td>
         <td><button class="view3d-btn" id="btn-${r.id}" onclick="toggle3DViewer(${r.id})">Ver en 3D</button></td>
       </tr>

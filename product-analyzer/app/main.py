@@ -11,9 +11,12 @@ from notifications import send_telegram_alert
 from init_db import init_database
 from api import app as api_app
 
-CATEGORY = "ropa"
-SEARCH_TERMS = ["remera hombre", "campera mujer", "zapatillas urbanas"]
-AMAZON_TAG = "jh0c35-20"
+SEARCH_CONFIG = [
+    ("ropa", "remera hombre"),
+    ("ropa", "campera mujer"),
+    ("calzado", "zapatillas urbanas"),
+]
+AMAZON_TAG = os.getenv("AMAZON_PARTNER_TAG", "jh0c35-20")
 
 
 def build_url(platform, title, product_url):
@@ -41,34 +44,55 @@ def run_pipeline():
     conn = get_connection()
     product_ids = []
 
-    for term in SEARCH_TERMS:
-        for platform_name, fetch_fn in [
-            ("mercadolibre", fetch_mercadolibre),
-            ("amazon", fetch_amazon),
-            ("tiktok", fetch_tiktok),
-        ]:
+    source_functions = [
+        ("mercadolibre", fetch_mercadolibre),
+        ("amazon", fetch_amazon),
+        ("tiktok", fetch_tiktok),
+    ]
+
+    for category, term in SEARCH_CONFIG:
+        for platform_name, fetch_fn in source_functions:
             try:
                 products = fetch_fn(term)
             except Exception as e:
                 print(f"[{platform_name}] error trayendo '{term}': {e}")
                 continue
+
+            if not products:
+                print(f"[{platform_name}] sin resultados reales para '{term}'.")
+                continue
+
             for product in products:
                 try:
-                    pid = upsert_product(
-                        conn, platform_name, CATEGORY, product)
+                    pid = upsert_product(conn, platform_name, category, product)
                     product_ids.append(pid)
                 except Exception as e:
-                    print(f"Error insertando producto: {e}")
+                    print(f"Error insertando producto de {platform_name}: {e}")
 
+    averages = {}
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT AVG(current_price) AS avg_price FROM products "
-            "WHERE category_id = (SELECT id FROM categories WHERE name = %s)",
-            (CATEGORY,),
+            "SELECT c.name AS category, p.currency, AVG(p.current_price) AS avg_price "
+            "FROM products p JOIN categories c ON c.id = p.category_id "
+            "WHERE p.is_active = TRUE AND p.current_price IS NOT NULL "
+            "GROUP BY c.name, p.currency"
         )
-        avg_price = float(cur.fetchone()["avg_price"] or 0)
+        for row in cur.fetchall():
+            averages[(row["category"], row["currency"])] = float(row["avg_price"] or 0)
 
     for pid in set(product_ids):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT c.name AS category, p.currency FROM products p "
+                "LEFT JOIN categories c ON c.id = p.category_id WHERE p.id = %s",
+                (pid,),
+            )
+            row = cur.fetchone()
+
+        if not row:
+            continue
+
+        avg_price = averages.get((row["category"], row["currency"]), 0)
         score = score_product(conn, pid, avg_price)
         print(f"Producto {pid} -> opportunity_score = {score}")
         if score >= 50:
