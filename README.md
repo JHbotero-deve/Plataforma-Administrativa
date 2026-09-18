@@ -38,7 +38,7 @@ Central/
 └── product-analyzer/
     ├── app/
     │   ├── api.py
-    │   ├── amazon_paapi.py
+    │   ├── amazon_creators.py
     │   ├── db.py
     │   ├── diagnose_pipeline.py
     │   ├── ingest.py
