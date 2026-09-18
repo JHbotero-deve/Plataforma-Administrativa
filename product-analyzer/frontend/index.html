@@ -689,7 +689,7 @@
 
   function formatPrice(price, currency) {
     if (price == null) return "—";
-    return new Intl.NumberFormat("es-CO", { style: "currency", currency: currency || "ARS" }).format(price);
+    return new Intl.NumberFormat("es-CO", { style: "currency", currency: currency || "COP" }).format(price);
   }
 
   async function apiGet(path) {
