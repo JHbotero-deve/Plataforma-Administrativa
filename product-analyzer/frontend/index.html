@@ -650,10 +650,10 @@
   //    por la URL pública que te la den (ej: https://api-prod.railway.app)
   // ==========================================================================
   const CONFIG = {
-    API_BASE: window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
-              ? "http://localhost:8000" 
-              : "https://gracious-renewal-production-00eb.up.railway.app",
-    VERSION: "1.1.0-live",
+    API_BASE: window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+              ? "http://localhost:8000"
+              : "/api",
+    VERSION: "2.0.0-live",
     DEBUG_MODE: false
   };
 
@@ -689,7 +689,7 @@
 
   function formatPrice(price, currency) {
     if (price == null) return "—";
-    return new Intl.NumberFormat("es-AR", { style: "currency", currency: currency || "ARS" }).format(price);
+    return new Intl.NumberFormat("es-CO", { style: "currency", currency: currency || "ARS" }).format(price);
   }
 
   async function apiGet(path) {
@@ -827,7 +827,13 @@
   // ---------- Ranking / ingresos / comparación ----------
 
   function renderTop(items) {
-    if (!items.length) return;
+    if (!items.length) {
+      document.getElementById("top-title").textContent = "Sin oportunidades disponibles";
+      document.getElementById("top-score").textContent = "—";
+      document.getElementById("top-meta").textContent = "La API no devolvió productos con datos suficientes.";
+      document.getElementById("rank-list").innerHTML = "";
+      return;
+    }
     const best = items[0];
 
     document.getElementById("top-title").textContent = best.title;
@@ -878,32 +884,6 @@
         <td><button class="view3d-btn" id="btn-${r.id}" onclick="toggle3DViewer(${r.id})">Ver en 3D</button></td>
       </tr>
     `).join("");
-  }
-
-  // ---------- Datos de ejemplo ----------
-
-  function sampleTop() {
-    return [
-      { id: 1, title: "Campera mujer impermeable", platform: "mercadolibre", current_price: 18999, rating: 4.6, opportunity_score: 82, image_url: null, model_url: null, model_shape: "garment", product_url: "https://listado.mercadolibre.com.co/campera-mujer-impermeable" },
-      { id: 3, title: "Zapatillas urbanas unisex", platform: "tiktok", current_price: 21999, rating: 4.6, opportunity_score: 76, image_url: null, model_url: null, model_shape: "footwear", product_url: "https://www.tiktok.com/shop" },
-      { id: 4, title: "Remera oversize hombre", platform: "amazon", current_price: 24999, rating: 4.3, opportunity_score: 61, image_url: null, model_url: null, model_shape: "garment", product_url: "https://www.amazon.com/s?k=remera+oversize+hombre&tag=jh0c35-20" },
-    ];
-  }
-
-  function sampleComparison() {
-    return [
-      { id: 1, title: "Campera mujer impermeable", platform: "mercadolibre", current_price: 18999, rating: 4.6, image_url: null, model_url: null, model_shape: "garment" },
-      { id: 2, title: "Campera mujer impermeable", platform: "amazon", current_price: 23500, rating: 4.1, image_url: null, model_url: null, model_shape: "garment" },
-      { id: 3, title: "Zapatillas urbanas unisex", platform: "tiktok", current_price: 21999, rating: 4.6, image_url: null, model_url: null, model_shape: "footwear" },
-    ];
-  }
-
-  function sampleRevenue() {
-    return [
-      { channel: "afiliados", total_revenue: 45200, conversions: 12 },
-      { channel: "dropshipping", total_revenue: 78900, conversions: 8 },
-      { channel: "suscripciones", total_revenue: 29990, conversions: 3 },
-    ];
   }
 
   document.getElementById("footer-note").textContent =
