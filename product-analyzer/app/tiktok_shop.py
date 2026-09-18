@@ -3,12 +3,10 @@ import hmac
 import json
 import os
 import time
-from urllib.parse import urlencode
-
 import requests
 
 API_BASE = "https://open-api.tiktokglobalshop.com"
-SEARCH_PATH = "/product/202312/products/search"
+SEARCH_PATH = "/product/202502/products/search"
 
 
 def _required(name: str) -> str:
@@ -57,7 +55,7 @@ def search_products(keyword: str, limit: int = 20) -> list[dict]:
     """
     access_token = _required("TIKTOK_ACCESS_TOKEN")
     params, app_secret = _signed_params()
-    body = json.dumps({"page_size": max(1, min(100, limit))}, separators=(",", ":"))
+    body = json.dumps({"page_size": max(1, min(100, limit)), "status": "ALL"}, separators=(",", ":"))
     params["sign"] = _sign_request(app_secret, SEARCH_PATH, params, body)
 
     response = requests.post(
