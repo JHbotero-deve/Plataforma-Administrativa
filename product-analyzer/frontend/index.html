@@ -855,6 +855,10 @@
     const labels = { afiliados: "Comisiones de afiliados", dropshipping: "Margen de dropshipping", suscripciones: "Suscripciones activas" };
     const maxRevenue = Math.max(...rows.map(r => r.total_revenue), 1);
     const list = document.getElementById("revenue-list");
+    if (!rows.length) {
+      list.innerHTML = '<div class="section-sub">Métricas de ingresos disponibles solo en el panel administrativo.</div>';
+      return;
+    }
     list.innerHTML = rows.map(r => `
       <div class="rank-row" style="grid-template-columns: 1fr auto auto;">
         <div>${labels[r.channel] || r.channel}</div>
