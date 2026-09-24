@@ -171,7 +171,7 @@ async def wompi_events(
                    (provider, event_type, transaction_id, checksum, payload)
                    VALUES ('wompi', %s, %s, %s, %s)
                    ON CONFLICT (provider, event_type, transaction_id, checksum) DO NOTHING""",
-                (event["event"], transaction_id, supplied, event),
+                (event["event"], transaction_id, supplied, Json(event)),
             )
             cur.execute(
                 """UPDATE payment_transactions
@@ -183,7 +183,7 @@ async def wompi_events(
                    RETURNING id, plan_id, customer_email""",
                 (
                     transaction_id, status, transaction.get("payment_method_type"),
-                    transaction.get("status_message"), supplied, event, status, reference,
+                    transaction.get("status_message"), supplied, Json(event), status, reference,
                 ),
             )
             payment = cur.fetchone()
