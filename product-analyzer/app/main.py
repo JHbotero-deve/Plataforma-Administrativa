@@ -1,17 +1,15 @@
-import time
 import os
 import threading
+import time
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import schedule
-import uvicorn
 
-from db import get_connection, upsert_product
-from ingest import fetch_mercadolibre, fetch_amazon, fetch_tiktok
 from analysis import score_product
-from notifications import send_telegram_alert
+from db import get_connection, upsert_product
+from ingest import fetch_amazon, fetch_mercadolibre, fetch_tiktok
 from init_db import init_database
-from api import app as api_app
+from notifications import send_telegram_alert
 from telegram_alert import run_bot
 
 SEARCH_CONFIG = [
@@ -19,11 +17,11 @@ SEARCH_CONFIG = [
     ("ropa", "campera mujer"),
     ("calzado", "zapatillas urbanas"),
 ]
-AMAZON_TAG = os.getenv("AMAZON_PARTNER_TAG", "jh0c35-20")
+AMAZON_TAG = os.getenv("AMAZON_PARTNER_TAG", "").strip()
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
 
 
-def build_url(platform, title, product_url):
+def build_url(platform: str, title: str, product_url: str | None) -> str:
     if product_url and product_url != "#":
         if platform == "amazon" and AMAZON_TAG:
             parsed = urlparse(product_url)
@@ -43,14 +41,17 @@ def build_url(platform, title, product_url):
     return f"https://www.google.com/search?q={q}"
 
 
-def start_api_server():
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(api_app, host="0.0.0.0", port=port)
+def _source_enabled(platform_name: str) -> bool:
+    required = {
+        "mercadolibre": ("MELI_ACCESS_TOKEN",),
+        "amazon": ("AMAZON_CREDENTIAL_ID", "AMAZON_CREDENTIAL_SECRET", "AMAZON_PARTNER_TAG"),
+        "tiktok": ("TIKTOK_APP_KEY", "TIKTOK_APP_SECRET", "TIKTOK_ACCESS_TOKEN", "TIKTOK_SHOP_CIPHER"),
+    }
+    names = required[platform_name]
+    return all(os.getenv(name, "").strip() for name in names)
 
 
 def run_pipeline():
-    print("Esperando a que la base de datos esté lista...")
-    time.sleep(5)
     print("== Iniciando ciclo de ingesta y análisis ==")
     conn = get_connection()
     product_ids = []
@@ -63,45 +64,52 @@ def run_pipeline():
 
     for category, term in SEARCH_CONFIG:
         for platform_name, fetch_fn in source_functions:
+            if not _source_enabled(platform_name):
+                print(f"[{platform_name}] fuente deshabilitada: faltan credenciales.")
+                continue
+
             try:
                 products = fetch_fn(term)
-            except Exception as e:
-                print(f"[{platform_name}] error trayendo '{term}': {e}")
+            except Exception as exc:
+                print(f"[{platform_name}] error trayendo '{term}': {exc}")
                 continue
 
             if not products:
                 print(f"[{platform_name}] sin resultados reales para '{term}'.")
                 continue
 
-            valid_products = [
-                p for p in products
-                if p.get("external_id") and p.get("title") and p.get("price") not in (None, 0, "0", "0.0")
-            ]
-            print(f"[{platform_name}] {len(valid_products)} productos válidos para guardar.")
-            for product in valid_products:
+            for product in products:
                 try:
                     pid = upsert_product(conn, platform_name, category, product)
                     product_ids.append(pid)
-                except Exception as e:
-                    print(f"Error insertando producto de {platform_name}: {e}")
+                except Exception as exc:
+                    conn.rollback()
+                    print(f"[{platform_name}] error insertando producto: {exc}")
 
     averages = {}
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT c.name AS category, p.currency, AVG(p.current_price) AS avg_price "
-            "FROM products p JOIN categories c ON c.id = p.category_id "
-            "WHERE p.is_active = TRUE AND p.current_price IS NOT NULL "
-            "GROUP BY c.name, p.currency"
+            """
+            SELECT c.name AS category, p.currency, AVG(p.current_price) AS avg_price
+            FROM products p
+            JOIN categories c ON c.id = p.category_id
+            WHERE p.is_active = TRUE AND p.current_price IS NOT NULL
+            GROUP BY c.name, p.currency
+            """
         )
         for row in cur.fetchall():
             averages[(row["category"], row["currency"])] = float(row["avg_price"] or 0)
 
-    for pid in set(product_ids):
+    for product_id in set(product_ids):
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT c.name AS category, p.currency FROM products p "
-                "LEFT JOIN categories c ON c.id = p.category_id WHERE p.id = %s",
-                (pid,),
+                """
+                SELECT c.name AS category, p.currency
+                FROM products p
+                LEFT JOIN categories c ON c.id = p.category_id
+                WHERE p.id = %s
+                """,
+                (product_id,),
             )
             row = cur.fetchone()
 
@@ -109,32 +117,44 @@ def run_pipeline():
             continue
 
         avg_price = averages.get((row["category"], row["currency"]), 0)
-        score = score_product(conn, pid, avg_price)
-        print(f"Producto {pid} -> opportunity_score = {score}")
+        score = score_product(conn, product_id, avg_price)
+        print(f"Producto {product_id} -> opportunity_score = {score}")
+
         if score >= SCORE_THRESHOLD:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT p.title, p.current_price, p.product_url, pl.name AS platform FROM products p JOIN platforms pl ON pl.id = p.platform_id WHERE p.id = %s",
-                    (pid,)
+                    """
+                    SELECT p.title, p.current_price, p.product_url,
+                           pl.name AS platform
+                    FROM products p
+                    JOIN platforms pl ON pl.id = p.platform_id
+                    WHERE p.id = %s
+                    """,
+                    (product_id,),
                 )
-                row = cur.fetchone()
-                if row:
-                    url = build_url(row["platform"],
-                                    row["title"], row["product_url"])
-                    send_telegram_alert({
-                        "title": row["title"],
-                        "price": row["current_price"],
-                        "url": url,
-                        "score": round(score, 1)
-                    })
+                product = cur.fetchone()
+
+            if product:
+                send_telegram_alert(
+                    {
+                        "title": product["title"],
+                        "price": product["current_price"],
+                        "url": build_url(
+                            product["platform"],
+                            product["title"],
+                            product["product_url"],
+                        ),
+                        "score": round(score, 1),
+                    }
+                )
 
     conn.close()
     print("== Ciclo completo ==")
 
 
-if __name__ == "__main__":
-    threading.Thread(target=start_api_server, daemon=True).start()
-    threading.Thread(target=run_bot, daemon=True).start()
+def run_worker():
+    print("Esperando a que la base de datos esté lista...")
+    time.sleep(5)
     init_database()
     run_pipeline()
 
@@ -142,3 +162,8 @@ if __name__ == "__main__":
     while True:
         schedule.run_pending()
         time.sleep(30)
+
+
+if __name__ == "__main__":
+    threading.Thread(target=run_bot, daemon=True).start()
+    run_worker()
