@@ -5,11 +5,14 @@ from urllib.parse import urlparse
 
 import requests
 
-from db import get_connection
+from analysis import score_product
+from db import get_connection, upsert_product
 
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
+ALLOWED_PLATFORMS = {"mercadolibre", "amazon", "tiktok"}
+ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios"}
 
 
 def _token():
@@ -139,6 +142,98 @@ def _search_products(term, limit=5):
         conn.close()
 
 
+def _model_product(argument):
+    parts = [part.strip() for part in argument.split("|")]
+    if len(parts) < 6:
+        return None, "Uso: /modelar plataforma|categoría|id|título|precio|url|rating|reseñas|ventas|imagen"
+
+    platform, category, external_id, title, price_raw, product_url = parts[:6]
+    rating_raw = parts[6] if len(parts) > 6 else ""
+    reviews_raw = parts[7] if len(parts) > 7 else ""
+    sales_raw = parts[8] if len(parts) > 8 else ""
+    image_url = parts[9] if len(parts) > 9 else ""
+
+    platform = platform.lower()
+    category = category.lower()
+
+    if platform not in ALLOWED_PLATFORMS:
+        return None, "Plataforma inválida. Usa: mercadolibre, amazon o tiktok."
+    if category not in ALLOWED_CATEGORIES:
+        return None, "Categoría inválida. Usa: ropa, calzado o accesorios."
+    if not external_id or not title:
+        return None, "El id externo y el título son obligatorios."
+
+    try:
+        price = float(price_raw.replace(",", "."))
+        if price <= 0:
+            raise ValueError
+    except ValueError:
+        return None, "El precio debe ser un número mayor que cero."
+
+    parsed_url = urlparse(product_url)
+    if parsed_url.scheme not in ("http", "https") or not parsed_url.netloc:
+        return None, "La URL del producto debe comenzar con http:// o https://."
+
+    def _optional_float(value, name, minimum=0):
+        if not value:
+            return None
+        try:
+            number = float(value.replace(",", "."))
+        except ValueError:
+            raise ValueError(f"{name} debe ser numérico.")
+        if number < minimum:
+            raise ValueError(f"{name} no puede ser negativo.")
+        return number
+
+    try:
+        rating = _optional_float(rating_raw, "rating")
+        if rating is not None and rating > 5:
+            return None, "El rating debe estar entre 0 y 5."
+        reviews = int(_optional_float(reviews_raw, "reseñas") or 0)
+        sales = int(_optional_float(sales_raw, "ventas") or 0)
+    except ValueError as exc:
+        return None, str(exc)
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT AVG(p.current_price) AS category_avg
+                FROM products p
+                JOIN categories c ON c.id = p.category_id
+                WHERE c.name = %s
+                  AND p.currency = 'COP'
+                  AND p.current_price IS NOT NULL
+                  AND p.is_active = TRUE
+                """,
+                (category,),
+            )
+            row = cur.fetchone()
+            category_avg = float(row["category_avg"]) if row and row["category_avg"] else price
+
+        product = {
+            "external_id": external_id,
+            "title": title,
+            "image_url": image_url or None,
+            "product_url": product_url,
+            "price": price,
+            "currency": "COP",
+            "rating": rating,
+            "reviews_count": reviews,
+            "sales_estimate": sales,
+        }
+        product_id = upsert_product(conn, platform, category, product)
+        opportunity = score_product(conn, product_id, category_avg)
+        return product_id, opportunity
+    except Exception as exc:
+        conn.rollback()
+        print(f"[telegram-bot] model product error: {exc}")
+        return None, "No fue posible guardar/modelar el producto. Revisa plataforma, categoría y conexión de base de datos."
+    finally:
+        conn.close()
+
+
 def _handle(token, chat_id, text):
     command, _, argument = text.partition(" ")
     command = command.lower().strip()
@@ -148,8 +243,11 @@ def _handle(token, chat_id, text):
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
             "/buscar producto — buscar en los datos modelados\n"
-            "/estado — estado básico del catálogo\n"
-            "/help — ayuda"
+            "/modelar — registrar y puntuar un producto\n"
+            "/estado — estado del catálogo\n"
+            "/help — ayuda\n\n"
+            "<b>Formato /modelar</b>\n"
+            "plataforma|categoría|id|título|precio|url|rating|reseñas|ventas|imagen"
         ))
 
     if command == "/top":
@@ -167,9 +265,20 @@ def _handle(token, chat_id, text):
             return _send(token, chat_id, "Uso: /buscar zapatillas")
         products = _search_products(term)
         if not products:
-            return _send(token, chat_id, f"No encontré productos modelados para: {term}")
+            return _send(token, chat_id, f"No encontré productos modelados para: {html.escape(term)}")
         body = f"<b>Resultados: {html.escape(term)}</b>\n\n" + "\n\n".join(_format_product(p) for p in products)
         return _send(token, chat_id, body)
+
+    if command == "/modelar":
+        result, error = _model_product(argument.strip())
+        if result is None:
+            return _send(token, chat_id, f"<b>Error de modelado</b>\n{html.escape(str(error))}")
+        return _send(
+            token,
+            chat_id,
+            f"<b>Producto modelado</b>\nID: {result}\nOportunidad: {float(error):.1f}/100\n"
+            "Ya está disponible para /top y /buscar.",
+        )
 
     if command == "/estado":
         conn = get_connection()
@@ -177,7 +286,20 @@ def _handle(token, chat_id, text):
             with conn.cursor() as cur:
                 cur.execute("SELECT COUNT(*) AS total FROM products WHERE is_active = TRUE")
                 total = cur.fetchone()["total"]
-            return _send(token, chat_id, f"<b>Estado del catálogo</b>\nProductos activos: {total}")
+                cur.execute(
+                    """
+                    SELECT COUNT(*) AS modeled
+                    FROM products p
+                    JOIN product_scores s ON s.product_id = p.id
+                    WHERE p.is_active = TRUE
+                    """
+                )
+                modeled = cur.fetchone()["modeled"]
+            return _send(
+                token,
+                chat_id,
+                f"<b>Estado del catálogo</b>\nProductos activos: {total}\nProductos modelados: {modeled}",
+            )
         finally:
             conn.close()
 
