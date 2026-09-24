@@ -114,7 +114,11 @@ def _search_products(term, limit=5):
             cur.execute(
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url,
+                       p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
+                       COALESCE(s.price_score, 0) AS price_score,
+                       COALESCE(s.demand_score, 0) AS demand_score,
+                       COALESCE(s.trend_score, 0) AS trend_score,
                        COALESCE(s.opportunity_score, 0) AS opportunity_score
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
@@ -164,7 +168,7 @@ def _handle(token, chat_id, text):
         products = _search_products(term)
         if not products:
             return _send(token, chat_id, f"No encontré productos modelados para: {term}")
-        body = f"<b>Resultados: {term}</b>\n\n" + "\n\n".join(_format_product(p) for p in products)
+        body = f"<b>Resultados: {html.escape(term)}</b>\n\n" + "\n\n".join(_format_product(p) for p in products)
         return _send(token, chat_id, body)
 
     if command == "/estado":
