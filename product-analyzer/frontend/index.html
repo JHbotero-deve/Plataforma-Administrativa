@@ -712,11 +712,11 @@
     const statusEl = document.getElementById("conn-status");
     const results = await Promise.allSettled([
       apiGet("/opportunities/top?limit=8"),
-      apiGet("/comparison?limit=25"),
-      apiGet("/monetize/revenue-summary")
+      apiGet("/comparison?limit=25")
     ]);
 
-    const [topResult, comparisonResult, revenueResult] = results;
+    const [topResult, comparisonResult] = results;
+    const revenueResult = { status: "fulfilled", value: [] };
 
     if (topResult.status === "fulfilled") {
       renderTop(topResult.value);
