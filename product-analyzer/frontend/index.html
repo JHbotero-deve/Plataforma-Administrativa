@@ -667,9 +667,9 @@
   }
 
   function getUrgency(score) {
-    if (score >= 85) return { text: "🔥 OPORTUNIDAD LEGENDARIA: EXPIRE EN BREVE", color: "var(--amber)" };
-    if (score >= 70) return { text: "⚡ ALTA DEMANDA: POCOS DISPONIBLES", color: "var(--plasma)" };
-    return { text: "✅ Precio Competitivo", color: "var(--common)" };
+    if (score >= 85) return { text: "Oportunidad de alto puntaje", color: "var(--amber)" };
+    if (score >= 70) return { text: "Puntaje de oportunidad alto", color: "var(--plasma)" };
+    return { text: "Puntaje de oportunidad", color: "var(--common)" };
   }
 
   function renderMeter(score, tierKey) {
@@ -740,7 +740,7 @@
 
     const failures = results.filter(r => r.status === "rejected");
     if (failures.length === 0) {
-      statusEl.innerHTML = '<span class="status-dot status-live"></span>Conectado · datos reales';
+      statusEl.innerHTML = '<span class="status-dot status-live"></span>Conectado · datos de API';
       statusEl.title = "Todas las fuentes de la API respondieron correctamente.";
     } else {
       const details = failures.map(r => r.reason?.message || "Error de API").join(" | ");
@@ -760,8 +760,7 @@
     grid.innerHTML = top3.map((it) => {
       const tier = rarityTier(it.opportunity_score);
       const urgency = getUrgency(it.opportunity_score);
-      const viewers = Math.floor(Math.random() * (45 - 12 + 1)) + 12;
-      return `
+            return `
       <div class="loot-card ${tier.key}">
         <div class="loot-media">
           ${it.image_url ? `<img src="${it.image_url}" alt="${it.title}">` : `<svg class="icon icon-lg"><use href="#ic-cube"/></svg>`}
@@ -774,9 +773,6 @@
           </div>
           <div class="loot-title">${it.title}</div>
           ${renderMeter(it.opportunity_score, tier.key)}
-          <div class="demand-pill">
-            <span class="dot-live"></span> ${viewers} personas viendo esto ahora
-          </div>
           <div class="loot-meta">
             ${platformTag(it.platform)}
             <span class="mono">★ ${it.rating ?? '—'}</span>
