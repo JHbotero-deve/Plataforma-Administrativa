@@ -28,7 +28,7 @@ app.include_router(monetization_router)
 # Habilitado abierto para poder conectar un frontend fácilmente; restringir en producción
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "*").split(",") if origin.strip()],
+    allow_origins=[origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",") if origin.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
 )
