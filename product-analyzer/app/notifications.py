@@ -1,43 +1,51 @@
-﻿import os
+import os
 import requests
 
+
+def _config():
+    token = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID") or os.getenv("CHAT_ID")
+    return token, chat_id
+
+
 def send_telegram_alert(product_info):
-    '''
-    Envía una notificación a Telegram cuando un producto supera el score crítico.
-    product_info: dict con title, price, url, score
-    '''
-    bot_token = os.getenv('BOT_TOKEN')
-    chat_id = os.getenv('CHAT_ID')
-
-    if not bot_token or not chat_id:
-        print('[telegram] Error: BOT_TOKEN o CHAT_ID no configurados en el .env')
+    token, chat_id = _config()
+    if not token or not chat_id:
+        print("[telegram] Variables TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID no configuradas.")
         return False
 
-    # Formateamos el mensaje para que se vea profesional en el celular
-    message = (
-        f"🚀 *¡OPORTUNIDAD DETECTADA!*\n\n"
-        f"📦 *Producto:* {product_info['title']}\n"
-        f"💰 *Precio:* {product_info['price']}\n"
-        f"⭐ *Score:* {product_info['score']}/100\n\n"
-        f"🔗 [Ir al producto]({product_info['url']})"
-    )
+    title = str(product_info.get("title", "Producto"))[:120]
+    price = product_info.get("price", product_info.get("current_price", "N/D"))
+    score = product_info.get("score", product_info.get("opportunity_score", "N/D"))
+    platform = str(product_info.get("platform", "N/D"))
+    category = str(product_info.get("category", "N/D"))
+    url = product_info.get("url") or product_info.get("product_url")
 
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
+    lines = [
+        "<b>Oportunidad detectada</b>",
+        f"<b>Producto:</b> {title}",
+        f"<b>Precio:</b> {price}",
+        f"<b>Score:</b> {score}/100",
+        f"<b>Plataforma:</b> {platform}",
+        f"<b>Categoría:</b> {category}",
+    ]
+    if url:
+        lines.append(f'<a href="{url}">Ver producto</a>')
 
+    return _send(token, chat_id, "\n".join(lines))
+
+
+def _send(token, chat_id, message):
     try:
-        r = requests.post(url, json=payload, timeout=10)
-        if r.ok:
-            print(f'[telegram] Alerta enviada con éxito para: {product_info["title"]}')
+        response = requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat_id, "text": message, "parse_mode": "HTML", "disable_web_page_preview": False},
+            timeout=10,
+        )
+        if response.ok:
             return True
-        else:
-            print(f'[telegram] Error al enviar: {r.text}')
-            return False
-    except Exception as e:
-        print(f'[telegram] Error de conexión: {e}')
+        print(f"[telegram] API error: {response.status_code}")
         return False
-
+    except requests.RequestException as exc:
+        print(f"[telegram] connection error: {exc}")
+        return False
