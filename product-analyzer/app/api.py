@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from db import get_connection
 from monetization import router as monetization_router
+from wompi import router as wompi_router
 
 app = FastAPI(
     title="API de Análisis de Productos",
@@ -24,6 +25,7 @@ app = FastAPI(
 )
 
 app.include_router(monetization_router)
+app.include_router(wompi_router)
 
 # Habilitado abierto para poder conectar un frontend fácilmente; restringir en producción
 app.add_middleware(
