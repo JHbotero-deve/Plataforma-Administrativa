@@ -1,5 +1,8 @@
+import html
 import os
 import time
+from urllib.parse import urlparse
+
 import requests
 
 from db import get_connection
@@ -27,28 +30,49 @@ def _send(token, chat_id, text):
             json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": False},
             timeout=10,
         )
-        return r.ok
-    except requests.RequestException as exc:
+        payload = r.json()
+        if not r.ok or not payload.get("ok"):
+            print(f"[telegram-bot] send rejected: {payload.get('description', 'respuesta inválida')}")
+            return False
+        return True
+    except (requests.RequestException, ValueError) as exc:
         print(f"[telegram-bot] send error: {exc}")
         return False
 
 
 def _format_product(p):
-    title = str(p.get("title") or "Sin título")[:90]
+    title = html.escape(str(p.get("title") or "Sin título")[:90])
     price = p.get("current_price")
-    score = p.get("opportunity_score")
-    platform = p.get("platform") or "N/D"
-    category = p.get("category") or "N/D"
-    url = p.get("product_url")
+    currency = html.escape(str(p.get("currency") or ""))
+    platform = html.escape(str(p.get("platform") or "N/D"))
+    category = html.escape(str(p.get("category") or "N/D"))
+    rating = p.get("rating")
+    reviews = p.get("reviews_count")
+    sales = p.get("sales_estimate")
+    opportunity = p.get("opportunity_score")
+    price_score = p.get("price_score")
+    demand_score = p.get("demand_score")
+    trend_score = p.get("trend_score")
+    url = str(p.get("product_url") or "").strip()
     lines = [
         f"<b>{title}</b>",
-        f"Precio: {price if price is not None else 'N/D'} {p.get('currency') or ''}".strip(),
-        f"Score: {round(float(score), 1) if score is not None else 'N/D'}/100",
+        f"Precio: {price if price is not None else 'N/D'} {currency}".strip(),
+        f"Oportunidad: {round(float(opportunity), 1) if opportunity is not None else 'N/D'}/100",
+        (
+            "Modelo: "
+            f"precio {round(float(price_score), 1) if price_score is not None else 'N/D'}, "
+            f"demanda {round(float(demand_score), 1) if demand_score is not None else 'N/D'}, "
+            f"tendencia {round(float(trend_score), 1) if trend_score is not None else 'N/D'}"
+        ),
+        f"Rating: {rating if rating is not None else 'N/D'} | Reseñas: {reviews if reviews is not None else 'N/D'}",
+        f"Ventas estimadas: {sales if sales is not None else 'N/D'}",
         f"Plataforma: {platform}",
         f"Categoría: {category}",
     ]
-    if url:
-        lines.append(f'<a href="{url}">Ver producto</a>')
+    parsed = urlparse(url)
+    if parsed.scheme in ("http", "https") and parsed.netloc:
+        safe_url = html.escape(url, quote=True)
+        lines.append(f'<a href="{safe_url}">Ver producto</a>')
     return "\n".join(lines)
 
 
@@ -59,7 +83,11 @@ def _top_products(limit=5):
             cur.execute(
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url,
+                       p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
+                       COALESCE(s.price_score, 0) AS price_score,
+                       COALESCE(s.demand_score, 0) AS demand_score,
+                       COALESCE(s.trend_score, 0) AS trend_score,
                        COALESCE(s.opportunity_score, 0) AS opportunity_score
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
