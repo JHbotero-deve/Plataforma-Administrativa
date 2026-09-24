@@ -7,13 +7,24 @@ Endpoints de monetización: los tres canales conviven en la misma app.
   - Resumen:       GET  /monetize/revenue-summary        -> ingresos por canal
 """
 
-from fastapi import APIRouter, HTTPException
+import hmac
+import os
+
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from db import get_connection
 
 router = APIRouter(prefix="/monetize", tags=["monetización"])
+
+
+def require_admin_key(x_admin_key: str | None = Header(default=None, alias="X-Admin-Key")):
+    expected = os.getenv("MONETIZATION_ADMIN_KEY", "").strip()
+    if not expected:
+        raise HTTPException(status_code=503, detail="Operación administrativa no configurada")
+    if not x_admin_key or not hmac.compare_digest(x_admin_key, expected):
+        raise HTTPException(status_code=403, detail="No autorizado")
 
 
 # ---------- Afiliados ----------
@@ -44,7 +55,7 @@ def register_click(product_id: int, user_id: int | None = None):
 
 
 @router.post("/click/{click_id}/confirm")
-def confirm_conversion(click_id: int, commission_earned: float):
+def confirm_conversion(click_id: int, commission_earned: float, _: None = Depends(require_admin_key)):
     """Marca un click como convertido, con la comisión reportada por la plataforma."""
     conn = get_connection()
     with conn.cursor() as cur:
@@ -72,7 +83,7 @@ class OrderCreate(BaseModel):
 
 
 @router.post("/orders")
-def create_order(order: OrderCreate):
+def create_order(order: OrderCreate, _: None = Depends(require_admin_key)):
     conn = get_connection()
     with conn.cursor() as cur:
         cur.execute(
@@ -91,7 +102,7 @@ def create_order(order: OrderCreate):
 
 
 @router.get("/orders/{user_id}")
-def list_orders(user_id: int):
+def list_orders(user_id: int, _: None = Depends(require_admin_key)):
     conn = get_connection()
     with conn.cursor() as cur:
         cur.execute(
@@ -112,7 +123,7 @@ class SubscribeRequest(BaseModel):
 
 
 @router.post("/subscribe")
-def subscribe(req: SubscribeRequest):
+def subscribe(req: SubscribeRequest, _: None = Depends(require_admin_key)):
     conn = get_connection()
     with conn.cursor() as cur:
         cur.execute("SELECT id FROM subscription_plans WHERE name = %s", (req.plan_name,))
@@ -153,7 +164,7 @@ def list_plans():
 # ---------- Resumen de ingresos ----------
 
 @router.get("/revenue-summary")
-def revenue_summary():
+def revenue_summary(_: None = Depends(require_admin_key)):
     conn = get_connection()
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM revenue_summary")
