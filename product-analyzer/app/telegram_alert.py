@@ -60,13 +60,13 @@ def _top_products(limit=5):
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url,
                        pl.name AS platform, c.name AS category,
-                       COALESCE(o.opportunity_score, 0) AS opportunity_score
+                       COALESCE(s.opportunity_score, 0) AS opportunity_score
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
-                LEFT JOIN product_opportunities o ON o.product_id = p.id
+                LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
-                ORDER BY COALESCE(o.opportunity_score, 0) DESC, p.updated_at DESC
+                ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
                 """,
                 (limit,),
@@ -94,7 +94,7 @@ def _search_products(term, limit=5):
                 LEFT JOIN product_opportunities o ON o.product_id = p.id
                 WHERE p.is_active = TRUE
                   AND p.title ILIKE %s
-                ORDER BY COALESCE(o.opportunity_score, 0) DESC, p.updated_at DESC
+                ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
                 """,
                 (f"%{term}%", limit),
