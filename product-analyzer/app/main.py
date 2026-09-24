@@ -1,6 +1,8 @@
 import time
 import os
 import threading
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
 import schedule
 import uvicorn
 
@@ -23,12 +25,19 @@ SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
 
 def build_url(platform, title, product_url):
     if product_url and product_url != "#":
+        if platform == "amazon" and AMAZON_TAG:
+            parsed = urlparse(product_url)
+            if parsed.scheme in ("http", "https") and "amazon." in parsed.netloc:
+                query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+                query["tag"] = AMAZON_TAG
+                return urlunparse(parsed._replace(query=urlencode(query)))
         return product_url
+
     q = title.replace(" ", "+")
-    if platform == "amazon":
+    if platform == "amazon" and AMAZON_TAG:
         return f"https://www.amazon.com/s?k={q}&tag={AMAZON_TAG}"
     if platform == "mercadolibre":
-        return f"https://listado.mercadolibre.com.co/{title.replace(' ', '-')}"
+        return f"https://listado.mercadolibre.com.co/{title.replace(" ", "-")}"
     if platform == "tiktok":
         return f"https://www.tiktok.com/search?q={q}"
     return f"https://www.google.com/search?q={q}"
@@ -40,7 +49,7 @@ def start_api_server():
 
 
 def run_pipeline():
-    print("⏳ Esperando a que la base de datos esté lista...")
+    print("Esperando a que la base de datos esté lista...")
     time.sleep(5)
     print("== Iniciando ciclo de ingesta y análisis ==")
     conn = get_connection()
