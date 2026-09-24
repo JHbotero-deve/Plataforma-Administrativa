@@ -8,7 +8,6 @@ import requests
 from analysis import score_product
 from db import get_connection, upsert_product
 
-
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
 ALLOWED_PLATFORMS = {"mercadolibre", "amazon", "tiktok"}
@@ -22,15 +21,21 @@ def _token():
 def _allowed_chat(chat_id):
     configured = os.getenv("TELEGRAM_CHAT_ID") or os.getenv("CHAT_ID")
     if not configured:
-        return True
-    return str(chat_id) == str(configured)
+        print("[telegram-bot] Bot bloqueado: TELEGRAM_CHAT_ID no está configurado.")
+        return False
+    return str(chat_id) == str(configured).strip()
 
 
 def _send(token, chat_id, text):
     try:
         r = requests.post(
             f"{API_BASE}/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": False},
+            json={
+                "chat_id": chat_id,
+                "text": text[:4096],
+                "parse_mode": "HTML",
+                "disable_web_page_preview": False,
+            },
             timeout=10,
         )
         payload = r.json()
@@ -57,6 +62,7 @@ def _format_product(p):
     demand_score = p.get("demand_score")
     trend_score = p.get("trend_score")
     url = str(p.get("product_url") or "").strip()
+
     lines = [
         f"<b>{title}</b>",
         f"Precio: {price if price is not None else 'N/D'} {currency}".strip(),
@@ -72,10 +78,10 @@ def _format_product(p):
         f"Plataforma: {platform}",
         f"Categoría: {category}",
     ]
+
     parsed = urlparse(url)
     if parsed.scheme in ("http", "https") and parsed.netloc:
-        safe_url = html.escape(url, quote=True)
-        lines.append(f'<a href="{safe_url}">Ver producto</a>')
+        lines.append(f'<a href="{html.escape(url, quote=True)}">Ver producto</a>')
     return "\n".join(lines)
 
 
@@ -127,8 +133,7 @@ def _search_products(term, limit=5):
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
-                WHERE p.is_active = TRUE
-                  AND p.title ILIKE %s
+                WHERE p.is_active = TRUE AND p.title ILIKE %s
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
                 """,
@@ -202,10 +207,8 @@ def _model_product(argument):
                 SELECT AVG(p.current_price) AS category_avg
                 FROM products p
                 JOIN categories c ON c.id = p.category_id
-                WHERE c.name = %s
-                  AND p.currency = 'COP'
-                  AND p.current_price IS NOT NULL
-                  AND p.is_active = TRUE
+                WHERE c.name = %s AND p.currency = 'COP'
+                  AND p.current_price IS NOT NULL AND p.is_active = TRUE
                 """,
                 (category,),
             )
@@ -229,7 +232,7 @@ def _model_product(argument):
     except Exception as exc:
         conn.rollback()
         print(f"[telegram-bot] model product error: {exc}")
-        return None, "No fue posible guardar/modelar el producto. Revisa plataforma, categoría y conexión de base de datos."
+        return None, "No fue posible guardar/modelar el producto. Revisa los datos y la conexión de base de datos."
     finally:
         conn.close()
 
@@ -312,32 +315,42 @@ def run_bot():
         print("[telegram-bot] Bot deshabilitado: falta TELEGRAM_BOT_TOKEN.")
         return
 
+    if not (os.getenv("TELEGRAM_CHAT_ID") or os.getenv("CHAT_ID")):
+        print("[telegram-bot] Bot deshabilitado: falta TELEGRAM_CHAT_ID.")
+        return
+
     offset = None
     print("[telegram-bot] Bot interactivo iniciado.")
+
     while True:
         try:
             params = {"timeout": 25}
             if offset is not None:
                 params["offset"] = offset
+
             response = requests.get(
                 f"{API_BASE}/bot{token}/getUpdates",
                 params=params,
                 timeout=35,
             )
             response.raise_for_status()
-            updates = response.json().get("result", [])
-            for update in updates:
+            payload = response.json()
+
+            if not payload.get("ok"):
+                raise RuntimeError(payload.get("description", "respuesta inválida"))
+
+            for update in payload.get("result", []):
                 offset = update["update_id"] + 1
                 message = update.get("message") or {}
                 chat = message.get("chat") or {}
+                text = message.get("text") or ""
                 chat_id = chat.get("id")
-                text = message.get("text")
-                if chat_id is None or not text or not _allowed_chat(chat_id):
+
+                if chat_id is None or not _allowed_chat(chat_id) or not text:
                     continue
+
                 _handle(token, chat_id, text)
-        except requests.RequestException as exc:
+
+        except (requests.RequestException, ValueError, RuntimeError) as exc:
             print(f"[telegram-bot] polling error: {exc}")
-            time.sleep(POLL_INTERVAL)
-        except Exception as exc:
-            print(f"[telegram-bot] unexpected error: {exc}")
-            time.sleep(POLL_INTERVAL)
+            time.sleep(max(POLL_INTERVAL, 5))
