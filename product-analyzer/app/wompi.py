@@ -8,6 +8,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Header, HTTPException, Request
+from psycopg2.extras import Json
 from pydantic import BaseModel
 
 from db import get_connection
