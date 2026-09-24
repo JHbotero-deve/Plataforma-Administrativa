@@ -12,7 +12,7 @@ Uso:
      Cambia ese código por el access_token y te muestra el shop_id.
      Copiá ambos valores al archivo .env.
 
-Requiere tener ya App Key y App Secret (TIKTOK_API_KEY / TIKTOK_API_SECRET
+Requiere tener ya App Key y App Secret (TIKTOK_APP_KEY / TIKTOK_APP_SECRET
 en el .env), generados en partner.tiktokshop.com.
 """
 
@@ -30,9 +30,9 @@ SHOPS_PATH = "/authorization/202309/shops"
 
 
 def print_auth_url(redirect_uri: str):
-    app_key = os.getenv("TIKTOK_API_KEY")
+    app_key = os.getenv("TIKTOK_APP_KEY")
     if not app_key:
-        raise RuntimeError("Falta TIKTOK_API_KEY en el .env")
+        raise RuntimeError("Falta TIKTOK_APP_KEY en el .env")
 
     url = f"{AUTH_BASE}?app_key={app_key}&redirect_uri={redirect_uri}&state=setup"
     print("\nAbrí esta URL en el navegador, iniciá sesión con tu cuenta de TikTok "
@@ -43,10 +43,10 @@ def print_auth_url(redirect_uri: str):
 
 
 def exchange_code_for_token(code: str):
-    app_key = os.getenv("TIKTOK_API_KEY")
-    app_secret = os.getenv("TIKTOK_API_SECRET")
+    app_key = os.getenv("TIKTOK_APP_KEY")
+    app_secret = os.getenv("TIKTOK_APP_SECRET")
     if not app_key or not app_secret:
-        raise RuntimeError("Faltan TIKTOK_API_KEY / TIKTOK_API_SECRET en el .env")
+        raise RuntimeError("Faltan TIKTOK_APP_KEY / TIKTOK_APP_SECRET en el .env")
 
     resp = requests.get(TOKEN_URL, params={
         "app_key": app_key,
