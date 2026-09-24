@@ -37,7 +37,7 @@ def build_url(platform, title, product_url):
     if platform == "amazon" and AMAZON_TAG:
         return f"https://www.amazon.com/s?k={q}&tag={AMAZON_TAG}"
     if platform == "mercadolibre":
-        return f"https://listado.mercadolibre.com.co/{title.replace(" ", "-")}"
+        return f"https://listado.mercadolibre.com.co/{title.replace(' ', '-')}"
     if platform == "tiktok":
         return f"https://www.tiktok.com/search?q={q}"
     return f"https://www.google.com/search?q={q}"
