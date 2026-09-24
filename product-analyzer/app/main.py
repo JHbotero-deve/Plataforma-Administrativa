@@ -10,6 +10,7 @@ from analysis import score_product
 from notifications import send_telegram_alert
 from init_db import init_database
 from api import app as api_app
+from telegram_alert import run_bot
 
 SEARCH_CONFIG = [
     ("ropa", "remera hombre"),
@@ -124,6 +125,7 @@ def run_pipeline():
 
 if __name__ == "__main__":
     threading.Thread(target=start_api_server, daemon=True).start()
+    threading.Thread(target=run_bot, daemon=True).start()
     init_database()
     run_pipeline()
 
