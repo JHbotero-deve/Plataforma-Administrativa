@@ -56,7 +56,7 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
             (
                 platform_id, category_id, product["external_id"], product["title"],
                 product.get("image_url"), product.get("product_url"),
-                product["price"], product.get("currency", "ARS"),
+                product["price"], product.get("currency") or "COP",
                 product.get("rating"), product.get("reviews_count", 0),
                 product.get("sales_estimate"),
             ),
