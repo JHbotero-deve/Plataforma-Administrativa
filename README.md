@@ -4,7 +4,7 @@ Radar de Producto es una plataforma de análisis de oportunidades comerciales qu
 
 ## Arquitectura actual
 
-- **Frontend:** HTML/CSS/JavaScript en `product-analyzer/frontend`, publicado en Netlify.
+- **Frontend:** HTML/CSS/JavaScript en `product-analyzer/frontend`, publicado en Vercel.
 - **Backend:** FastAPI + worker de ingesta en `product-analyzer/app`, publicado como contenedor en Railway.
 - **Base de datos:** PostgreSQL.
 - **Fuentes:** Mercado Libre (búsqueda pública), Amazon Creators API y TikTok Shop Open API para la tienda autorizada.
@@ -23,7 +23,7 @@ Mercado Libre / Amazon / TikTok Shop
         FastAPI /opportunities/top
         FastAPI /comparison
                 ↓
-             Netlify
+             Vercel
 ```
 
 El frontend **no contiene productos de ejemplo como respaldo**. Cuando una fuente falla, se informa el estado de la API y no se inventan productos.
@@ -86,9 +86,9 @@ Variables importantes:
 - `SCORE_THRESHOLD`
 - Telegram: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_POLL_INTERVAL`
 
-### Netlify
+### Vercel
 
-Netlify publica:
+Vercel publica:
 
 ```
 product-analyzer/frontend
@@ -96,7 +96,7 @@ product-analyzer/frontend
 
 El frontend usa `/api` en producción. El archivo `product-analyzer/frontend/_redirects` envía esas llamadas al backend de Railway y evita tener la URL de Railway escrita dentro de la interfaz.
 
-Conecta Netlify al repositorio y a la rama `main` para que cada cambio validado se publique automáticamente.
+Conecta Vercel al repositorio y a la rama `main` para que cada cambio validado se publique automáticamente.
 
 ## Diagnóstico
 
@@ -109,8 +109,17 @@ GET /products
 GET /opportunities/top
 ```
 
-Si `/health` responde correctamente pero `/pipeline/summary` muestra cero productos, el problema está en la ingesta o en la base de datos. Si hay productos en la API pero no en Netlify, el problema está en el frontend, el proxy o el despliegue.
+Si `/health` responde correctamente pero `/pipeline/summary` muestra cero productos, el problema está en la ingesta o en la base de datos. Si hay productos en la API pero no en Vercel, el problema está en el frontend, el proxy o el despliegue.
 
 ## Seguridad
 
 Las credenciales de Amazon, TikTok, Mercado Libre, Telegram y la base de datos se manejan únicamente en variables de entorno del backend. No deben aparecer en `index.html`, GitHub ni commits.
+
+
+## Ciclo de catálogo en producción
+
+- Railway ejecuta una carga inmediatamente al iniciar y después cada **2 horas**.
+- Cada producto nuevo recibe una vigencia de **48 horas** desde su primera inserción.
+- Al iniciar cada ciclo se desactivan los productos cuyo `catalog_expires_at` ya venció.
+- Si un producto reaparece, se actualizan sus datos sin crear duplicados y se conserva la vigencia del lote original.
+- Si una fuente no tiene credenciales o falla, no se generan productos ficticios.

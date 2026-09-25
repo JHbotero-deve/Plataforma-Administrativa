@@ -30,7 +30,8 @@ def init_database():
             "sql/004_wompi.sql",
             "sql/005_source_metadata.sql",
             "sql/006_curated_links.sql",
-            "sql/007_tiktok_creator.sql"
+            "sql/007_tiktok_creator.sql",
+            "sql/008_catalog_lifecycle.sql"
         ]
 
         for sql_file in sql_files:
