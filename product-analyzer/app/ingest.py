@@ -1,70 +1,50 @@
 import os
 import requests
-
 from amazon_creators import search_items as amazon_search_items
 from tiktok_shop import search_products as tiktok_search_products
 
-MELI_URL = "https://api.mercadolibre.com/sites/MCO/search"
+MELI_SEARCH='https://api.mercadolibre.com/sites/MCO/search'
+MELI_ITEM='https://api.mercadolibre.com/items/{id}'
+MELI_PRICES='https://api.mercadolibre.com/items/{id}/prices'
+MELI_SALE_PRICE='https://api.mercadolibre.com/items/{id}/sale_price'
 
+def _headers():
+    h={'User-Agent':'CentralProductAnalyzer/2.1','Accept':'application/json'}; token=os.getenv('MELI_ACCESS_TOKEN','').strip()
+    if token: h['Authorization']=f'Bearer {token}'
+    return h
 
-def _meli_headers() -> dict:
-    headers = {
-        "User-Agent": "RadarProducto/1.0",
-        "Accept": "application/json",
-    }
-    token = os.getenv("MELI_ACCESS_TOKEN", "").strip()
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    return headers
+def _get(url,params=None):
+    r=requests.get(url,params=params,headers=_headers(),timeout=20)
+    if r.status_code==401: raise RuntimeError('Mercado Libre rechazó MELI_ACCESS_TOKEN')
+    if r.status_code==403: raise RuntimeError('Mercado Libre rechazó la consulta (403)')
+    r.raise_for_status(); return r.json()
 
+def _details(item_id):
+    try: return _get(MELI_ITEM.format(id=item_id))
+    except requests.RequestException as exc: print(f'[Mercado Libre] detalle {item_id}: {exc}'); return {}
 
-def fetch_mercadolibre(query: str, limit: int = 20) -> list[dict]:
-    response = requests.get(
-        MELI_URL,
-        params={"q": query, "limit": min(limit, 50)},
-        headers=_meli_headers(),
-        timeout=20,
-    )
-    if response.status_code == 401:
-        raise RuntimeError(
-            "Mercado Libre rechazó la autenticación. Revisa MELI_ACCESS_TOKEN."
-        )
-    if response.status_code == 403:
-        raise RuntimeError(
-            "Mercado Libre rechazó la consulta (403). Configura un "
-            "MELI_ACCESS_TOKEN válido y autorizado para MCO."
-        )
-    response.raise_for_status()
+def _prices(item_id):
+    try: return (_get(MELI_PRICES.format(id=item_id)).get('prices') or [])
+    except requests.RequestException as exc: print(f'[Mercado Libre] prices {item_id}: {exc}'); return []
 
-    products = []
-    for item in response.json().get("results", []):
-        external_id = item.get("id")
-        title = item.get("title")
-        price = item.get("price")
-        if not external_id or not title or price in (None, 0):
-            continue
+def _sale_price(item_id):
+    try: return _get(MELI_SALE_PRICE.format(id=item_id),{'context':'channel_marketplace'})
+    except requests.RequestException as exc: print(f'[Mercado Libre] sale_price {item_id}: {exc}'); return {}
 
-        products.append(
-            {
-                "external_id": external_id,
-                "title": title,
-                "image_url": (item.get("thumbnail") or "").replace("-I.", "-O."),
-                "product_url": item.get("permalink"),
-                "price": price,
-                "currency": item.get("currency_id") or "COP",
-                "rating": None,
-                "reviews_count": 0,
-                "sales_estimate": item.get("sold_quantity"),
-            }
-        )
-
-    print(f"[Mercado Libre] '{query}': {len(products)} productos reales.")
+def fetch_mercadolibre(query,limit=20):
+    data=_get(MELI_SEARCH,{'q':query,'limit':min(limit,50)}); products=[]
+    for item in data.get('results',[]):
+        item_id=item.get('id'); title=item.get('title')
+        if not item_id or not title: continue
+        detail=_details(item_id); prices=_prices(item_id); sale=_sale_price(item_id)
+        price=sale.get('amount') or detail.get('price') or item.get('price'); currency=sale.get('currency_id') or detail.get('currency_id') or item.get('currency_id') or 'COP'
+        if price in (None,0) and prices:
+            current=sorted(prices,key=lambda x:x.get('last_updated') or '',reverse=True)[0]; price=current.get('amount'); currency=current.get('currency_id') or currency
+        if price in (None,0): continue
+        seller_id=detail.get('seller_id') or (item.get('seller') or {}).get('id'); metadata={'search_result':item,'item':detail,'prices':prices,'sale_price':sale,'site_id':'MCO','category_id':detail.get('category_id'),'condition':detail.get('condition'),'buying_mode':detail.get('buying_mode'),'listing_type_id':detail.get('listing_type_id'),'status':detail.get('status'),'available_quantity':detail.get('available_quantity'),'sold_quantity':detail.get('sold_quantity'),'shipping':detail.get('shipping') or {},'attributes':detail.get('attributes') or [],'variations':detail.get('variations') or [],'tags':detail.get('tags') or []}
+        products.append({'external_id':item_id,'title':title,'image_url':(detail.get('thumbnail') or item.get('thumbnail') or '').replace('-I.','-O.'),'product_url':detail.get('permalink') or item.get('permalink'),'price':float(price),'currency':currency,'rating':None,'reviews_count':0,'sales_estimate':detail.get('sold_quantity') or item.get('sold_quantity'),'seller':{'external_id':str(seller_id) if seller_id else None,'name':None,'reputation':None},'source_metadata':metadata})
+    print(f'[Mercado Libre MCO] {query}: {len(products)} productos reales completos')
     return products
 
-
-def fetch_amazon(query: str, limit: int = 10) -> list[dict]:
-    return amazon_search_items(query, min(limit, 10))
-
-
-def fetch_tiktok(query: str, limit: int = 20) -> list[dict]:
-    return tiktok_search_products(query, min(limit, 100))
+def fetch_amazon(query,limit=10): return amazon_search_items(query,min(limit,10))
+def fetch_tiktok(query,limit=20): return tiktok_search_products(query,min(limit,100))
