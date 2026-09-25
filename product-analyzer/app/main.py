@@ -1,5 +1,4 @@
 import os
-import threading
 import time
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -10,7 +9,6 @@ from db import get_connection, upsert_product
 from ingest import fetch_amazon, fetch_mercadolibre, fetch_tiktok
 from init_db import init_database
 from notifications import send_telegram_alert
-from telegram_alert import run_bot
 
 SEARCH_CONFIG = [
     ("ropa", "remera hombre"),
@@ -165,5 +163,4 @@ def run_worker():
 
 
 if __name__ == "__main__":
-    threading.Thread(target=run_bot, daemon=True).start()
     run_worker()
