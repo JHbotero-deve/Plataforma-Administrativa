@@ -15,7 +15,7 @@ def _required(name):
 def _token():
     now=time.time()
     if _cache['token'] and now < _cache['expires']: return _cache['token']
-    response=requests.post(TOKEN_URL,data={'grant_type':'client_credentials','client_id':_required('AMAZON_CREDENTIAL_ID'),'client_secret':_required('AMAZON_CREDENTIAL_SECRET'),'scope':'creatorsapi::default'},timeout=20)
+    response=requests.post(TOKEN_URL,json={'grant_type':'client_credentials','client_id':_required('AMAZON_CREDENTIAL_ID'),'client_secret':_required('AMAZON_CREDENTIAL_SECRET'),'scope':'creatorsapi::default'},headers={'Content-Type':'application/json'},timeout=20)
     if not response.ok: raise RuntimeError(f'Amazon token HTTP {response.status_code}: {response.text[:500]}')
     data=response.json(); token=data.get('access_token')
     if not token: raise RuntimeError('Amazon no devolvió access_token')
