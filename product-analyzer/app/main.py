@@ -41,7 +41,7 @@ def build_url(platform: str, title: str, product_url: str | None) -> str:
 
 def _source_enabled(platform_name: str) -> bool:
     required = {
-        "mercadolibre": ("MELI_ACCESS_TOKEN",),
+        "mercadolibre": (),
         "amazon": ("AMAZON_CREDENTIAL_ID", "AMAZON_CREDENTIAL_SECRET", "AMAZON_PARTNER_TAG"),
         "tiktok": ("TIKTOK_APP_KEY", "TIKTOK_APP_SECRET", "TIKTOK_ACCESS_TOKEN", "TIKTOK_SHOP_CIPHER"),
     }
