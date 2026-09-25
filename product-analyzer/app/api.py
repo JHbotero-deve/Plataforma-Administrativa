@@ -17,6 +17,7 @@ from db import get_connection
 from curated import import_product_url
 from monetization import router as monetization_router
 from wompi import router as wompi_router
+from tiktok_creator import creator_configured, get_creator_profile, get_showcase_products, sync_showcase
 
 API_VERSION = "1.1.0"
 
@@ -164,6 +165,180 @@ def list_curated_products(limit: int = Query(50, ge=1, le=200)):
                 (limit,),
             )
             return cur.fetchall()
+    finally:
+        conn.close()
+
+
+class TikTokCreatorMonetization(BaseModel):
+    affiliate_url: Optional[str] = None
+    commission_rate: Optional[float] = None
+    video_url: Optional[str] = None
+    content_type: Optional[str] = None
+    showcase_status: str = "showcase"
+
+
+@core_router.get("/tiktok/creator/status")
+def tiktok_creator_status():
+    configured = creator_configured()
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT open_id, granted_scopes, user_type, last_sync_at, last_error
+                FROM tiktok_creator_state
+                WHERE id = 1
+                """
+            )
+            state = cur.fetchone()
+        return {
+            "configured": configured,
+            "connected": bool(state and state["open_id"]) and configured,
+            "state": state,
+        }
+    finally:
+        conn.close()
+
+
+@core_router.post("/tiktok/creator/sync")
+def tiktok_creator_sync(
+    category: str = Query("accesorios"),
+    limit: int = Query(2000, ge=1, le=2000),
+):
+    if not creator_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Falta TIKTOK_CREATOR_ACCESS_TOKEN o las credenciales de la aplicación TikTok.",
+        )
+    try:
+        return sync_showcase(category, limit)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"No se pudo sincronizar TikTok Shop Creator: {exc}")
+
+
+@core_router.get("/tiktok/creator/showcase")
+def tiktok_creator_showcase(limit: int = Query(200, ge=1, le=2000)):
+    if not creator_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="La conexión TikTok Shop Creator no está configurada.",
+        )
+    try:
+        return get_showcase_products(limit)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"No se pudo consultar el Showcase: {exc}")
+
+
+@core_router.get("/tiktok/creator/products")
+def tiktok_creator_products(limit: int = Query(100, ge=1, le=500)):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.id, p.title, p.current_price, p.currency, p.image_url,
+                       p.product_url, tcp.tiktok_product_id, tcp.showcase_status,
+                       tcp.affiliate_url, tcp.commission_rate,
+                       tcp.estimated_commission, tcp.video_url,
+                       tcp.content_type, tcp.synced_at
+                FROM tiktok_creator_products tcp
+                JOIN products p ON p.id = tcp.product_id
+                WHERE p.is_active = TRUE
+                ORDER BY tcp.synced_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+@core_router.patch("/tiktok/creator/products/{product_id}")
+def update_tiktok_creator_product(
+    product_id: int,
+    payload: TikTokCreatorMonetization,
+):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE tiktok_creator_products
+                SET affiliate_url=COALESCE(%s, affiliate_url),
+                    commission_rate=COALESCE(%s, commission_rate),
+                    estimated_commission=CASE
+                        WHEN %s IS NOT NULL AND p.current_price IS NOT NULL
+                        THEN p.current_price * %s / 100
+                        ELSE estimated_commission
+                    END,
+                    video_url=COALESCE(%s, video_url),
+                    content_type=COALESCE(%s, content_type),
+                    showcase_status=COALESCE(%s, showcase_status),
+                    updated_at=NOW()
+                FROM products p
+                WHERE tiktok_creator_products.product_id=%s
+                  AND p.id=tiktok_creator_products.product_id
+                RETURNING tiktok_creator_products.*
+                """,
+                (
+                    payload.affiliate_url,
+                    payload.commission_rate,
+                    payload.commission_rate,
+                    payload.commission_rate,
+                    payload.video_url,
+                    payload.content_type,
+                    payload.showcase_status,
+                    product_id,
+                ),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Producto TikTok Creator no encontrado")
+        conn.commit()
+        return row
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@core_router.post("/tiktok/creator/products/{product_id}/click")
+def register_tiktok_creator_click(product_id: int):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT affiliate_url
+                FROM tiktok_creator_products
+                WHERE product_id=%s AND affiliate_url IS NOT NULL
+                """,
+                (product_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="El producto no tiene enlace afiliado configurado")
+            cur.execute(
+                """
+                INSERT INTO tiktok_creator_clicks(product_id, affiliate_url)
+                VALUES (%s,%s)
+                RETURNING id, clicked_at
+                """,
+                (product_id, row["affiliate_url"]),
+            )
+        conn.commit()
+        return {"tracked": True, "affiliate_url": row["affiliate_url"], "click": cur.fetchone() if False else None}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 

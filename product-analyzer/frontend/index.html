@@ -439,6 +439,17 @@
   .curated-item-title { font-weight: 600; font-size: 14px; }
   .curated-item-meta { color: var(--text-dim); font-size: 12px; margin-top: 4px; }
   @media (max-width: 760px) { .curated-form { grid-template-columns: 1fr; } .curated-item { grid-template-columns: 52px 1fr; } .curated-item .btn { grid-column: 1 / -1; } }
+
+  .tiktok-box { background: var(--panel); border: 1px solid var(--line); padding: 24px; margin-bottom: 28px; }
+  .tiktok-actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .tiktok-status { color:var(--text-dim); font-size:13px; min-height:20px; margin-top:10px; }
+  .tiktok-list { display:grid; gap:12px; margin-top:18px; }
+  .tiktok-item { display:grid; grid-template-columns:64px 1fr; gap:14px; border:1px solid var(--line); padding:12px; background:var(--void); }
+  .tiktok-item img { width:64px; height:64px; object-fit:cover; background:var(--panel-2); }
+  .tiktok-fields { display:grid; grid-template-columns:1fr 120px 1fr auto; gap:8px; margin-top:10px; }
+  .tiktok-fields input { width:100%; background:var(--panel); color:var(--text); border:1px solid var(--line); padding:9px 10px; font:12px Inter,sans-serif; }
+  @media (max-width:760px){ .tiktok-fields{grid-template-columns:1fr;} }
+
 </style>
 </head>
 <body>
@@ -621,6 +632,22 @@
     </div>
   </div>
 </section>
+<section id="tiktok-shop">
+  <div class="wrap">
+    <div class="section-label">TikTok Shop Creator</div>
+    <h2>Convierte tu Showcase en oportunidades monetizables.</h2>
+    <p class="section-sub">Central sincroniza los productos que ya tienes en tu Showcase de creador, conserva el enlace afiliado y calcula la comisión estimada. Para enlaces compartibles, pega el enlace generado por TikTok desde Compartir.</p>
+    <div class="tiktok-box">
+      <div class="tiktok-actions">
+        <button class="btn btn-primary" id="tiktok-sync" type="button">Sincronizar Showcase</button>
+        <a class="btn btn-ghost" href="https://seller-us.tiktok.com/university/essay?knowledge_id=10012399" target="_blank" rel="noopener">Cómo agregar productos</a>
+      </div>
+      <div class="tiktok-status" id="tiktok-status"></div>
+      <div class="tiktok-list" id="tiktok-list"></div>
+    </div>
+  </div>
+</section>
+
 
 <section id="dashboard">
   <div class="wrap">
@@ -1187,6 +1214,97 @@
       if (dash) dashObserver.observe(dash);
     });
   }
+
+  async function loadTikTokCreatorProducts() {
+    const status = document.getElementById("tiktok-status");
+    const list = document.getElementById("tiktok-list");
+    try {
+      const state = await apiGet("/tiktok/creator/status");
+      if (!state.configured) {
+        status.textContent = "Falta configurar la credencial de creador TIKTOK_CREATOR_ACCESS_TOKEN en el backend.";
+        list.innerHTML = "";
+        return;
+      }
+      const rows = await apiGet("/tiktok/creator/products?limit=100");
+      status.textContent = state.connected
+        ? `Conectado como creador · ${rows.length} productos sincronizados`
+        : "Credenciales configuradas; sincroniza el Showcase para comprobar el acceso de creador.";
+      if (!rows.length) {
+        list.innerHTML = '<div class="section-sub">No hay productos del Showcase sincronizados todavía.</div>';
+        return;
+      }
+      list.innerHTML = rows.map(r => `
+        <div class="tiktok-item">
+          <img src="${r.image_url || ""}" alt="" onerror="this.style.visibility='hidden'">
+          <div>
+            <div class="curated-item-title">${escapeHtml(r.title)}</div>
+            <div class="curated-item-meta">TikTok Shop · ${formatPrice(r.current_price, r.currency)} · comisión ${r.commission_rate ?? "N/D"}%</div>
+            <div class="tiktok-fields">
+              <input id="tt-aff-${r.id}" type="url" placeholder="Enlace afiliado generado por TikTok" value="${escapeHtml(r.affiliate_url || "")}">
+              <input id="tt-rate-${r.id}" type="number" min="0" max="100" step="0.01" placeholder="% comisión" value="${r.commission_rate ?? ""}">
+              <input id="tt-video-${r.id}" type="url" placeholder="URL del video TikTok (opcional)" value="${escapeHtml(r.video_url || "")}">
+              <button class="btn btn-ghost btn-sm" type="button" onclick="saveTikTokProduct(${r.id})">Guardar</button>
+            </div>
+            ${r.affiliate_url ? `<div class="tiktok-actions" style="margin-top:8px"><button class="btn btn-primary btn-sm" type="button" onclick="openTikTokAffiliate(${r.id}, '${encodeURIComponent(r.affiliate_url)}')">Promocionar</button></div>` : '<div class="curated-item-meta" style="margin-top:8px">Pega el enlace afiliado generado desde TikTok para activar la promoción.</div>'}
+          </div>
+        </div>`
+      ).join("");
+    } catch (error) {
+      status.textContent = `TikTok no disponible: ${error.message}`;
+    }
+  }
+
+  window.saveTikTokProduct = async function(productId) {
+    const status = document.getElementById("tiktok-status");
+    try {
+      const affiliateUrl = document.getElementById(`tt-aff-${productId}`).value.trim();
+      const commissionRate = document.getElementById(`tt-rate-${productId}`).value;
+      const videoUrl = document.getElementById(`tt-video-${productId}`).value.trim();
+      const response = await fetch(`${CONFIG.API_BASE}/tiktok/creator/products/${productId}`, {
+        method: "PATCH",
+        headers: {"Content-Type":"application/json","Accept":"application/json"},
+        body: JSON.stringify({
+          affiliate_url: affiliateUrl || null,
+          commission_rate: commissionRate === "" ? null : Number(commissionRate),
+          video_url: videoUrl || null,
+          content_type: videoUrl ? "VIDEO" : null
+        })
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail || "No se pudo guardar");
+      status.textContent = "Monetización TikTok actualizada.";
+      await loadTikTokCreatorProducts();
+    } catch (error) {
+      status.textContent = `Error: ${error.message}`;
+    }
+  };
+
+  window.openTikTokAffiliate = async function(productId, encodedUrl) {
+    const url = decodeURIComponent(encodedUrl);
+    try {
+      await fetch(`${CONFIG.API_BASE}/tiktok/creator/products/${productId}/click`, {method:"POST"});
+    } finally {
+      window.open(url, "_blank", "noopener");
+    }
+  };
+
+  document.getElementById("tiktok-sync").addEventListener("click", async () => {
+    const status = document.getElementById("tiktok-status");
+    status.textContent = "Sincronizando Showcase de TikTok...";
+    try {
+      const response = await fetch(`${CONFIG.API_BASE}/tiktok/creator/sync?category=accesorios&limit=2000`, {method:"POST",headers:{"Accept":"application/json"}});
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.detail || "No se pudo sincronizar");
+      status.textContent = `Showcase sincronizado: ${body.synced} productos.`;
+      await loadTikTokCreatorProducts();
+      await loadDashboard();
+    } catch (error) {
+      status.textContent = `Error de sincronización: ${error.message}`;
+    }
+  });
+
+  loadTikTokCreatorProducts();
+
 </script>
 </body>
 </html>
