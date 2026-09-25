@@ -42,6 +42,21 @@ services:
       - ./app:/app
     command: ["python", "main.py"]
 
+  telegram:
+    build: ./app
+    container_name: productos_telegram
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./app:/app
+    command: ["python", "-c", "from telegram_alert import run_bot; run_bot()"]
+
   api:
     build: ./app
     container_name: productos_api
