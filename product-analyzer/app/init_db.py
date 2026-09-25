@@ -27,7 +27,8 @@ def init_database():
             "sql/001_schema.sql",
             "sql/002_monetization.sql",
             "sql/003_3d_models.sql",
-            "sql/004_wompi.sql"
+            "sql/004_wompi.sql",
+            "sql/005_source_metadata.sql"
         ]
 
         for sql_file in sql_files:
