@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from db import get_connection
+from curated import import_product_url
 from monetization import router as monetization_router
 from wompi import router as wompi_router
 
@@ -122,6 +123,46 @@ def list_products(
             query += " ORDER BY p.updated_at DESC LIMIT %s"
             params.append(limit)
             cur.execute(query, params)
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
+class CuratedProductCreate(BaseModel):
+    url: str
+    category: str = "accesorios"
+    title: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@core_router.post("/curated-products")
+def create_curated_product(payload: CuratedProductCreate):
+    try:
+        return import_product_url(payload.url, payload.category, payload.title, payload.notes)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"No se pudo importar el producto: {exc}")
+
+
+@core_router.get("/curated-products")
+def list_curated_products(limit: int = Query(50, ge=1, le=200)):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.id, p.title, pl.name AS platform, p.product_url, p.image_url,
+                       p.current_price, p.currency, cl.notes, cl.created_at
+                FROM curated_links cl
+                JOIN products p ON p.id = cl.product_id
+                JOIN platforms pl ON pl.name = cl.platform
+                WHERE p.is_active = TRUE
+                ORDER BY cl.created_at DESC
+                LIMIT %s
+                """,
+                (limit,),
+            )
             return cur.fetchall()
     finally:
         conn.close()
