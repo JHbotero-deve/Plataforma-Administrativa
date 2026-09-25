@@ -428,6 +428,17 @@
     .xp-track { max-width: none; flex: 1 1 auto; }
     .xp-count { font-size: 10.5px; }
   }
+
+  .curated-box { background: var(--panel); border: 1px solid var(--line); padding: 24px; margin-bottom: 28px; }
+  .curated-form { display: grid; grid-template-columns: 1fr 180px auto; gap: 10px; }
+  .curated-form input, .curated-form select { width: 100%; background: var(--void); color: var(--text); border: 1px solid var(--line); padding: 12px 13px; font: 13px Inter, sans-serif; }
+  .curated-status { margin-top: 12px; color: var(--text-dim); font-size: 13px; min-height: 20px; }
+  .curated-list { display: grid; gap: 10px; margin-top: 16px; }
+  .curated-item { display: grid; grid-template-columns: 64px 1fr auto; gap: 14px; align-items: center; border: 1px solid var(--line); padding: 10px; background: var(--void); }
+  .curated-item img { width: 64px; height: 64px; object-fit: cover; background: var(--panel-2); }
+  .curated-item-title { font-weight: 600; font-size: 14px; }
+  .curated-item-meta { color: var(--text-dim); font-size: 12px; margin-top: 4px; }
+  @media (max-width: 760px) { .curated-form { grid-template-columns: 1fr; } .curated-item { grid-template-columns: 52px 1fr; } .curated-item .btn { grid-column: 1 / -1; } }
 </style>
 </head>
 <body>
@@ -590,6 +601,24 @@
     <div class="section-label">Ingresos por canal</div>
     <h2 style="font-size:21px;">Cómo viene rindiendo cada canal</h2>
     <div class="rank-list" id="revenue-list"></div>
+  </div>
+</section>
+
+
+<section id="curated-products">
+  <div class="wrap">
+    <div class="section-label">Productos propios</div>
+    <h2>Agrega cualquier producto que quieras promocionar.</h2>
+    <p class="section-sub">Pega la URL de Amazon, Mercado Libre, TikTok Shop o cualquier tienda. Central la guarda como producto curado y lo incorpora a tu catálogo.</p>
+    <div class="curated-box">
+      <form class="curated-form" id="curated-form">
+        <input id="curated-url" type="url" required placeholder="https://www.amazon.com/... o https://www.mercadolibre.com.co/..." aria-label="URL del producto">
+        <select id="curated-category" aria-label="Categoría"><option value="ropa">Ropa</option><option value="calzado">Calzado</option><option value="accesorios" selected>Accesorios</option></select>
+        <button class="btn btn-primary" type="submit">Agregar producto</button>
+      </form>
+      <div class="curated-status" id="curated-status"></div>
+      <div class="curated-list" id="curated-list"></div>
+    </div>
   </div>
 </section>
 
@@ -889,7 +918,41 @@
   document.getElementById("footer-note").textContent =
     "Datos calculados por el motor de scoring propio (precio vs. categoría, demanda, tendencia). Actualiza cada 6 horas.";
 
+
+  async function loadCuratedProducts() {
+    try {
+      const rows = await apiGet("/curated-products?limit=30");
+      const list = document.getElementById("curated-list");
+      if (!rows.length) { list.innerHTML = '<div class="section-sub">Todavía no has agregado productos propios.</div>'; return; }
+      list.innerHTML = rows.map(r => `<div class="curated-item">
+        <img src="${r.image_url || ''}" alt="" onerror="this.style.visibility='hidden'">
+        <div><div class="curated-item-title">${escapeHtml(r.title)}</div><div class="curated-item-meta">${r.platform} · producto curado</div></div>
+        <a class="btn btn-ghost btn-sm" href="${r.product_url}" target="_blank" rel="noopener">Abrir producto</a>
+      </div>`).join("");
+    } catch (error) { console.error(error); }
+  }
+
+  document.getElementById("curated-form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const status = document.getElementById("curated-status");
+    const url = document.getElementById("curated-url").value.trim();
+    const category = document.getElementById("curated-category").value;
+    status.textContent = "Importando producto...";
+    try {
+      const result = await fetch(`${CONFIG.API_BASE}/curated-products`, { method: "POST", headers: {"Content-Type":"application/json","Accept":"application/json"}, body: JSON.stringify({url, category}) });
+      const body = await result.json();
+      if (!result.ok) throw new Error(body.detail || "No se pudo importar");
+      status.textContent = `Producto agregado: ${body.title}`;
+      document.getElementById("curated-url").value = "";
+      await loadCuratedProducts();
+      await loadDashboard();
+    } catch (error) { status.textContent = `Error: ${error.message}`; }
+  });
+
+  function escapeHtml(value) { const div = document.createElement("div"); div.textContent = value ?? ""; return div.innerHTML; }
+
   loadDashboard();
+  loadCuratedProducts();
 
   // ---------- Motor del visor 3D (compartido por vidriera y tabla) ----------
 
