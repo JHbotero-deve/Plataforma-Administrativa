@@ -43,6 +43,29 @@ def expire_catalog():
         conn.close()
 
 
+
+def ingest_amazon_seed(conn) -> list[int]:
+    ids = []
+    for category, asin, url, fallback_title, fallback_price in AMAZON_SEED:
+        try:
+            product = import_url(url, category)
+            if product["external_id"] != asin:
+                raise ValueError(f"ASIN inesperado: {product['external_id']}")
+            if not product.get("title") or product["title"].startswith("Producto Amazon"):
+                product["title"] = fallback_title
+            if product.get("price") is None:
+                product["price"] = fallback_price
+            product["source_metadata"]["seed_reference_price"] = fallback_price
+            product["source_metadata"]["seed_batch"] = "amazon-initial-10"
+            ids.append(upsert_product(conn, "amazon", category, product))
+            image_state = "si" if product.get("image_url") else "no"
+            print(f"[amazon] {asin} -> {product['title']} | USD {product['price']} | imagen={image_state}")
+        except Exception as exc:
+            conn.rollback()
+            print(f"[amazon] error {asin}: {exc}")
+    return ids
+
+
 def run_pipeline():
     print("== Iniciando ciclo de ingesta y análisis ==")
     expire_catalog()
