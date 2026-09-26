@@ -16,6 +16,9 @@ from pydantic import BaseModel
 from db import get_connection
 from monetization import router as monetization_router
 from wompi import router as wompi_router
+from analysis import score_product
+from db import get_connection, upsert_product
+from url_import import import_url
 
 API_VERSION = "1.1.0"
 
@@ -123,6 +126,76 @@ def list_products(
             params.append(limit)
             cur.execute(query, params)
             return cur.fetchall()
+    finally:
+        conn.close()
+
+
+class ProductUrlImport(BaseModel):
+    url: str
+    category: str = "calzado"
+    title: Optional[str] = None
+    price: Optional[float] = None
+    currency: str = "USD"
+    image_url: Optional[str] = None
+
+
+@core_router.post("/products/import-url")
+def import_product_url(payload: ProductUrlImport):
+    if payload.price is not None and payload.price <= 0:
+        raise HTTPException(status_code=400, detail="El precio debe ser mayor que cero.")
+
+    category = payload.category.strip().lower()
+    if category not in {"ropa", "calzado", "accesorios"}:
+        raise HTTPException(status_code=400, detail="Categoría inválida.")
+
+    try:
+        product = import_url(
+            payload.url,
+            category,
+            title=payload.title,
+            price=payload.price,
+            currency=payload.currency,
+            image_url=payload.image_url,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    conn = get_connection()
+    try:
+        product_id = upsert_product(conn, product["platform"], category, product)
+        score = None
+
+        if product.get("price") is not None:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT AVG(p.current_price) AS category_avg
+                    FROM products p
+                    JOIN categories c ON c.id = p.category_id
+                    WHERE c.name = %s AND p.currency = %s
+                      AND p.current_price IS NOT NULL AND p.is_active = TRUE
+                    """,
+                    (category, product["currency"]),
+                )
+                row = cur.fetchone()
+            category_avg = float(row["category_avg"] or product["price"])
+            score = score_product(conn, product_id, category_avg)
+
+        return {
+            "ok": True,
+            "id": product_id,
+            "platform": product["platform"],
+            "title": product["title"],
+            "image_url": product["image_url"],
+            "product_url": product["product_url"],
+            "price": product["price"],
+            "currency": product["currency"],
+            "opportunity_score": score,
+            "message": "Producto agregado desde URL. El enlace original queda disponible para venta.",
+        }
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
