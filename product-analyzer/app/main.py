@@ -1,3 +1,4 @@
+import os
 import time
 
 import schedule
@@ -14,7 +15,7 @@ SEARCH_CONFIG = [
     ("ropa", "campera mujer"),
     ("calzado", "zapatillas urbanas"),
 ]
-SCORE_THRESHOLD = float(__import__("os").getenv("SCORE_THRESHOLD", "50"))
+SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
 
 
 def build_url(title: str, product_url: str | None) -> str:
@@ -48,79 +49,80 @@ def run_pipeline():
     conn = get_connection()
     product_ids = []
 
-    for category, term in SEARCH_CONFIG:
-        try:
-            products = fetch_mercadolibre(term)
-        except Exception as exc:
-            print(f"[mercadolibre] error trayendo '{term}': {exc}")
-            continue
-
-        if not products:
-            print(f"[mercadolibre] sin resultados reales para '{term}'.")
-            continue
-
-        for product in products:
+    try:
+        for category, term in SEARCH_CONFIG:
             try:
-                product_ids.append(upsert_product(conn, "mercadolibre", category, product))
+                products = fetch_mercadolibre(term)
             except Exception as exc:
-                conn.rollback()
-                print(f"[mercadolibre] error insertando producto: {exc}")
+                print(f"[mercadolibre] error trayendo '{term}': {exc}")
+                continue
 
-    averages = {}
-    with conn.cursor() as cur:
-        cur.execute("""
-            SELECT c.name AS category, p.currency, AVG(p.current_price) AS avg_price
-            FROM products p
-            JOIN categories c ON c.id = p.category_id
-            WHERE p.is_active = TRUE AND p.current_price IS NOT NULL
-            GROUP BY c.name, p.currency
-        """)
-        for row in cur.fetchall():
-            averages[(row["category"], row["currency"])] = float(row["avg_price"] or 0)
+            if not products:
+                print(f"[mercadolibre] sin resultados reales para '{term}'.")
+                continue
 
-    for product_id in set(product_ids):
+            for product in products:
+                try:
+                    product_ids.append(upsert_product(conn, "mercadolibre", category, product))
+                except Exception as exc:
+                    conn.rollback()
+                    print(f"[mercadolibre] error insertando producto: {exc}")
+
+        averages = {}
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT c.name AS category, p.currency
+                SELECT c.name AS category, p.currency, AVG(p.current_price) AS avg_price
                 FROM products p
-                LEFT JOIN categories c ON c.id = p.category_id
-                WHERE p.id = %s
-            """, (product_id,))
-            row = cur.fetchone()
+                JOIN categories c ON c.id = p.category_id
+                WHERE p.is_active = TRUE AND p.current_price IS NOT NULL
+                GROUP BY c.name, p.currency
+            """)
+            for row in cur.fetchall():
+                averages[(row["category"], row["currency"])] = float(row["avg_price"] or 0)
 
-        if not row:
-            continue
-
-        score = score_product(
-            conn,
-            product_id,
-            averages.get((row["category"], row["currency"]), 0),
-        )
-        print(f"Producto {product_id} -> opportunity_score = {score}")
-
-        if score >= SCORE_THRESHOLD:
+        for product_id in set(product_ids):
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT p.title, p.current_price, p.product_url
+                    SELECT c.name AS category, p.currency
                     FROM products p
+                    LEFT JOIN categories c ON c.id = p.category_id
                     WHERE p.id = %s
                 """, (product_id,))
-                product = cur.fetchone()
+                row = cur.fetchone()
 
-            if product:
-                send_telegram_alert({
-                    "title": product["title"],
-                    "price": product["current_price"],
-                    "url": build_url(product["title"], product["product_url"]),
-                    "score": round(score, 1),
-                })
+            if not row:
+                continue
 
-    conn.close()
+            score = score_product(
+                conn,
+                product_id,
+                averages.get((row["category"], row["currency"]), 0),
+            )
+            print(f"Producto {product_id} -> opportunity_score = {score}")
+
+            if score >= SCORE_THRESHOLD:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT p.title, p.current_price, p.product_url
+                        FROM products p
+                        WHERE p.id = %s
+                    """, (product_id,))
+                    product = cur.fetchone()
+
+                if product:
+                    send_telegram_alert({
+                        "title": product["title"],
+                        "price": product["current_price"],
+                        "url": build_url(product["title"], product["product_url"]),
+                        "score": round(score, 1),
+                    })
+    finally:
+        conn.close()
 
     if creator_configured():
         try:
             result = sync_showcase(limit=200)
-            print(f"[tiktok] productos sincronizados: {result.get("synced", 0)}")
+            print(f"[tiktok] productos sincronizados: {result.get('synced', 0)}")
         except Exception as exc:
             print(f"[tiktok] error sincronizando Creator: {exc}")
     else:
