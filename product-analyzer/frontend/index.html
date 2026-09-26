@@ -43,7 +43,7 @@ import {RoundedBoxGeometry} from "three/addons/geometries/RoundedBoxGeometry.js"
 (()=>{"use strict";
 const API="/api", $=id=>document.getElementById(id);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const money=(v,c)=>{if(v==null||Number.isNaN(Number(v)))return"—";try{return new Intl.NumberFormat("es-CO",{style:"currency",currency:c||"COP",maximumFractionDigits:0}).format(Number(v))}catch{return Number(v).toLocaleString("es-CO")+" "+(c||"")}};
+const money=(v,c)=>{if(v==null||Number.isNaN(Number(v)))return"—";const n=Number(v);const cur=String(c||"COP").toUpperCase();if(cur==="USD"||cur==="US$"||cur==="$"){const cop=n*3329.61;return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(cop)+" COP";}try{return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(n)+" COP"}catch{return n.toLocaleString("es-CO")+" COP"}};
 const date=v=>v?new Date(v).toLocaleString("es-CO"):"—";
 async function get(path){const r=await fetch(API+path,{cache:"no-store",headers:{Accept:"application/json"}});if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}
 function status(kind,label){$("status").innerHTML='<span class="dot '+(kind==="ok"?"ok":kind==="warn"?"warn":"")+'"></span>'+esc(label)}
