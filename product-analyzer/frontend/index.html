@@ -39,6 +39,7 @@
 import * as THREE from "three";
 import {OrbitControls} from "three/addons/controls/OrbitControls.js";
 import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
+import {RoundedBoxGeometry} from "three/addons/geometries/RoundedBoxGeometry.js";
 (()=>{"use strict";
 const API="/api", $=id=>document.getElementById(id);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -85,7 +86,7 @@ async function open3dInCard(p){
    }else if(cat.includes("acces")){
      geometry=new THREE.DodecahedronGeometry(.82,2);
    }else{
-     geometry=new THREE.RoundedBoxGeometry(1.35,1.35,1.35,4,.12);
+     geometry=new RoundedBoxGeometry(1.35,1.35,1.35,4,.12);
    }
    const base=new THREE.MeshStandardMaterial({color:0x8995a3,roughness:.38,metalness:.08});
    const accent=new THREE.MeshStandardMaterial({color:0x4d5967,roughness:.5,metalness:.12});
@@ -97,6 +98,15 @@ async function open3dInCard(p){
    },undefined,()=>{});
  };
  if(p.model_url)new GLTFLoader().load(p.model_url,g=>{g.scene.scale.setScalar(1.5);group.add(g.scene)},()=>addFallback(),()=>addFallback()); else addFallback();
+ const ball=new THREE.Mesh(new THREE.SphereGeometry(.14,24,24),new THREE.MeshStandardMaterial({color:0xb8c2cc,roughness:.28,metalness:.45})); ball.position.set(0,-1.15,0); ball.userData.baseY=-1.15; scene.add(ball);
+ const ring=new THREE.Mesh(new THREE.TorusGeometry(.22,.025,12,40),new THREE.MeshStandardMaterial({color:0x66727f,roughness:.35,metalness:.5})); ring.rotation.x=-Math.PI/2; ring.position.set(0,-1.28,0); scene.add(ring);
+ const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(); let rotating=false,lastX=0,lastY=0;
+ const point=e=>{const r=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-r.left)/r.width)*2-1;pointer.y=-((e.clientY-r.top)/r.height)*2+1;raycaster.setFromCamera(pointer,camera)};
+ renderer.domElement.addEventListener("pointerdown",e=>{point(e);if(raycaster.intersectObject(ball).length){rotating=true;lastX=e.clientX;lastY=e.clientY;controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId);}});
+ renderer.domElement.addEventListener("pointermove",e=>{if(!rotating)return;group.rotation.y+=(e.clientX-lastX)*.012;group.rotation.x+=(e.clientY-lastY)*.008;lastX=e.clientX;lastY=e.clientY;});
+ const stop=e=>{if(!rotating)return;rotating=false;controls.enabled=true;try{renderer.domElement.releasePointerCapture(e.pointerId)}catch{}};
+ renderer.domElement.addEventListener("pointerup",stop); renderer.domElement.addEventListener("pointercancel",stop);
+ ball.material.emissive=new THREE.Color(0x33404c); ball.material.emissiveIntensity=.35;
   const resize=()=>{const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}; const ro=new ResizeObserver(resize);ro.observe(host);resize();
  const animate=()=>{if(!host.isConnected){renderer.dispose();controls.dispose();ro.disconnect();return}requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}; animate();
  viewers.set(String(p.id),{controls,renderer,ro});
