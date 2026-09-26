@@ -39,6 +39,7 @@
 import * as THREE from "three";
 import {OrbitControls} from "three/addons/controls/OrbitControls.js";
 import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
+import {DragControls} from "three/addons/controls/DragControls.js";
 (()=>{"use strict";
 const API="/api", $=id=>document.getElementById(id);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -97,12 +98,13 @@ async function open3dInCard(p){
    },undefined,()=>{});
  };
  if(p.model_url)new GLTFLoader().load(p.model_url,g=>{g.scene.scale.setScalar(1.5);group.add(g.scene)},()=>addFallback(),()=>addFallback()); else addFallback();
+ const drag=new DragControls([group],camera,renderer.domElement); drag.transformGroup=true; drag.rotateSpeed=1.15; drag.addEventListener("dragstart",()=>{controls.enabled=false}); drag.addEventListener("dragend",()=>{controls.enabled=true});
  const resize=()=>{const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}; const ro=new ResizeObserver(resize);ro.observe(host);resize();
- const animate=()=>{if(!host.isConnected){renderer.dispose();controls.dispose();ro.disconnect();return}requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}; animate();
- viewers.set(String(p.id),{controls,renderer,ro});
+ const animate=()=>{if(!host.isConnected){renderer.dispose();controls.dispose();drag.dispose();ro.disconnect();return}requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)}; animate();
+ viewers.set(String(p.id),{controls,renderer,drag,ro});
 }
 $("featured").addEventListener("click",async e=>{
- const close=e.target.closest("[data-close3d]"); if(close){const id=String(close.dataset.close3d),host=$("viewer-"+id);host.classList.remove("open");const v=viewers.get(id);if(v){v.controls.dispose();v.renderer.dispose();v.ro.disconnect();viewers.delete(id)}return}
+ const close=e.target.closest("[data-close3d]"); if(close){const id=String(close.dataset.close3d),host=$("viewer-"+id);host.classList.remove("open");const v=viewers.get(id);if(v){v.controls.dispose();v.drag?.dispose();v.renderer.dispose();v.ro.disconnect();viewers.delete(id)}return}
  const b=e.target.closest(".view3d");if(!b)return;const id=String(b.dataset.id),host=$("viewer-"+id);if(host.classList.contains("open")){host.classList.remove("open");return}
  try{const r=await get("/products/"+id);await open3dInCard(r.product)}catch(err){console.error(err)}
 });
