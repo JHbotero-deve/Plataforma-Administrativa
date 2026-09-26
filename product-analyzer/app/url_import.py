@@ -65,7 +65,8 @@ def import_url(url: str, category: str, title: str | None = None,
     platform = detect_platform(url)
     metadata = _metadata(url)
 
-    resolved_url = metadata.get("resolved_url") or url\n    external_id = _asin(resolved_url) if platform == "amazon" else None
+    resolved_url = metadata.get("resolved_url") or url
+    external_id = _asin(resolved_url) if platform == "amazon" else None
     if not external_id:
         path_id = re.search(r"/([A-Z]{2,4}-?[0-9]{6,})", parsed.path, re.I)
         external_id = path_id.group(1).upper() if path_id else re.sub(r"[^a-zA-Z0-9]+", "-", parsed.path.strip("/"))[:120]
@@ -90,6 +91,7 @@ def import_url(url: str, category: str, title: str | None = None,
         "source_metadata": {
             "import_method": "product_url",
             "metadata_source": "open_graph" if metadata else "url_only",
-            "original_url": url,\n            "resolved_url": resolved_url,
+            "original_url": url,
+            "resolved_url": resolved_url,
         },
     }
