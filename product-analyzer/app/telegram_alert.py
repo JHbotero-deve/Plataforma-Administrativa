@@ -435,6 +435,15 @@ def run_bot():
 
                 _handle(token, chat_id, text)
 
+        except requests.HTTPError as exc:
+            response = getattr(exc, "response", None)
+            status = response.status_code if response is not None else "?"
+            if status == 409:
+                print("[telegram-bot] polling bloqueado: otro proceso está usando el bot (HTTP 409).")
+                time.sleep(max(POLL_INTERVAL, 15))
+            else:
+                print(f"[telegram-bot] polling HTTP error: {status}")
+                time.sleep(max(POLL_INTERVAL, 5))
         except (requests.RequestException, ValueError, RuntimeError) as exc:
-            print(f"[telegram-bot] polling error: {exc}")
+            print(f"[telegram-bot] polling error: {type(exc).__name__}")
             time.sleep(max(POLL_INTERVAL, 5))
