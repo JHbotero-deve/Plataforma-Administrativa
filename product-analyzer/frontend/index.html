@@ -57,17 +57,17 @@ async function open3dInCard(p){
  const host=$("viewer-"+p.id); if(!host||viewers.has(String(p.id)))return;
  host.classList.add("open");
  const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0d131a);
- const camera=new THREE.PerspectiveCamera(34,1,.1,100); camera.position.set(0,.15,4.4);
+ const camera=new THREE.PerspectiveCamera(34,1,.1,100); camera.position.set(0,.45,3.6); camera.lookAt(0,0,0);
  const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false}); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.outputColorSpace=THREE.SRGBColorSpace; host.appendChild(renderer.domElement);
  const controls=new OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.enablePan=false; controls.enableRotate=false; controls.enableZoom=true; controls.minDistance=2.5; controls.maxDistance=6;
  scene.add(new THREE.HemisphereLight(0xffffff,0x334455,2.4));
  const key=new THREE.DirectionalLight(0xffffff,3); key.position.set(3,4,5); scene.add(key);
  const fill=new THREE.DirectionalLight(0x7f9bb8,1.4); fill.position.set(-4,1,3); scene.add(fill);
  const group=new THREE.Group(); group.position.y=.25; scene.add(group);
- const mat=new THREE.MeshStandardMaterial({color:0x9da8b3,roughness:.3,metalness:.18});
+ const mat=new THREE.MeshStandardMaterial({color:0xd6dde5,roughness:.3,metalness:.12});
  const cat=(String(p.category||"")+" "+String(p.title||"")).toLowerCase();
  let mesh;
- if(cat.includes("smarttag")||cat.includes("tag2")||cat.includes("tracker")||cat.includes("bluetooth")){
+ if(cat.includes("mouse")||cat.includes("raton")||cat.includes("arc touch")){\n   const body=new THREE.Mesh(new RoundedBoxGeometry(1.35,.32,1.05,8,.16),new THREE.MeshStandardMaterial({color:0xd7dbe0,roughness:.28,metalness:.18}));\n   body.rotation.x=-.12; body.position.y=.02; group.add(body);\n   const top=new THREE.Mesh(new RoundedBoxGeometry(.7,.035,.52,6,.035),new THREE.MeshStandardMaterial({color:0x3c434b,roughness:.3,metalness:.25}));\n   top.position.set(0,.2,.02); group.add(top);\n   const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,.055,24),new THREE.MeshStandardMaterial({color:0xb9c0c8,roughness:.25,metalness:.55}));\n   wheel.rotation.z=Math.PI/2; wheel.position.set(0,.235,.02); group.add(wheel);\n   mesh=body;\n }else if(cat.includes("smarttag")||cat.includes("tag2")||cat.includes("tracker")||cat.includes("bluetooth")){
    const body=new RoundedBoxGeometry(.92,.16,.92,8,.14); mesh=new THREE.Mesh(body,mat);
    mesh.rotation.x=-.08;
    const hole=new THREE.Mesh(new THREE.TorusGeometry(.16,.055,16,32),new THREE.MeshStandardMaterial({color:0x20262c,roughness:.25,metalness:.35}));
@@ -98,7 +98,7 @@ async function open3dInCard(p){
  renderer.domElement.addEventListener("pointermove",e=>{if(!rotating)return;group.rotation.y+=(e.clientX-lastX)*.012;group.rotation.x+=(e.clientY-lastY)*.008;lastX=e.clientX;lastY=e.clientY});
  const stop=e=>{if(rotating){rotating=false;controls.enabled=true;try{renderer.domElement.releasePointerCapture(e.pointerId)}catch{}}};renderer.domElement.addEventListener("pointerup",stop);renderer.domElement.addEventListener("pointercancel",stop);
  const resize=()=>{const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()};const ro=new ResizeObserver(resize);ro.observe(host);resize();
- const animate=()=>{if(!host.isConnected){renderer.dispose();controls.dispose();ro.disconnect();return}requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)};animate();
+ const animate=()=>{if(!host.isConnected){renderer.dispose();controls.dispose();ro.disconnect();return}controls.update();renderer.render(scene,camera)};renderer.setAnimationLoop(animate);
  viewers.set(String(p.id),{controls,renderer,ro});
 }
 $("featured").addEventListener("click",async e=>{
