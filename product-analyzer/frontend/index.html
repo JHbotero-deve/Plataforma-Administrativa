@@ -1,288 +1,67 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Central — Gestión comercial</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Central — Radar de oportunidades</title>
+<meta name="description" content="Central analiza productos reales y detecta oportunidades de compra y monetización.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#07090d;--side:#090c12;--panel:#0e121a;--line:#202936;--line2:#2c3747;--text:#f5f7fa;--muted:#8c97a8;--dim:#5f6978;--acc:#ff8a00;--accbg:#2b1a07;--warn:#e8c547}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Inter,system-ui,sans-serif}button,input,select,textarea{font:inherit}
-.sidebar{position:fixed;inset:0 auto 0 0;width:220px;background:var(--side);border-right:1px solid var(--line);padding:22px 14px;z-index:30;transition:.2s}
-.brand{display:flex;gap:10px;align-items:center;margin-bottom:22px}.mark{width:36px;height:36px;border-radius:10px;background:var(--acc);color:#120a00;display:grid;place-items:center;font:700 16px "Space Grotesk"}.brand b{font:700 17px "Space Grotesk"}.brand small{display:block;color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:.08em}
-.nav{width:100%;height:42px;border:1px solid transparent;background:none;color:var(--muted);display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:10px;cursor:pointer;margin-bottom:2px;font-weight:600;text-align:left}.nav:hover{background:#0f141c;color:var(--text)}.nav.active{background:var(--accbg);border-color:#5a3510;color:var(--text)}.nav span{flex:1}
-.badge{min-width:22px;height:22px;border-radius:99px;background:var(--acc);color:#120a00;display:grid;place-items:center;font-size:10px;font-weight:700}
-.main{margin-left:220px}.top{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px 28px;border-bottom:1px solid var(--line);background:rgba(7,9,13,.94);backdrop-filter:blur(12px)}
-.crumb{font-size:10px;text-transform:uppercase;font-weight:700;color:var(--dim)}.crumb b{color:var(--acc)}h1{font:500 24px "Space Grotesk";margin:2px 0 0}.actions{display:flex;gap:8px;flex-wrap:wrap}
-.btn{height:38px;border:1px solid var(--line2);background:#161d29;color:var(--text);border-radius:10px;padding:0 14px;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none}.btn.primary{background:var(--acc);border-color:var(--acc);color:#120a00}.btn:disabled{opacity:.5;cursor:wait}
-.content{padding:26px 28px 60px;max-width:1400px;margin:auto}.section{scroll-margin-top:100px;margin-bottom:30px}.head{display:flex;justify-content:space-between;align-items:end;gap:14px;margin-bottom:14px;flex-wrap:wrap}
-.eyebrow{font-size:10px;color:var(--acc);font-weight:700;text-transform:uppercase;letter-spacing:.08em}.title{font:700 21px "Space Grotesk";margin:2px 0}.copy{margin:0;color:var(--muted);font-size:12px}
-.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}.metric{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}.metric span{font-size:11px;color:var(--muted)}.metric strong{display:block;font:700 24px "Space Grotesk";margin-top:6px}.acc{color:var(--acc)}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}.panelhead{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.panelhead b{font:700 15px "Space Grotesk"}.panelhead small{display:block;color:var(--muted);font-size:10px}.pad{padding:16px}
-.field,.filter{background:#0b0f15;color:var(--text);border:1px solid var(--line2);border-radius:8px;height:40px;padding:0 10px;font-size:12px;width:100%;min-width:0}.filter{width:auto;height:36px}.field:focus{outline:0;border-color:#566579}textarea.field{height:auto;padding:10px}
-.filters{display:flex;gap:8px;flex-wrap:wrap}.products{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px}.product{background:#0b0f15;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-.media{height:150px;position:relative;background:linear-gradient(180deg,#171d27,#0c1118);border-bottom:1px solid var(--line)}.media img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;padding:16px}.tag{position:absolute;top:9px;z-index:1;border-radius:99px;padding:3px 8px;font-size:9px;font-weight:700}.tag.l{left:9px;background:rgba(7,9,13,.86);border:1px solid var(--line2);text-transform:uppercase;color:#c8d0da}.tag.r{right:9px}.hi{background:var(--acc);color:#120a00}.mid{background:var(--warn);color:#251f05}.lo{background:#202833}
-.body{padding:12px}.ptitle{font-size:12px;font-weight:700;min-height:34px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.price{font:700 15px "Space Grotesk";color:var(--acc);margin-top:8px}.meta{display:flex;justify-content:space-between;color:var(--muted);font-size:10px;margin-top:4px}.product .btn{width:100%;height:32px;margin-top:8px;font-size:10px}
-.twocol{display:grid;grid-template-columns:1.5fr .8fr;gap:14px}.bars{height:190px;display:flex;align-items:end;gap:10px;padding:16px;border-bottom:1px solid var(--line)}.barcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:end;gap:5px}.bar{width:100%;max-width:50px;background:var(--acc);border-radius:6px 6px 0 0;min-height:3px}.barcol small{font-size:9px;color:var(--dim)}
-.row{display:flex;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}.rank{width:24px;height:24px;border-radius:8px;background:#161d29;display:grid;place-items:center;font-size:10px;font-weight:700}.row div{min-width:0;flex:1}.row b{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row small{color:var(--dim);font-size:9px}.row strong{font:700 11px monospace;color:var(--acc)}
-.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;min-width:680px}th,td{padding:11px 14px;border-bottom:1px solid var(--line);text-align:left;font-size:11px}th{font-size:10px;color:var(--dim);text-transform:uppercase}.pill{display:inline-flex;border-radius:99px;padding:3px 8px;background:var(--accbg);color:var(--acc);font-size:9px;font-weight:700}
-.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.plan{padding:15px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}.plan h3{font:700 15px "Space Grotesk";margin:0 0 4px}.plan strong{font:700 20px "Space Grotesk";color:var(--acc)}.plan .btn,.plan .pill{margin-top:10px}
-.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:10px;grid-column:1/-1}.msg{min-height:18px;margin-top:8px;color:var(--muted);font-size:11px}
-.pubstage{border:1px solid var(--line);border-radius:16px;background:#090c11;overflow:hidden}.pub{display:grid;grid-template-columns:1fr 1fr;min-height:420px}.pub-img{display:grid;place-items:center;padding:28px;background:radial-gradient(circle at 50% 48%,#1b2533,#07090d 70%)}.pub-img img{max-width:100%;max-height:360px;object-fit:contain;filter:drop-shadow(0 24px 30px rgba(0,0,0,.5))}.pub-info{padding:40px;display:flex;flex-direction:column;justify-content:center;gap:10px}.pub-info h3{font:700 clamp(22px,3vw,36px)/1.1 "Space Grotesk";margin:0}.big{font-size:26px}.pubctl{display:flex;align-items:center;gap:8px}
-.studio{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}.stage{min-height:340px;background:radial-gradient(circle at 50% 38%,#1b2533,#07090d 70%);display:grid;place-items:center;position:relative;overflow:hidden}.viewer{width:80%;height:300px;display:grid;place-items:center;transform:perspective(1000px) rotateX(var(--rx,0deg)) rotateY(var(--ry,-18deg));transition:transform .12s}.viewer img{max-width:90%;max-height:90%;object-fit:contain;filter:drop-shadow(0 24px 28px rgba(0,0,0,.45))}model-viewer{width:100%;height:100%;display:none;--poster-color:transparent}.vempty{position:absolute;inset:16px;display:grid;place-items:center;color:var(--muted);border:1px dashed var(--line2);border-radius:14px}
-.ctl{padding:14px;display:grid;gap:10px}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.lbl{font-size:10px;color:var(--dim);text-transform:uppercase;font-weight:700;margin-bottom:4px}.range{width:100%;accent-color:var(--acc)}
-.card{border-radius:16px;border:1px solid #344052;background:linear-gradient(135deg,#141b27,#0a0d13);padding:18px;display:flex;gap:14px;align-items:center;min-height:170px}.card img{width:42%;max-height:140px;object-fit:contain}.card b{font:700 18px/1.1 "Space Grotesk";display:block}.card .price{font-size:18px}
-.toast{position:fixed;right:20px;bottom:20px;background:#10161f;border:1px solid var(--line2);border-radius:10px;padding:12px 14px;font-size:12px;opacity:0;transform:translateY(8px);transition:.2s;z-index:100;pointer-events:none}.toast.show{opacity:1;transform:none}.mobile{display:none}
-@media(max-width:1000px){.grid4{grid-template-columns:repeat(2,1fr)}.twocol,.studio{grid-template-columns:1fr}.products{grid-template-columns:repeat(2,1fr)}.pub{grid-template-columns:1fr}}
-@media(max-width:820px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:none}.main{margin-left:0}.top{padding:12px 16px}.content{padding:18px 16px 50px}.plans{grid-template-columns:1fr}.mobile{display:inline-flex}}
-@media(max-width:560px){.grid4,.products,.two{grid-template-columns:1fr}.pub-info{padding:22px}}
-</style></head>
+:root{--bg:#0a0d12;--panel:#121720;--panel2:#171d27;--line:#29313d;--text:#eef2f6;--muted:#929baa;--accent:#b6e85a;--accent2:#9b83ff;--danger:#ff6978}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:linear-gradient(180deg,#111722 0,#0a0d12 52%);color:var(--text);font:15px/1.55 Inter,system-ui,sans-serif}.wrap{width:min(1160px,calc(100% - 32px));margin:auto}.mono{font-family:"JetBrains Mono",monospace}.nav{position:sticky;top:0;z-index:20;background:rgba(10,13,18,.94);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}.nav .wrap{min-height:64px;display:flex;align-items:center;justify-content:space-between;gap:18px}.brand{font-weight:700;letter-spacing:.04em}.brand b{color:var(--accent)}.navlinks{display:flex;gap:18px;flex-wrap:wrap}.navlinks a{color:var(--muted);text-decoration:none;font-size:13px}.navlinks a:hover{color:var(--text)}.status{font-size:12px;color:var(--muted)}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--danger);margin-right:7px}.dot.ok{background:var(--accent)}.dot.warn{background:#e8c547}header{padding:78px 0 62px;border-bottom:1px solid var(--line)}.eyebrow{font:12px "JetBrains Mono",monospace;color:var(--accent);text-transform:uppercase;letter-spacing:.08em}h1{font-size:clamp(40px,6vw,70px);line-height:1.02;max-width:900px;margin:14px 0 20px}h2{font-size:26px;margin:0 0 7px}h3{margin:0 0 8px}p{color:var(--muted)}.hero-copy{max-width:730px;font-size:17px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}.btn{display:inline-flex;align-items:center;justify-content:center;padding:11px 16px;border:1px solid var(--line);background:var(--panel);color:var(--text);text-decoration:none;border-radius:7px;font-weight:600;cursor:pointer}.btn.primary{background:var(--accent);border-color:var(--accent);color:#10150d}.btn.small{padding:8px 11px;font-size:12px}.btn:disabled{opacity:.55;cursor:not-allowed}section{padding:58px 0;border-bottom:1px solid var(--line)}.section-head{display:flex;align-items:end;justify-content:space-between;gap:20px;margin-bottom:24px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.card,.panel,.metric{background:var(--panel);border:1px solid var(--line);border-radius:10px}.card{overflow:hidden;min-width:0}.card-media{height:170px;overflow:hidden;background:var(--panel2);display:flex;align-items:center;justify-content:center;position:relative}.card-media img{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;display:block;padding:14px}.card-media .noimg{font:12px "JetBrains Mono";color:var(--muted)}.card-body{padding:13px}.badge{display:inline-block;border:1px solid #4d5968;color:#c1c9d4;border-radius:999px;padding:3px 8px;font:11px "JetBrains Mono"}.title{font-weight:600;margin:10px 0 7px;min-height:42px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.price{font:700 15px "JetBrains Mono";color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.score{color:#d5caff;font:600 12px "JetBrains Mono";margin-top:5px}.card-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.card-actions a{margin:0}.empty{border:1px dashed var(--line);padding:30px;text-align:center;color:var(--muted);grid-column:1/-1}.import{display:grid;grid-template-columns:1fr 180px 130px;gap:10px}.field{width:100%;padding:12px 13px;border:1px solid var(--line);background:#0e131a;color:var(--text);border-radius:7px;outline:none}.field:focus{border-color:#566579}.import-result{margin-top:12px;min-height:20px;color:var(--muted);font-size:13px}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}table{width:100%;border-collapse:collapse;min-width:860px;background:var(--panel)}th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line)}th{font:11px "JetBrains Mono";color:var(--muted);text-transform:uppercase}td{font-size:13px}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.metric{padding:18px}.metric strong{display:block;font:700 23px "JetBrains Mono";color:var(--accent);margin-top:5px}.metric span{color:var(--muted);font-size:12px}.inline-3d{display:block;height:205px;margin:0 13px 13px;border:1px solid var(--line);border-radius:8px;background:radial-gradient(circle at 50% 38%,#26313d 0,#111821 45%,#0d131a 100%);overflow:hidden;position:relative;perspective:850px}.inline-3d canvas{display:none}.inline-3d .hint{position:absolute;left:10px;bottom:8px;padding:4px 7px;border-radius:5px;background:rgba(10,13,18,.82);color:#aeb7c4;font:10px "JetBrains Mono";pointer-events:none;z-index:5}.model3d-css{position:absolute;inset:0;display:grid;place-items:center;transform-style:preserve-3d;cursor:default}.model3d-css .object{position:relative;width:150px;height:105px;transform-style:preserve-3d;transform:rotateX(-12deg) rotateY(28deg);transition:transform .06s linear}.model3d-css .part{position:absolute;transform-style:preserve-3d}.model3d-css .shadow{position:absolute;left:50%;top:150px;width:110px;height:24px;transform:translateX(-50%);border-radius:50%;background:rgba(0,0,0,.45);filter:blur(7px)}.model3d-css .ball{position:absolute;left:50%;bottom:23px;width:24px;height:24px;margin-left:-12px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#cbd4dd 38%,#66727f 100%);box-shadow:0 3px 12px rgba(0,0,0,.55);z-index:4;cursor:grab}.model3d-css .ball:after{content:"";position:absolute;left:50%;top:50%;width:38px;height:38px;margin:-19px;border:1px solid #66727f;border-radius:50%}.m-mic .body{left:12px;top:28px;width:126px;height:48px;border-radius:12px;background:linear-gradient(145deg,#4b555f,#15191e);box-shadow:inset 0 2px 5px #7c8792,0 8px 14px #000}.m-mic .screen{left:43px;top:35px;width:60px;height:23px;border-radius:4px;background:#080b0e;border:1px solid #68737e}.m-mic .line{left:52px;top:42px;width:42px;height:3px;background:#aeb7c4;box-shadow:0 7px 0 #4f5b66}.m-mic .led{left:22px;top:48px;width:8px;height:8px;border-radius:50%;background:#b6e85a;box-shadow:0 0 8px #b6e85a}.m-glasses .bridge{left:62px;top:38px;width:26px;height:14px;border-top:5px solid #1d2228}.m-glasses .lens{top:24px;width:62px;height:48px;border:7px solid #171b20;border-radius:24px 24px 18px 18px;background:rgba(160,185,205,.16);box-shadow:inset 0 0 12px rgba(180,220,255,.22)}.m-glasses .lens.l{left:4px}.m-glasses .lens.r{right:4px}.m-glasses .arm{top:31px;width:58px;height:10px;border-radius:8px;background:#14181d}.m-glasses .arm.l{left:-25px;transform:rotate(-8deg)}.m-glasses .arm.r{right:-25px;transform:rotate(8deg)}.m-mouse .body{left:15px;top:18px;width:120px;height:78px;border-radius:48% 48% 35% 35%;background:linear-gradient(145deg,#eef1f4,#8d969f);box-shadow:inset 0 3px 6px #fff,0 10px 18px #000}.m-mouse .stripe{left:57px;top:22px;width:6px;height:45px;border-radius:5px;background:#343b44}.m-mouse .wheel{left:54px;top:34px;width:12px;height:19px;border-radius:7px;background:#aeb7c4}.m-tag .body{left:30px;top:12px;width:90px;height:90px;border-radius:20px;background:linear-gradient(145deg,#f0f2f4,#9ca5ae);box-shadow:inset 0 2px 6px #fff,0 10px 18px #000}.m-tag .hole{left:90px;top:22px;width:22px;height:22px;border:6px solid #222831;border-radius:50%}.m-phone .body{left:42px;top:8px;width:66px;height:98px;border-radius:10px;background:linear-gradient(145deg,#424b55,#101419);box-shadow:inset 2px 2px 5px #89939d,0 10px 18px #000}.m-phone .screen{left:47px;top:13px;width:56px;height:88px;border-radius:6px;background:#111b25;border:2px solid #56616c}.m-watch .body{left:45px;top:15px;width:60px;height:72px;border-radius:14px;background:#252b32;box-shadow:0 8px 16px #000}.m-watch .face{left:50px;top:21px;width:50px;height:60px;border-radius:10px;background:#080b0e;border:2px solid #79838d}.m-watch .strap{left:62px;top:0;width:25px;height:105px;border-radius:12px;background:#15191e;z-index:-1}.m-camera .body{left:23px;top:28px;width:108px;height:58px;border-radius:10px;background:linear-gradient(145deg,#555f69,#171c21);box-shadow:inset 0 2px 4px #929ba5,0 10px 18px #000}.m-camera .lens{left:58px;top:35px;width:42px;height:42px;border-radius:50%;background:radial-gradient(circle,#9aa6b2 0 18%,#17202a 19% 42%,#050709 43% 100%);border:3px solid #87919b}.m-headphones .band{left:25px;top:10px;width:100px;height:90px;border:14px solid #303840;border-bottom-color:transparent;border-radius:60px 60px 0 0}.m-headphones .cup{top:68px;width:30px;height:38px;border-radius:10px;background:#c5cbd1}.m-headphones .cup.l{left:17px}.m-headphones .cup.r{right:17px}.m-bottle .body{left:43px;top:15px;width:64px;height:94px;border-radius:18px 18px 14px 14px;background:linear-gradient(90deg,#697580,#d9dee2 45%,#737e88);box-shadow:0 10px 18px #000}.m-bottle .cap{left:50px;top:5px;width:50px;height:18px;border-radius:7px;background:#343c44}.m-default .body{left:32px;top:17px;width:86px;height:86px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#aeb8c2 35%,#404a54 100%);box-shadow:0 10px 18px #000} .modal{display:none}.modal.open{display:none}
+@media(max-width:1000px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:850px){.grid,.metrics{grid-template-columns:1fr 1fr}.import{grid-template-columns:1fr}.navlinks{display:none}}@media(max-width:560px){.grid,.metrics{grid-template-columns:1fr}.card-media{height:155px}.inline-3d{height:175px}header{padding-top:50px}.viewer-stage{height:330px}.model{width:190px;height:190px}}
+</style>
+</head>
 <body>
-<aside class="sidebar" id="sidebar">
-  <div class="brand"><div class="mark">C</div><div><b>CENTRAL</b><small>Gestión comercial</small></div></div>
-  <button class="nav active" data-t="publicaciones"><span>Tienda</span></button>
-  <button class="nav" data-t="resumen"><span>Resumen</span></button>
-  <button class="nav" data-t="productos"><span>Productos</span></button>
-  <button class="nav" data-t="analitica"><span>Analítica</span></button>
-  <button class="nav" data-t="pedidos"><span>Pedidos</span><em class="badge" id="ordersBadge">0</em></button>
-  <button class="nav" data-t="planes"><span>Planes</span></button>
-  <button class="nav" data-t="studio"><span>Estudio 3D</span></button>
-</aside>
-<main class="main">
-<header class="top"><div><div class="crumb">Gestión comercial / <b id="crumb">Tienda</b></div><h1>Centro de ventas</h1></div>
-<div class="actions"><button class="btn mobile" id="menu" type="button">☰</button><button class="btn" id="refresh" type="button">↻ Actualizar</button><a class="btn" href="/tienda" target="_blank" rel="noopener noreferrer">Ver tienda →</a><button class="btn primary" id="goImport" type="button">＋ Importar</button></div></header>
-<div class="content">
+<nav class="nav"><div class="wrap"><div class="brand">CENTRAL <b>·</b> RADAR</div><div class="navlinks"><a href="#oportunidades">Oportunidades</a><a href="#importar">Importar</a><a href="#catalogo">Catálogo</a><a href="#estado">Estado</a></div><div class="status" id="status"><span class="dot"></span>Conectando API</div></div></nav>
 
-<section class="section" id="publicaciones">
-  <div class="head"><div><div class="eyebrow">Tienda</div><h2 class="title">Publicaciones de Central</h2><p class="copy">Las tarjetas publicadas rotan automáticamente.</p></div>
-  <div class="pubctl"><button class="btn" id="pubPrev" type="button">‹</button><span class="copy" id="pubCount">0 / 0</span><button class="btn" id="pubNext" type="button">›</button></div></div>
-  <div class="pubstage" id="pubStage"><div class="empty" style="margin:20px">Cargando publicaciones…</div></div>
-</section>
+<header><div class="wrap"><div class="eyebrow">Producto real · análisis · monetización</div><h1>Detecta oportunidades antes de que desaparezcan.</h1><p class="hero-copy">Central reúne productos reales, calcula una señal de oportunidad y mantiene un catálogo con renovación automática cada 2 horas y vigencia de 48 horas. No usa productos de demostración.</p><div class="actions"><a class="btn primary" href="#oportunidades">Ver oportunidades</a><a class="btn" href="#importar">Importar producto</a></div></div></header>
 
-<section class="section" id="resumen">
-  <div class="head"><div><div class="eyebrow">Resumen</div><h2 class="title">Rendimiento de Central</h2><p class="copy">Datos reales calculados por el backend.</p></div><span class="pill" id="status">Conectando API</span></div>
-  <div class="grid4"><div class="metric"><span>Productos activos</span><strong class="acc" id="mProducts">—</strong></div><div class="metric"><span>Oportunidades altas</span><strong id="mHigh">—</strong></div><div class="metric"><span>Mercado Libre</span><strong id="mML">—</strong></div><div class="metric"><span>Amazon</span><strong id="mAmazon">—</strong></div></div>
-  <div class="grid4"><div class="metric"><span>Ventas cobradas</span><strong id="mSales">—</strong></div><div class="metric"><span>Ganancia estimada</span><strong class="acc" id="mProfit">—</strong></div><div class="metric"><span>Margen</span><strong id="mMargin">—</strong></div><div class="metric"><span>Unidades vendidas</span><strong id="mUnits">—</strong></div></div>
-</section>
+<main>
+<section id="oportunidades"><div class="wrap"><div class="section-head"><div><div class="eyebrow">01 · scoring</div><h2>Oportunidades activas</h2><p>Productos reales ordenados por la señal calculada por Central.</p></div><div class="mono" id="updated">—</div></div><div class="grid" id="featured"><div class="empty">Cargando datos reales…</div></div></div></section>
 
-<section class="section" id="productos">
-  <div class="head"><div><div class="eyebrow">Catálogo</div><h2 class="title">Productos</h2><p class="copy">Ordenados por señal de oportunidad.</p></div>
-  <div class="filters"><select class="filter" id="fPlatform"><option value="">Todas las fuentes</option><option value="mercadolibre">Mercado Libre</option><option value="amazon">Amazon</option><option value="tiktok">TikTok</option><option value="personal">Personal</option></select><select class="filter" id="fCategory"><option value="">Todas las categorías</option><option value="ropa">Ropa</option><option value="calzado">Calzado</option><option value="accesorios">Accesorios</option><option value="otros">Otros</option></select><select class="filter" id="fScore"><option value="0">Todos</option><option value="75">Score ≥ 75</option><option value="50">Score ≥ 50</option></select></div></div>
-  <div class="panel"><div class="panelhead"><div><b>Catálogo real</b><small id="updated">—</small></div></div><div class="products" id="products"><div class="empty">Cargando…</div></div></div>
-</section>
+<section id="importar"><div class="wrap"><div class="section-head"><div><div class="eyebrow">02 · entrada real</div><h2>Importar desde una plataforma</h2><p>Pega una URL de Amazon o Mercado Libre. Central extrae los metadatos disponibles y guarda el producto en el catálogo.</p></div></div><form class="import" id="importForm"><input class="field" id="url" type="url" placeholder="https://www.amazon.com/dp/... o https://www.mercadolibre.com.co/..." required><select class="field" id="category"><option value="accesorios">Accesorios</option><option value="ropa">Ropa</option><option value="calzado">Calzado</option></select><button class="btn primary" id="importBtn" type="submit">Importar</button></form><div class="import-result" id="importResult"></div></div></section>
 
-<section class="section" id="analitica">
-  <div class="head"><div><div class="eyebrow">Analítica</div><h2 class="title">Señal de oportunidad</h2></div></div>
-  <div class="twocol"><div class="panel"><div class="panelhead"><b>Top por score</b></div><div class="bars" id="bars"></div></div><div class="panel"><div class="panelhead"><b>Ranking</b></div><div id="ranking"></div></div></div>
-</section>
+<section id="catalogo"><div class="wrap"><div class="section-head"><div><div class="eyebrow">03 · catálogo</div><h2>Productos activos</h2><p>Datos persistidos en PostgreSQL, con vencimiento y renovación controlados por el worker.</p></div><button class="btn small" id="refreshBtn">Actualizar</button></div><div class="table-wrap"><table><thead><tr><th>Producto</th><th>Fuente</th><th>Precio</th><th>Score</th><th>Vigencia</th></tr></thead><tbody id="catalog"><tr><td colspan="5">Cargando…</td></tr></tbody></table></div></div></section>
 
-<section class="section" id="pedidos">
-  <div class="head"><div><div class="eyebrow">Pedidos</div><h2 class="title">Pedidos</h2><p class="copy">Cada pedido conserva su referencia de pago.</p></div></div>
-  <div class="panel tablewrap"><table><thead><tr><th>Referencia</th><th>Producto</th><th>Cant.</th><th>Total</th><th>Ganancia</th><th>Estado</th></tr></thead><tbody id="orders"><tr><td colspan="6">Cargando pedidos…</td></tr></tbody></table></div>
-</section>
+<section id="estado"><div class="wrap"><div class="section-head"><div><div class="eyebrow">04 · operación</div><h2>Estado de Central</h2></div></div><div class="metrics"><div class="metric"><span>Productos activos</span><strong id="count">—</strong></div><div class="metric"><span>Última actualización</span><strong id="last" style="font-size:14px">—</strong></div><div class="metric"><span>Mercado Libre</span><strong id="mlCount">—</strong></div><div class="metric"><span>Amazon</span><strong id="amzCount">—</strong></div></div></div></section>
+</main>
 
-<section class="section" id="planes">
-  <div class="head"><div><div class="eyebrow">Monetización</div><h2 class="title">Planes</h2></div></div>
-  <div class="plans" id="plans"><div class="empty">Cargando planes…</div></div>
-</section>
+<div class="modal" id="modal"><div class="viewer"><div class="viewer-head"><div><div class="eyebrow">Visualización</div><h3 id="viewerTitle">Producto</h3><div class="viewer-note">Modelo 3D procedimental basado en la categoría; la imagen real del producto se conserva como referencia.</div></div><button class="btn small" id="closeModal">Cerrar</button></div><div class="viewer-stage"><div class="model" id="model"><div class="model-face"></div><div class="model-face"></div><div class="model-face"></div><div class="model-face"></div><div class="model-face"></div><div class="model-face"></div></div></div></div></div>
 
-<section class="section" id="studio">
-  <div class="head"><div><div class="eyebrow">Estudio 3D</div><h2 class="title">Visualizador y creador de tarjetas</h2><p class="copy">Elige un producto, revisa la tarjeta y publícala en la tienda.</p></div>
-  <button class="btn primary" id="sync" type="button">Actualizar catálogo real</button></div>
+<footer><div class="wrap">Central · datos reales · ciclo automático 2h · vigencia 48h · Amazon · Mercado Libre · Telegram · Wompi preparado.</div></footer>
 
-  <div class="panel"><div class="panelhead"><div><b>Importar producto</b><small>Pega un enlace de Amazon, Mercado Libre, TikTok u otra fuente compatible.</small></div></div>
-  <div class="pad"><div class="two" style="grid-template-columns:1fr 150px auto"><input class="field" id="iUrl" type="url" placeholder="Enlace del producto"><select class="field" id="iCat"><option value="accesorios">Accesorios</option><option value="ropa">Ropa</option><option value="calzado">Calzado</option><option value="otros">Otros</option></select><button class="btn primary" id="iBtn" type="button">Importar</button></div><div class="msg" id="iMsg"></div></div></div>
-
-  <div class="studio">
-    <div class="panel"><div class="panelhead"><div><b>Visualizador</b><small id="sName">Selecciona un producto</small></div></div>
-      <div class="pad two"><input class="field" id="sSearch" type="search" placeholder="Buscar producto"><select class="field" id="sProduct"><option value="">Seleccionar producto</option></select></div>
-      <div class="stage"><div class="viewer" id="viewer"><img id="vImg" alt="" style="display:none" referrerpolicy="no-referrer"><model-viewer id="model" camera-controls auto-rotate interaction-prompt="none"></model-viewer></div><div class="vempty" id="vEmpty">Selecciona un producto</div></div>
-      <div class="ctl"><div class="two"><label><div class="lbl">Rotación horizontal</div><input class="range" id="rotY" type="range" min="-45" max="45" value="-18"></label><label><div class="lbl">Rotación vertical</div><input class="range" id="rotX" type="range" min="-20" max="20" value="0"></label></div>
-      <label><div class="lbl">Modelo 3D externo (GLB)</div><input class="field" id="modelUrl" type="url" placeholder="Enlace del modelo GLB"></label>
-      <div class="two"><button class="btn primary" id="saveModel" type="button">Guardar modelo</button><button class="btn" id="resetView" type="button">Restablecer vista</button></div><div class="msg" id="vMsg"></div></div>
-    </div>
-    <div class="panel"><div class="panelhead"><div><b>Creador de tarjeta</b><small id="cHint">Selecciona un producto para comenzar.</small></div><div class="actions"><button class="btn primary" id="publish" type="button">Publicar en Central</button><a class="btn" id="viewPub" href="/tienda" hidden>Ver en tienda</a></div></div>
-      <div class="ctl"><label><div class="lbl">Título</div><input class="field" id="cTitle" maxlength="70"></label><label><div class="lbl">Precio · COP</div><input class="field" id="cPrice" type="number" min="1" step="1"></label>
-      <div class="card"><img id="pvImg" alt="" style="display:none" referrerpolicy="no-referrer"><div><span class="eyebrow">Central</span><b id="pvTitle">Tu producto</b><div class="price" id="pvPrice">$0</div></div></div><div class="msg" id="pMsg"></div></div>
-    </div>
-  </div>
-
-  <div class="panel" style="margin-top:14px"><div class="panelhead"><div><b>Producto personal</b><small>Publica productos propios sin depender de otra tienda.</small></div></div>
-  <form class="pad" id="pForm"><div class="two" style="grid-template-columns:1.5fr 1fr 1fr"><input class="field" id="pTitle" placeholder="Nombre del producto" required><input class="field" id="pPrice" type="number" min="1" step="1" placeholder="Precio venta COP" required><input class="field" id="pStock" type="number" min="0" placeholder="Stock"></div>
-  <div class="two" style="margin-top:10px"><input class="field" id="pImage" type="url" placeholder="URL de imagen principal"><input class="field" id="pFiles" type="file" accept="image/*" multiple></div>
-  <div class="two" style="margin-top:10px"><input class="field" id="pSku" placeholder="SKU opcional"><input class="field" id="pUrl" type="url" placeholder="URL de compra opcional"></div>
-  <textarea class="field" id="pDesc" rows="3" placeholder="Descripción" style="margin-top:10px"></textarea>
-  <div style="display:flex;gap:10px;margin-top:10px"><select class="field" id="pCat" style="width:180px"><option value="otros">Otros</option><option value="ropa">Ropa</option><option value="calzado">Calzado</option><option value="accesorios">Accesorios</option></select><button class="btn primary" id="pBtn" type="submit">Crear producto personal</button></div><div class="msg" id="pFormMsg">Hasta 5 imágenes; se comprimen antes de guardarlas.</div></form></div>
-</section>
-</div></main>
-<div class="toast" id="toast"></div>
-
-<script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
 <script>
 (()=>{"use strict";
-const API="/api",$=id=>document.getElementById(id);
+const API="/api", $=id=>document.getElementById(id);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const money=(v,c)=>v==null||v===""||isNaN(v)?"—":new Intl.NumberFormat("es-CO",{style:"currency",currency:String(c||"COP").toUpperCase()==="USD"?"USD":"COP",maximumFractionDigits:0}).format(+v);
-const img=p=>p?.image_url||(p?.image_gallery||[])[0]||"";
-const msg=(id,t)=>{$(id).textContent=t};
-const isExt=p=>String(p?.platform||"").toLowerCase()!=="personal";
-const S={products:[],summary:[],metrics:{},orders:[],pubs:[]};let sel=null,pubI=0,pubT=null;
-
-function toast(t){const x=$("toast");x.textContent=t;x.classList.add("show");clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove("show"),2600)}
-async function api(p,o={}){
-  const c=new AbortController(),t=setTimeout(()=>c.abort(),15000);
-  try{
-    const r=await fetch(API+p,{cache:"no-store",...o,headers:{Accept:"application/json",...(o.body?{"Content-Type":"application/json"}:{})},signal:c.signal});
-    const d=await r.json().catch(()=>({}));
-    if(!r.ok)throw Error(typeof d.detail==="string"?d.detail:d.detail?.message||"HTTP "+r.status);
-    return d;
-  }catch(e){throw Error(e.name==="AbortError"?"La API no respondió a tiempo":e.message)}finally{clearTimeout(t)}
+const money=(v,c)=>{if(v==null||Number.isNaN(Number(v)))return"—";const n=Number(v);const cur=String(c||"COP").toUpperCase();if(cur==="USD"||cur==="US$"||cur==="$"){const cop=n*3329.61;return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(cop)+" COP";}try{return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(n)+" COP"}catch{return n.toLocaleString("es-CO")+" COP"}};
+const date=v=>v?new Date(v).toLocaleString("es-CO"):"—";
+async function get(path){const r=await fetch(API+path,{cache:"no-store",headers:{Accept:"application/json"}});if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}
+function status(kind,label){$("status").innerHTML='<span class="dot '+(kind==="ok"?"ok":kind==="warn"?"warn":"")+'"></span>'+esc(label)}
+function card(p){const score=p.opportunity_score==null?"—":Math.round(Number(p.opportunity_score));return '<article class="card" data-product="'+esc(p.id)+'"><div class="card-media">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="noimg" style="display:none">Sin imagen</span>':'<span class="noimg">Sin imagen</span>')+'</div><div class="inline-3d open" id="viewer-'+esc(p.id)+'"><span class="hint">Producto 3D · arrastra para observarlo</span></div><div class="card-body"><span class="badge">'+esc(p.platform||"—")+'</span><div class="title">'+esc(p.title)+'</div><div class="price">'+money(p.current_price,p.currency)+'</div><div class="score">Score '+score+'/100</div><div class="card-actions">'+(p.product_url?'<a class="btn small" href="'+esc(p.product_url)+'" target="_blank" rel="noopener noreferrer">Abrir original</a>':"")+'</div></div></article>'}
+function row(p){return '<tr><td>'+esc(p.title)+'</td><td>'+esc(p.platform)+'</td><td>'+money(p.current_price,p.currency)+'</td><td>'+esc(p.opportunity_score==null?"—":Math.round(Number(p.opportunity_score)))+'</td><td>'+date(p.catalog_expires_at)+'</td></tr>'}
+async function load(){try{const [top,items,summary]=await Promise.all([get("/opportunities/top?limit=12"),get("/products?limit=50"),get("/pipeline/summary")]);$("featured").innerHTML=top.length?top.map(card).join(""):'<div class="empty">No hay oportunidades reales disponibles.</div>';if(top.length)await Promise.all(top.map(p=>open3dInCard(p)));$("catalog").innerHTML=items.length?items.map(row).join(""):'<tr><td colspan="5">No hay productos reales disponibles.</td></tr>';const total=summary.reduce((n,x)=>n+Number(x.product_count||0),0);$("count").textContent=total;const ml=summary.find(x=>x.platform==="mercadolibre"),amz=summary.find(x=>x.platform==="amazon");$("mlCount").textContent=ml?.product_count??0;$("amzCount").textContent=amz?.product_count??0;const last=summary.map(x=>x.last_update).filter(Boolean).sort().pop();$("last").textContent=date(last);$("updated").textContent=new Date().toLocaleTimeString("es-CO");status("ok","API conectada")}catch(e){console.error(e);$("featured").innerHTML='<div class="empty">API no disponible. No se muestran datos de respaldo.</div>';$("catalog").innerHTML='<tr><td colspan="5">API no disponible.</td></tr>';status("error","API no disponible")}}
+$("importForm").addEventListener("submit",async e=>{e.preventDefault();const btn=$("importBtn"),out=$("importResult");btn.disabled=true;btn.textContent="Importando…";out.textContent="Leyendo la URL y guardando el producto…";try{const r=await fetch(API+"/products/import-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:$("url").value,category:$("category").value})});const data=await r.json();if(!r.ok)throw new Error(data.detail||"No fue posible importar");out.textContent="Producto importado: "+(data.product?.title||"OK")+(data.opportunity_score!=null?" · score "+Math.round(data.opportunity_score):" · score pendiente por falta de precio");$("url").value="";await load()}catch(err){out.textContent="Error: "+err.message}finally{btn.disabled=false;btn.textContent="Importar"}});
+$("refreshBtn").addEventListener("click",load);
+const viewers=new Map();
+function open3dInCard(p){
+ const host=$("viewer-"+p.id);if(!host||viewers.has(String(p.id)))return;
+ const title=(String(p.title||"")+" "+String(p.category||"")).toLowerCase();
+ let type=title.includes("ray-ban")||title.includes("rayban")||title.includes("glasses")||title.includes("gafas")?"m-glasses":title.includes("mic")||title.includes("microphone")||title.includes("microfono")||title.includes("transmisor")||title.includes("lavalier")?"m-mic":title.includes("mouse")||title.includes("raton")?"m-mouse":title.includes("smarttag")||title.includes("tracker")||title.includes("bluetooth")?"m-tag":title.includes("phone")||title.includes("celular")||title.includes("tablet")?"m-phone":title.includes("watch")||title.includes("reloj")?"m-watch":title.includes("camera")||title.includes("camara")?"m-camera":title.includes("headphone")||title.includes("audif")?"m-headphones":title.includes("bottle")||title.includes("botella")||title.includes("termo")?"m-bottle":"m-default";
+ host.innerHTML='<div class="model3d-css '+type+'"><div class="object"><div class="part body"></div><div class="part screen"></div><div class="part line"></div><div class="part led"></div><div class="part bridge"></div><div class="part lens l"></div><div class="part lens r"></div><div class="part arm l"></div><div class="part arm r"></div><div class="part stripe"></div><div class="part wheel"></div><div class="part hole"></div><div class="part face"></div><div class="part strap"></div><div class="part cap"></div><div class="part band"></div><div class="part cup l"></div><div class="part cup r"></div></div><div class="shadow"></div><div class="ball" title="Arrastra para girar"></div><span class="hint">3D · arrastra la bola para girar · rueda para zoom</span></div>';
+ const stage=host.querySelector(".model3d-css"),obj=host.querySelector(".object"),ball=host.querySelector(".ball");let rx=-12,ry=28,drag=false,lx=0,ly=0,zoom=1;
+ const render=()=>obj.style.transform="scale("+zoom+") rotateX("+rx+"deg) rotateY("+ry+"deg)";
+ ball.addEventListener("pointerdown",e=>{drag=true;lx=e.clientX;ly=e.clientY;ball.setPointerCapture(e.pointerId);ball.style.cursor="grabbing"});
+ ball.addEventListener("pointermove",e=>{if(!drag)return;ry+=(e.clientX-lx)*.8;rx+=(e.clientY-ly)*.45;rx=Math.max(-55,Math.min(35,rx));lx=e.clientX;ly=e.clientY;render()});
+ const stop=e=>{drag=false;ball.style.cursor="grab";try{ball.releasePointerCapture(e.pointerId)}catch{}};
+ ball.addEventListener("pointerup",stop);ball.addEventListener("pointercancel",stop);
+ stage.addEventListener("wheel",e=>{e.preventDefault();zoom=Math.max(.7,Math.min(1.45,zoom-e.deltaY*.0008));render()},{passive:false});
+ viewers.set(String(p.id),{host});
+ render();
 }
-
-/* ---------- Navegación ---------- */
-const NAMES={publicaciones:"Tienda",resumen:"Resumen",productos:"Productos",analitica:"Analítica",pedidos:"Pedidos",planes:"Planes",studio:"Estudio 3D"};
-function go(id){$(id).scrollIntoView({behavior:"smooth"});document.querySelectorAll(".nav").forEach(x=>x.classList.toggle("active",x.dataset.t===id));$("crumb").textContent=NAMES[id];$("sidebar").classList.remove("open")}
-document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>go(b.dataset.t));
-$("menu").onclick=()=>$("sidebar").classList.toggle("open");
-$("goImport").onclick=()=>{go("studio");$("iUrl").focus()};
-
-/* ---------- Carga de datos (cada endpoint falla por separado) ---------- */
-async function load(){
-  const R=await Promise.allSettled([api("/products?limit=200"),api("/pipeline/summary"),api("/store/metrics"),api("/store/orders?limit=30")]);
-  const v=i=>R[i].status==="fulfilled"?R[i].value:null;
-  S.products=v(0)||[];S.summary=v(1)||[];S.metrics=v(2)||{};S.orders=v(3)||[];
-  const ok=R.filter(r=>r.status==="fulfilled").length;
-  $("status").textContent=ok===R.length?"API conectada":ok?"API parcial ("+ok+"/"+R.length+")":"API no disponible";
-  render();fillStudio();
-}
-const score=p=>Number(p.opportunity_score||0);
-function render(){
-  const pl=$("fPlatform").value,ca=$("fCategory").value,mi=+$("fScore").value;
-  const all=[...S.products].sort((a,b)=>score(b)-score(a));
-  const f=all.filter(p=>(!pl||String(p.platform).toLowerCase()===pl)&&(!ca||String(p.category).toLowerCase()===ca)&&score(p)>=mi);
-  $("products").innerHTML=f.length?f.slice(0,24).map(card).join(""):'<div class="empty">No hay productos con estos filtros.</div>';
-  $("updated").textContent="Actualizado "+new Date().toLocaleTimeString("es-CO");
-  $("mProducts").textContent=S.products.length;
-  $("mHigh").textContent=S.products.filter(p=>score(p)>=75).length;
-  $("mML").textContent=S.summary.find(x=>x.platform==="mercadolibre")?.product_count??0;
-  $("mAmazon").textContent=S.summary.find(x=>x.platform==="amazon")?.product_count??0;
-  const m=S.metrics;$("mSales").textContent=money(m.gross_sales);$("mProfit").textContent=money(m.estimated_profit);
-  $("mMargin").textContent=Number(m.margin_pct||0).toFixed(2)+"%";$("mUnits").textContent=m.units_sold??0;
-  const top=all.filter(p=>score(p)>0).slice(0,8),max=Math.max(1,...top.map(score));
-  $("bars").innerHTML=top.length?top.map(p=>'<div class="barcol"><small>'+Math.round(score(p))+'</small><div class="bar" style="height:'+Math.max(3,score(p)/max*140)+'px"></div><small>'+esc(String(p.platform||"").slice(0,8))+'</small></div>').join(""):'<div class="empty" style="width:100%">Aún no hay productos con score.</div>';
-  $("ranking").innerHTML=top.slice(0,6).map((p,i)=>'<div class="row"><div class="rank">'+(i+1)+'</div><div><b>'+esc(p.title)+'</b><small>'+esc(p.platform)+' · '+money(p.current_price,p.currency)+'</small></div><strong>'+Math.round(score(p))+'</strong></div>').join("")||'<div class="empty" style="margin:14px">Sin datos.</div>';
-  $("orders").innerHTML=S.orders.length?S.orders.map(o=>'<tr><td>'+esc(o.reference)+'</td><td>'+esc(o.product_title_snapshot)+'</td><td>'+esc(o.quantity)+'</td><td>'+money(o.total_amount,o.currency)+'</td><td class="acc">'+money(o.estimated_profit,o.currency)+'</td><td><span class="pill">'+esc(o.payment_status||o.status)+'</span></td></tr>').join(""):'<tr><td colspan="6">No hay pedidos registrados.</td></tr>';
-  $("ordersBadge").textContent=S.orders.length;
-}
-function card(p){
-  const s=Math.round(score(p)),cls=s>=75?"hi":s>=50?"mid":"lo",im=img(p);
-  return '<article class="product"><div class="media"><span class="tag l">'+esc(p.platform||"fuente")+'</span><span class="tag r '+cls+'">'+(p.opportunity_score==null?"Sin score":s+"/100")+'</span>'+(im?'<img src="'+esc(im)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer">':"")+'</div><div class="body"><div class="ptitle">'+esc(String(p.title||"").replace(/^Amazon\.com:\s*/i,""))+'</div><div class="price">'+money(p.current_price,p.currency)+'</div><div class="meta"><span>'+esc(p.category||"—")+'</span><span>'+(p.stock!=null?"Stock "+esc(p.stock):"")+'</span></div><button class="btn js-use" data-id="'+esc(p.id)+'" type="button">Usar en Estudio</button></div></article>';
-}
-document.addEventListener("error",e=>{if(e.target.tagName==="IMG")e.target.style.display="none"},true);
-["fPlatform","fCategory","fScore"].forEach(id=>$(id).onchange=render);
-$("products").onclick=e=>{const b=e.target.closest(".js-use");if(!b)return;go("studio");$("sProduct").value=b.dataset.id;pick(b.dataset.id)};
-$("refresh").onclick=async()=>{await Promise.all([load(),loadPubs()]);toast("Central actualizado")};
-
-/* ---------- Planes (cobro con Wompi) ---------- */
-async function plans(){
-  try{
-    const p=await api("/monetize/plans");
-    $("plans").innerHTML=p.length?p.map(x=>{const free=!Number(x.price);return '<div class="plan"><h3>'+esc(x.name)+'</h3><strong>'+money(x.price)+'</strong><p class="copy">'+(free?"Plan gratuito activo.":"Plan de pago.")+'</p>'+(free?'<span class="pill">Activo</span>':'<button class="btn primary" data-plan="'+esc(x.name)+'" type="button">Contratar con Wompi</button>')+'</div>'}).join(""):'<div class="empty">No hay planes configurados.</div>';
-  }catch{$("plans").innerHTML='<div class="empty">Planes no disponibles.</div>'}
-}
-$("plans").onclick=async e=>{
-  const b=e.target.closest("[data-plan]");if(!b)return;
-  const email=(prompt("Correo para el cobro del plan:")||"").trim();if(!email)return;
-  try{const r=await api("/wompi/checkout/subscription",{method:"POST",body:JSON.stringify({plan_name:b.dataset.plan,customer_email:email,redirect_url:location.origin+"/tienda"})});location.href=r.checkout_url}
-  catch(err){toast("No se pudo iniciar el pago: "+err.message)}
-};
-
-/* ---------- Publicaciones (carrusel) ---------- */
-async function loadPubs(){try{S.pubs=await api("/publications?limit=20");pubI=0;renderPubs();clearInterval(pubT);if(S.pubs.length>1)pubT=setInterval(()=>step(1),6000)}catch{$("pubStage").innerHTML='<div class="empty" style="margin:20px">No fue posible cargar las publicaciones.</div>'}}
-function step(d){if(!S.pubs.length)return;pubI=(pubI+d+S.pubs.length)%S.pubs.length;renderPubs()}
-function renderPubs(){
-  const n=S.pubs.length;$("pubCount").textContent=n?(pubI+1)+" / "+n:"0 / 0";
-  if(!n){$("pubStage").innerHTML='<div class="empty" style="margin:20px">Todavía no hay publicaciones. Crea una tarjeta en el Estudio y pulsa "Publicar en Central".</div>';return}
-  const p=S.pubs[pubI];
-  $("pubStage").innerHTML='<div class="pub"><div class="pub-img">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="" referrerpolicy="no-referrer">':"")+'</div><div class="pub-info"><span class="eyebrow">Publicado · '+esc(p.platform||"Central")+'</span><h3>'+esc(p.title)+'</h3><p class="copy">'+esc(p.subtitle||"")+'</p><div class="price big">'+esc(p.price_display||money(p.current_price,p.currency))+'</div><div>'+(p.product_url?'<a class="btn primary" href="'+esc(p.product_url)+'" target="_blank" rel="noopener noreferrer">Ver producto</a>':"")+'</div></div></div>';
-}
-$("pubPrev").onclick=()=>step(-1);$("pubNext").onclick=()=>step(1);
-$("pubStage").onmouseenter=()=>clearInterval(pubT);
-$("pubStage").onmouseleave=()=>{clearInterval(pubT);if(S.pubs.length>1)pubT=setInterval(()=>step(1),6000)};
-
-/* ---------- Estudio ---------- */
-function fillStudio(){
-  const q=$("sSearch").value.trim().toLowerCase(),keep=$("sProduct").value;
-  const rows=S.products.filter(p=>!q||[p.title,p.sku,p.platform,p.category].some(v=>String(v||"").toLowerCase().includes(q)));
-  $("sProduct").innerHTML='<option value="">Seleccionar producto ('+rows.length+')</option>'+rows.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.title)+'</option>').join("");
-  if(keep&&rows.some(p=>String(p.id)===keep))$("sProduct").value=keep;
-}
-function apply3d(){$("viewer").style.setProperty("--ry",$("rotY").value+"deg");$("viewer").style.setProperty("--rx",$("rotX").value+"deg")}
-function preview(){
-  $("pvTitle").textContent=$("cTitle").value||"Tu producto";
-  $("pvPrice").textContent=sel?money($("cPrice").value||sel.current_price,isExt(sel)?sel.currency:"COP"):"$0";
-  const im=img(sel);$("pvImg").style.display=im?"block":"none";if(im)$("pvImg").src=im;
-}
-function pick(id){
-  sel=S.products.find(p=>String(p.id)===String(id))||null;
-  const m=$("model"),vi=$("vImg");
-  if(!sel){msg("sName","Selecciona un producto");vi.style.display="none";m.style.display="none";$("vEmpty").style.display="grid";$("cTitle").value="";$("cPrice").value="";preview();return}
-  msg("sName",sel.title);const im=img(sel);
-  vi.style.display=im&&!sel.model_url?"block":"none";if(im)vi.src=im;
-  if(sel.model_url){m.setAttribute("src",sel.model_url);m.style.display="block"}else{m.removeAttribute("src");m.style.display="none"}
-  $("vEmpty").style.display=im||sel.model_url?"none":"grid";
-  $("modelUrl").value=sel.model_url||"";
-  $("cTitle").value=sel.title||"";$("cPrice").value=sel.current_price??"";$("cPrice").disabled=isExt(sel);
-  msg("cHint",isExt(sel)?"Producto externo: título, imagen y precio se toman de la fuente original.":"Producto propio: puedes definir el precio de venta.");
-  msg("vMsg",sel.model_url?"Modelo GLB cargado.":"Mostrando la imagen real. Agrega un GLB para el modelo 3D.");
-  preview();
-}
-$("sProduct").onchange=e=>pick(e.target.value);$("sSearch").oninput=fillStudio;
-["cTitle","cPrice"].forEach(id=>$(id).oninput=preview);
-$("rotY").oninput=$("rotX").oninput=apply3d;
-$("resetView").onclick=()=>{$("rotY").value=-18;$("rotX").value=0;apply3d()};
-$("saveModel").onclick=async()=>{
-  if(!sel)return msg("vMsg","Selecciona un producto antes de guardar.");
-  try{await api("/products/"+sel.id+"/model",{method:"PATCH",body:JSON.stringify({model_url:$("modelUrl").value||null,model_shape:sel.model_shape||"headphones"})});sel.model_url=$("modelUrl").value||null;pick(sel.id);msg("vMsg","Modelo 3D guardado.")}
-  catch(e){msg("vMsg","No fue posible guardar: "+e.message)}
-};
-$("publish").onclick=async()=>{
-  if(!sel)return toast("Selecciona un producto");
-  const ext=isExt(sel),cur=ext?Number(sel.current_price||0):Number($("cPrice").value||sel.current_price||0);
-  const base={product_id:sel.id,image_url:img(sel)||null,product_url:sel.product_url||null,opportunity_score:sel.opportunity_score??null,accent:"#ff8a00",is_published:true,sale_price:cur||null,price_display:cur?money(cur,ext?sel.currency:"COP"):"Consultar"};
-  const body=ext?{...base,title:sel.title,subtitle:"Producto original",cost_price:cur||null,footer:"Oferta externa · producto original"}
-    :{...base,title:$("cTitle").value.trim()||sel.title,subtitle:"Producto propio de Central",cost_price:Number(sel.current_price)||cur||null,footer:"Producto propio · Central"};
-  const b=$("publish");b.disabled=true;msg("pMsg","Publicando…");
-  try{await api("/publications",{method:"POST",body:JSON.stringify(body)});msg("pMsg","Publicado en Central.");$("viewPub").hidden=false;toast("Producto publicado");await loadPubs()}
-  catch(e){msg("pMsg","Error al publicar: "+e.message)}finally{b.disabled=false}
-};
-$("sync").onclick=async()=>{
-  const b=$("sync");b.disabled=true;
-  try{const d=await api("/store/sync",{method:"POST"});toast("Catálogo: "+Number(d.amazon?.imported||0)+" Amazon + "+Number(d.mercadolibre?.imported||0)+" Mercado Libre");await load();await loadPubs()}
-  catch(e){toast("Sincronización: "+e.message)}finally{b.disabled=false}
-};
-$("iBtn").onclick=async()=>{
-  const url=$("iUrl").value.trim();if(!url)return msg("iMsg","Pega el enlace del producto.");
-  const b=$("iBtn");b.disabled=true;msg("iMsg","Importando…");
-  try{const r=await api("/products/import-url",{method:"POST",body:JSON.stringify({url,category:$("iCat").value})});
-    if(!r?.product?.id)throw Error("La API no devolvió el producto");
-    $("iUrl").value="";await load();$("sProduct").value=r.product.id;pick(r.product.id);msg("iMsg","Producto importado y cargado en el creador de tarjetas.")}
-  catch(e){msg("iMsg","No fue posible importar: "+e.message)}finally{b.disabled=false}
-};
-
-/* ---------- Producto personal ---------- */
-function compress(file){return new Promise((ok,no)=>{const r=new FileReader();r.onerror=no;r.onload=()=>{const i=new Image();i.onload=()=>{const k=Math.min(1,1600/Math.max(i.width,i.height)),c=document.createElement("canvas");c.width=Math.round(i.width*k)||1;c.height=Math.round(i.height*k)||1;c.getContext("2d").drawImage(i,0,0,c.width,c.height);ok(c.toDataURL("image/webp",.78))};i.onerror=no;i.src=r.result};r.readAsDataURL(file)})}
-$("pForm").onsubmit=async e=>{
-  e.preventDefault();
-  const title=$("pTitle").value.trim(),price=Number($("pPrice").value);if(!title||!price)return toast("Nombre y precio son obligatorios");
-  const b=$("pBtn");b.disabled=true;
-  try{
-    const files=[...$("pFiles").files].filter(f=>f.type.startsWith("image/")).slice(0,5),imgs=[];
-    for(const f of files)imgs.push(await compress(f));
-    await api("/products/personal",{method:"POST",body:JSON.stringify({title,price,currency:"COP",stock:$("pStock").value===""?null:Number($("pStock").value),sku:$("pSku").value.trim()||null,image_url:$("pImage").value.trim()||imgs[0]||null,image_gallery:imgs,product_url:$("pUrl").value.trim()||null,description:$("pDesc").value.trim()||null,category:$("pCat").value})});
-    toast("Producto personal creado");$("pForm").reset();await load()
-  }catch(err){toast("No se pudo crear: "+err.message)}finally{b.disabled=false}
-};
-
-/* ---------- Inicio ---------- */
-apply3d();load();plans();loadPubs();setInterval(load,10*60*1000);
-})();
-</script>
-</body></html>
+load();setInterval(load,10*60*1000);
+})();</script>
+</body>
+</html>
