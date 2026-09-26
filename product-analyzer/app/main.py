@@ -50,6 +50,8 @@ def run_pipeline():
     product_ids = []
 
     try:
+        product_ids.extend(ingest_amazon_seed(conn))
+
         for category, term in SEARCH_CONFIG:
             try:
                 products = fetch_mercadolibre(term)
