@@ -63,9 +63,9 @@ async function open3dInCard(p){
  const controls=new OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.dampingFactor=.08; controls.enablePan=false; controls.enableRotate=true; controls.enableZoom=true; controls.minDistance=2.2; controls.maxDistance=6; controls.autoRotate=false; controls.rotateSpeed=1.2; controls.zoomSpeed=1.1; controls.touches={ONE:THREE.TOUCH.ROTATE,TWO:THREE.TOUCH.DOLLY_PAN};
  scene.add(new THREE.HemisphereLight(0xffffff,0x334455,2.2)); const key=new THREE.DirectionalLight(0xffffff,2.5); key.position.set(3,4,5); scene.add(key);
  const fill=new THREE.DirectionalLight(0x8aa8ff,1.1); fill.position.set(-4,1,2); scene.add(fill);
- const group=new THREE.Group(); scene.add(group); const loader=new THREE.TextureLoader();
+ const group=new THREE.Group(); group.position.y=.15; scene.add(group); const loader=new THREE.TextureLoader();
  const addFallback=()=>{
-   const cat=String(p.category||"").toLowerCase();
+   const cat=(String(p.category||"")+" "+String(p.title||"")).toLowerCase();
    let geometry,materials;
    if(cat.includes("calzado")||cat.includes("shoe")||cat.includes("zapato")){
      const shape=new THREE.Shape();
