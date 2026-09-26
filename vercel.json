@@ -1,8 +1,5 @@
 {
   "$schema":"https://openapi.vercel.sh/vercel.json",
-  "framework":null,
-  "buildCommand":"",
-  "installCommand":"",
   "outputDirectory":"product-analyzer/frontend",
   "rewrites":[
     {"source":"/api/:path*","destination":"https://gracious-renewal-production-9f45.up.railway.app/api/v1/:path*"},

@@ -1,5 +1,7 @@
+import html
 import os
-import html\n\nimport requests
+
+import requests
 
 
 def _config():
@@ -14,11 +16,10 @@ def send_telegram_alert(product_info):
         print("[telegram] Variables TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID no configuradas.")
         return False
 
-    title = str(product_info.get("title", "Producto"))[:120]
-    price = product_info.get("price", product_info.get("current_price", "N/D"))
-    score = product_info.get("score", product_info.get("opportunity_score", "N/D"))
-    platform = str(product_info.get("platform", "N/D"))
-    category = str(product_info.get("category", "N/D"))
+    title = html.escape(str(product_info.get("title", "Producto"))[:120])
+    price = html.escape(str(product_info.get("price", product_info.get("current_price", "N/D"))))
+    score = html.escape(str(product_info.get("score", product_info.get("opportunity_score", "N/D"))))
+    category = html.escape(str(product_info.get("category", "N/D")))
     url = product_info.get("url") or product_info.get("product_url")
 
     lines = [
@@ -26,11 +27,12 @@ def send_telegram_alert(product_info):
         f"<b>Producto:</b> {title}",
         f"<b>Precio:</b> {price}",
         f"<b>Score:</b> {score}/100",
-        f"<b>Plataforma:</b> {platform}",
+        "<b>Plataforma:</b> Mercado Libre",
         f"<b>Categoría:</b> {category}",
     ]
     if url:
-        lines.append(f'<a href="{url}">Ver producto</a>')
+        safe_url = html.escape(str(url), quote=True)
+        lines.append(f'<a href="{safe_url}">Ver producto</a>')
 
     return _send(token, chat_id, "\n".join(lines))
 
@@ -39,7 +41,12 @@ def _send(token, chat_id, message):
     try:
         response = requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": message, "parse_mode": "HTML", "disable_web_page_preview": False},
+            json={
+                "chat_id": chat_id,
+                "text": message,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": False,
+            },
             timeout=10,
         )
         if response.ok:
