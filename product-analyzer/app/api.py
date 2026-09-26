@@ -13,11 +13,10 @@ from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from db import get_connection
-from monetization import router as monetization_router
-from wompi import router as wompi_router
 from analysis import score_product
 from db import get_connection, upsert_product
+from monetization import router as monetization_router
+from wompi import router as wompi_router
 from url_import import import_url
 
 API_VERSION = "1.1.0"
@@ -99,7 +98,7 @@ def pipeline_summary():
 @core_router.get("/products")
 def list_products(
     category: Optional[str] = Query(None, description="ropa, calzado, accesorios"),
-    platform: Optional[str] = Query(None, description="mercadolibre, amazon, tiktok"),
+    platform: Optional[str] = Query(None, description="mercadolibre, amazon"),
     limit: int = Query(50, ge=1, le=200),
 ):
     conn = get_connection()
