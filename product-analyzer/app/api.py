@@ -39,7 +39,7 @@ app.add_middleware(
     allow_origins=[
         origin.strip()
         for origin in os.getenv(
-            "ALLOWED_ORIGINS", "http://localhost:3000"
+            "ALLOWED_ORIGINS", "http://localhost:3000,https://central-five-pied.vercel.app,https://central-jorgedevop27-9650.vercel.app,https://central-git-main-jorgedevop27-9650.vercel.app"
         ).split(",")
         if origin.strip()
     ],
