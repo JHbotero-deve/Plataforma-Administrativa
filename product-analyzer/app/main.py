@@ -67,8 +67,10 @@ def ingest_amazon_seed(conn) -> list[int]:
                 raise ValueError(f"ASIN inesperado: {product['external_id']}")
             if not product.get("title") or product["title"].startswith("Producto Amazon"):
                 product["title"] = fallback_title
-            if product.get("price") is None:
+            if not product.get("price") or float(product["price"]) <= 0:
                 product["price"] = fallback_price
+            if not product.get("image_url"):
+                product["image_url"] = f"https://images-na.ssl-images-amazon.com/images/P/{asin}.01.L.jpg"
             product["source_metadata"]["seed_reference_price"] = fallback_price
             product["source_metadata"]["seed_batch"] = "amazon-initial-10"
             ids.append(upsert_product(conn, "amazon", category, product))
