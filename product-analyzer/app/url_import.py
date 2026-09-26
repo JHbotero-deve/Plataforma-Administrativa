@@ -22,10 +22,31 @@ def _asin(url: str) -> str | None:
     return match.group(1).upper() if match else None
 
 
+
+def _parse_price(content: str) -> tuple[float | None, str | None]:
+    patterns = [
+        r'"priceAmount"\s*:\s*([0-9]+(?:\.[0-9]+)?)',
+        r'"price"\s*:\s*"([0-9]+(?:\.[0-9]+)?)"',
+        r'<span[^>]+class=["\'][^"\']*a-price-whole[^"\']*["\'][^>]*>([0-9,]+)',
+        r'<span[^>]+class=["\'][^"\']*a-offscreen[^"\']*["\'][^>]*>\s*[$€£]?\s*([0-9]+(?:[.,][0-9]{1,2})?)',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, content, re.I)
+        if not match:
+            continue
+        raw = match.group(1).replace(",", "")
+        try:
+            return float(raw), None
+        except ValueError:
+            continue
+    currency_match = re.search(r'"currencyCode"\s*:\s*"([A-Z]{3})"', content, re.I)
+    return None, currency_match.group(1).upper() if currency_match else None
+
 def _metadata(url: str) -> dict:
     headers = {
         "User-Agent": "Mozilla/5.0 (compatible; CentralProductRadar/1.0)",
         "Accept-Language": "es-CO,es;q=0.9,en;q=0.7",
+        "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
     }
     try:
         response = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
@@ -45,6 +66,12 @@ def _metadata(url: str) -> dict:
         match = re.search(pattern, content, re.I)
         if match:
             result[key] = html.unescape(match.group(1)).strip()
+
+    price, price_currency = _parse_price(content)
+    if price is not None:
+        result["price"] = price
+    if price_currency:
+        result["currency"] = price_currency
 
     if not result.get("title"):
         match = re.search(r"<title[^>]*>(.*?)</title>", content, re.I | re.S)
@@ -76,6 +103,8 @@ def import_url(url: str, category: str, title: str | None = None,
 
     final_title = (title or metadata.get("title") or f"Producto {platform.title()} {external_id}").strip()
     final_image = (image_url or metadata.get("image_url") or "").strip() or None
+    final_price = price if price is not None else metadata.get("price")
+    final_currency = metadata.get("currency") or currency
 
     return {
         "platform": platform,
@@ -83,8 +112,8 @@ def import_url(url: str, category: str, title: str | None = None,
         "title": final_title[:500],
         "image_url": final_image,
         "product_url": resolved_url,
-        "price": price,
-        "currency": currency.upper()[:10] if currency else "USD",
+        "price": final_price,
+        "currency": str(final_currency).upper()[:10] if final_currency else "USD",
         "rating": None,
         "reviews_count": 0,
         "sales_estimate": None,
