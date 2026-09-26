@@ -9,6 +9,7 @@ SQL_FILES = [
     "sql/003_3d_models.sql",
     "sql/004_wompi.sql",
     "sql/005_source_metadata.sql",
+    "sql/007_tiktok_creator.sql",
     "sql/008_catalog_lifecycle.sql",
 ]
 

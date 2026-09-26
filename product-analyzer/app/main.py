@@ -7,6 +7,7 @@ from db import get_connection, upsert_product
 from ingest import fetch_mercadolibre
 from init_db import init_database
 from notifications import send_telegram_alert
+from tiktok_creator import creator_configured, sync_showcase
 
 SEARCH_CONFIG = [
     ("ropa", "remera hombre"),
@@ -115,6 +116,16 @@ def run_pipeline():
                 })
 
     conn.close()
+
+    if creator_configured():
+        try:
+            result = sync_showcase(limit=200)
+            print(f"[tiktok] productos sincronizados: {result.get("synced", 0)}")
+        except Exception as exc:
+            print(f"[tiktok] error sincronizando Creator: {exc}")
+    else:
+        print("[tiktok] integración no configurada; se conserva el ciclo principal.")
+
     print("== Ciclo completo ==")
 
 
