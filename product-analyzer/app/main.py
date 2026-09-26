@@ -9,12 +9,26 @@ from ingest import fetch_mercadolibre
 from init_db import init_database
 from notifications import send_telegram_alert
 from tiktok_creator import creator_configured, sync_showcase
+from url_import import import_url
 
 SEARCH_CONFIG = [
     ("ropa", "remera hombre"),
     ("ropa", "campera mujer"),
     ("calzado", "zapatillas urbanas"),
 ]
+AMAZON_SEED = [
+    ("accesorios", "B0BFJ4CRKD", "https://www.amazon.com/dp/B0BFJ4CRKD", "Logitech MX Brio Ultra HD 4K Webcam", 199.99),
+    ("accesorios", "B006JH8T3S", "https://www.amazon.com/dp/B006JH8T3S", "Logitech HD Pro Webcam C920", 69.99),
+    ("accesorios", "B08XXGSLPK", "https://www.amazon.com/dp/B08XXGSLPK", "MAONO USB/XLR Dynamic Microphone HD300T", 69.99),
+    ("accesorios", "B0DDLD9X2P", "https://www.amazon.com/dp/B0DDLD9X2P", "DJI Mic Mini Transmitter", 24.99),
+    ("accesorios", "B0C6XK77HJ", "https://www.amazon.com/dp/B0C6XK77HJ", "Anker Nano Power Bank 5000mAh USB-C", 22.99),
+    ("accesorios", "B09N3PRJZK", "https://www.amazon.com/dp/B09N3PRJZK", "Baseus 100W Blade Laptop Power Bank", 79.98),
+    ("accesorios", "B0CKTCZPQS", "https://www.amazon.com/dp/B0CKTCZPQS", "VINTAR Universal Travel Adapter", 19.99),
+    ("accesorios", "B0CYNXD439", "https://www.amazon.com/dp/B0CYNXD439", "BAGSMART 30L Travel Backpack", 23.99),
+    ("accesorios", "B0CHN2D8KM", "https://www.amazon.com/dp/B0CHN2D8KM", "Samsung Galaxy SmartTag2", 29.99),
+    ("accesorios", "B0CGXYM9TP", "https://www.amazon.com/dp/B0CGXYM9TP", "Ray-Ban Meta Wayfarer Smart Glasses", 299.00),
+]
+
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
 
 
