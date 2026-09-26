@@ -1,12 +1,10 @@
 import os
 import time
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
-
 import schedule
 
 from analysis import score_product
 from db import get_connection, upsert_product
-from ingest import fetch_amazon, fetch_mercadolibre, fetch_tiktok
+from ingest import fetch_mercadolibre
 from init_db import init_database
 from notifications import send_telegram_alert
 
