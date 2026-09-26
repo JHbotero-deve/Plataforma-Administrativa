@@ -1,7 +1,5 @@
 import os
 import requests
-from amazon_creators import search_items as amazon_search_items
-from tiktok_shop import search_products as tiktok_search_products
 
 MELI_SEARCH='https://api.mercadolibre.com/sites/MCO/search'
 MELI_ITEM='https://api.mercadolibre.com/items/{id}'

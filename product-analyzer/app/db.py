@@ -33,7 +33,7 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
                 currency=EXCLUDED.currency, rating=COALESCE(EXCLUDED.rating,products.rating),
                 reviews_count=COALESCE(EXCLUDED.reviews_count,products.reviews_count),
                 sales_estimate=COALESCE(EXCLUDED.sales_estimate,products.sales_estimate),
-                source_metadata=EXCLUDED.source_metadata, is_active=TRUE, updated_at=NOW()
+                source_metadata=EXCLUDED.source_metadata, catalog_expires_at=NOW() + INTERVAL '2 days', is_active=TRUE, updated_at=NOW()
             RETURNING id
         """, (platform["id"], category["id"] if category else None, seller_id, product["external_id"], product["title"], product.get("image_url"), product.get("product_url"), product.get("price"), product.get("currency") or "COP", product.get("rating"), product.get("reviews_count",0), product.get("sales_estimate"), Json(product.get("source_metadata") or {})))
         product_id = cur.fetchone()["id"]
