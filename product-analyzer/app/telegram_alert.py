@@ -41,7 +41,8 @@ def _send(token, chat_id, text):
         )
         payload = r.json()
         if not r.ok or not payload.get("ok"):
-            print(f"[telegram-bot] send rejected: {payload.get('description', 'respuesta inválida')}")
+            print(
+                f"[telegram-bot] send rejected: {payload.get('description', 'respuesta inválida')}")
             return False
         return True
     except (requests.RequestException, ValueError) as exc:
@@ -82,7 +83,8 @@ def _format_product(p):
 
     parsed = urlparse(url)
     if parsed.scheme in ("http", "https") and parsed.netloc:
-        lines.append(f'<a href="{html.escape(url, quote=True)}">Ver producto</a>')
+        lines.append(
+            f'<a href="{html.escape(url, quote=True)}">Ver producto</a>')
     return "\n".join(lines)
 
 
@@ -93,12 +95,12 @@ def _top_products(limit=5):
             cur.execute(
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url,
-                       p.rating, p.reviews_count, p.sales_estimate,
-                       pl.name AS platform, c.name AS category,
-                       COALESCE(s.price_score, 0) AS price_score,
-                       COALESCE(s.demand_score, 0) AS demand_score,
-                       COALESCE(s.trend_score, 0) AS trend_score,
-                       COALESCE(s.opportunity_score, 0) AS opportunity_score
+                        p.rating, p.reviews_count, p.sales_estimate,
+                        pl.name AS platform, c.name AS category,
+                        COALESCE(s.price_score, 0) AS price_score,
+                        COALESCE(s.demand_score, 0) AS demand_score,
+                        COALESCE(s.trend_score, 0) AS trend_score,
+                        COALESCE(s.opportunity_score, 0) AS opportunity_score
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
@@ -124,12 +126,12 @@ def _search_products(term, limit=5):
             cur.execute(
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url,
-                       p.rating, p.reviews_count, p.sales_estimate,
-                       pl.name AS platform, c.name AS category,
-                       COALESCE(s.price_score, 0) AS price_score,
-                       COALESCE(s.demand_score, 0) AS demand_score,
-                       COALESCE(s.trend_score, 0) AS trend_score,
-                       COALESCE(s.opportunity_score, 0) AS opportunity_score
+                        p.rating, p.reviews_count, p.sales_estimate,
+                        pl.name AS platform, c.name AS category,
+                        COALESCE(s.price_score, 0) AS price_score,
+                        COALESCE(s.demand_score, 0) AS demand_score,
+                        COALESCE(s.trend_score, 0) AS trend_score,
+                        COALESCE(s.opportunity_score, 0) AS opportunity_score
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
@@ -209,12 +211,13 @@ def _model_product(argument):
                 FROM products p
                 JOIN categories c ON c.id = p.category_id
                 WHERE c.name = %s AND p.currency = 'COP'
-                  AND p.current_price IS NOT NULL AND p.is_active = TRUE
+                AND p.current_price IS NOT NULL AND p.is_active = TRUE
                 """,
                 (category,),
             )
             row = cur.fetchone()
-            category_avg = float(row["category_avg"]) if row and row["category_avg"] else price
+            category_avg = float(
+                row["category_avg"]) if row and row["category_avg"] else price
 
         product = {
             "external_id": external_id,
@@ -335,7 +338,8 @@ def _handle(token, chat_id, text):
         products = _search_products(term)
         if not products:
             return _send(token, chat_id, f"No encontré productos modelados para: {html.escape(term)}")
-        body = f"<b>Resultados: {html.escape(term)}</b>\n\n" + "\n\n".join(_format_product(p) for p in products)
+        body = f"<b>Resultados: {html.escape(term)}</b>\n\n" + \
+            "\n\n".join(_format_product(p) for p in products)
         return _send(token, chat_id, body)
 
 
@@ -371,7 +375,8 @@ def _handle(token, chat_id, text):
         conn = get_connection()
         try:
             with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) AS total FROM products WHERE is_active = TRUE")
+                cur.execute(
+                    "SELECT COUNT(*) AS total FROM products WHERE is_active = TRUE")
                 total = cur.fetchone()["total"]
                 cur.execute(
                     """
@@ -421,7 +426,8 @@ def run_bot():
             payload = response.json()
 
             if not payload.get("ok"):
-                raise RuntimeError(payload.get("description", "respuesta inválida"))
+                raise RuntimeError(payload.get(
+                    "description", "respuesta inválida"))
 
             for update in payload.get("result", []):
                 offset = update["update_id"] + 1

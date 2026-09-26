@@ -1,13 +1,4 @@
-﻿"""
-Endpoints de monetización: los tres canales conviven en la misma app.
-
-  - Afiliados:     POST /monetize/click/{product_id}   -> registra el click y redirige
-  - Dropshipping:  POST /monetize/orders                -> crea una orden con margen
-  - Suscripciones: POST /monetize/subscribe              -> asigna un plan a un usuario
-  - Resumen:       GET  /monetize/revenue-summary        -> ingresos por canal
-"""
-
-import hmac
+﻿import hmac
 import os
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -31,12 +22,8 @@ def require_admin_key(x_admin_key: str | None = Header(default=None, alias="X-Ad
 
 @router.get("/click/{product_id}")
 def register_click(product_id: int, user_id: int | None = None):
-    """
-    Registra el click de afiliado y redirige al producto real en la
-    plataforma de origen (Mercado Libre / Amazon / TikTok).
-    La conversión (venta confirmada) se marca después, vía webhook o
-    reporte manual del programa de afiliados de cada plataforma.
-    """
+    
+
     conn = get_connection()
     with conn.cursor() as cur:
         cur.execute("SELECT product_url FROM products WHERE id = %s", (product_id,))
@@ -93,7 +80,7 @@ def create_order(order: OrderCreate, _: None = Depends(require_admin_key)):
             RETURNING id, margin
             """,
             (order.user_id, order.product_id, order.quantity,
-             order.sale_price, order.supplier_cost),
+                order.sale_price, order.supplier_cost),
         )
         result = cur.fetchone()
     conn.commit()
@@ -114,12 +101,9 @@ def list_orders(user_id: int, _: None = Depends(require_admin_key)):
     conn.close()
     return results
 
-
-# ---------- Suscripciones SaaS ----------
-
 class SubscribeRequest(BaseModel):
     user_id: int
-    plan_name: str  # 'free', 'pro', 'business'
+    plan_name: str
 
 
 @router.post("/subscribe")
@@ -159,10 +143,6 @@ def list_plans():
         results = cur.fetchall()
     conn.close()
     return results
-
-
-# ---------- Resumen de ingresos ----------
-
 @router.get("/revenue-summary")
 def revenue_summary(_: None = Depends(require_admin_key)):
     conn = get_connection()

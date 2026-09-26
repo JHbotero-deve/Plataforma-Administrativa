@@ -25,7 +25,7 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
             seller_id = cur.fetchone()["id"]
         cur.execute("""
             INSERT INTO products (platform_id, category_id, seller_id, external_id, title, image_url, product_url, current_price, currency, rating, reviews_count, sales_estimate, source_metadata, catalog_batch_id, catalog_expires_at, updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW()+INTERVAL '48 hours',NOW())
+            VALUES (,%s,%s,%s,%s,NOW(),NOW()+INTERVAL '48 hours',NOW())
             ON CONFLICT (platform_id, external_id) DO UPDATE SET
                 category_id=EXCLUDED.category_id, seller_id=COALESCE(EXCLUDED.seller_id,products.seller_id),
                 title=EXCLUDED.title, image_url=COALESCE(EXCLUDED.image_url,products.image_url),

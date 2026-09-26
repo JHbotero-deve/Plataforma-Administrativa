@@ -1,18 +1,4 @@
-﻿"""
-Motor de scoring "inteligente" para productos.
-
-Combina:
-- price_score: qué tan barato es el producto respecto al promedio de su categoría
-- demand_score: basado en rating + cantidad de reviews/ventas
-- trend_score: variación de precio en las últimas mediciones (baja de precio = sube el score)
-- opportunity_score: combinación ponderada de los tres anteriores
-
-No usa ningún servicio externo de IA: son fórmulas estadísticas simples,
-pensadas para poder mejorarse después con un modelo de ML real si se quiere.
-"""
-
-
-def compute_price_score(price: float, category_avg_price: float) -> float:
+﻿def compute_price_score(price: float, category_avg_price: float) -> float:
     if not category_avg_price or category_avg_price == 0:
         return 50.0
     ratio = price / category_avg_price
@@ -47,8 +33,7 @@ def compute_trend_score(price_history: list) -> float:
     return round(max(0, min(100, score)), 2)
 
 
-def compute_opportunity_score(price_score, demand_score, trend_score,
-                               weights=(0.4, 0.4, 0.2)) -> float:
+def compute_opportunity_score(price_score, demand_score, trend_score, weights=(0.4, 0.4, 0.2)) -> float:
     w_price, w_demand, w_trend = weights
     return round(
         price_score * w_price + demand_score * w_demand + trend_score * w_trend, 2
