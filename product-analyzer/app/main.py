@@ -22,7 +22,7 @@ AMAZON_SEED = [
     ("accesorios", "B08XXGSLPK", "https://www.amazon.com/dp/B08XXGSLPK", "MAONO USB/XLR Dynamic Microphone HD300T", 69.99),
     ("accesorios", "B0DDLD9X2P", "https://www.amazon.com/dp/B0DDLD9X2P", "DJI Mic Mini Transmitter", 24.99),
     ("accesorios", "B0C6XK77HJ", "https://www.amazon.com/dp/B0C6XK77HJ", "Anker Nano Power Bank 5000mAh USB-C", 22.99),
-    ("accesorios", "B09N3PRJZK", "https://www.amazon.com/dp/B09N3PRJZK", "Baseus 100W Blade Laptop Power Bank", 79.98),
+    ("accesorios", "B073QKC8Q8", "https://www.amazon.com/dp/B073QKC8Q8", "Microsoft Surface Arc Touch Mouse", 69.99),
     ("accesorios", "B0CKTCZPQS", "https://www.amazon.com/dp/B0CKTCZPQS", "VINTAR Universal Travel Adapter", 19.99),
     ("accesorios", "B0CYNXD439", "https://www.amazon.com/dp/B0CYNXD439", "BAGSMART 30L Travel Backpack", 23.99),
     ("accesorios", "B0CHN2D8KM", "https://www.amazon.com/dp/B0CHN2D8KM", "Samsung Galaxy SmartTag2", 29.99),
