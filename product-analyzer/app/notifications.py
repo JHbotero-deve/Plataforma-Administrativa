@@ -1,5 +1,5 @@
 import os
-import requests
+import html\n\nimport requests
 
 
 def _config():

@@ -10,7 +10,7 @@ from db import get_connection, upsert_product
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
-ALLOWED_PLATFORMS = {"mercadolibre", "amazon", "tiktok"}
+ALLOWED_PLATFORMS = {"mercadolibre"}
 ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios"}
 
 
@@ -162,7 +162,7 @@ def _model_product(argument):
     category = category.lower()
 
     if platform not in ALLOWED_PLATFORMS:
-        return None, "Plataforma inválida. Usa: mercadolibre, amazon o tiktok."
+        return None, "Plataforma inválida. Usa: Mercado Libre."
     if category not in ALLOWED_CATEGORIES:
         return None, "Categoría inválida. Usa: ropa, calzado o accesorios."
     if not external_id or not title:
