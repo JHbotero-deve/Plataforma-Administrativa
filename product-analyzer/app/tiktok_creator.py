@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 import requests
 
+from analysis import score_product
 from db import get_connection, upsert_product
 
 API_BASE = "https://open-api.tiktokglobalshop.com"
@@ -206,6 +207,22 @@ def sync_showcase(category: str = "accesorios", limit: int = 2000) -> dict:
     try:
         for product in products:
             product_id = upsert_product(conn, "tiktok", category, product)
+            if product.get("price") is not None:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT AVG(p.current_price) AS category_avg
+                        FROM products p
+                        JOIN categories c ON c.id = p.category_id
+                        WHERE c.name = %s
+                          AND p.currency = %s
+                          AND p.current_price IS NOT NULL
+                          AND p.is_active = TRUE
+                        """,
+                        (category, product.get("currency") or "USD"),
+                    )
+                    average = cur.fetchone()["category_avg"]
+                score_product(conn, product_id, float(average or product["price"]))
             with conn.cursor() as cur:
                 cur.execute(
                     """
