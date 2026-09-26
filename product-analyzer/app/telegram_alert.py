@@ -41,8 +41,7 @@ def _send(token, chat_id, text):
         )
         payload = r.json()
         if not r.ok or not payload.get("ok"):
-            print(
-                f"[telegram-bot] send rejected: {payload.get('description', 'respuesta inválida')}")
+            print(f"[telegram-bot] send rejected: {payload.get('description', 'respuesta inválida')}")
             return False
         return True
     except (requests.RequestException, ValueError) as exc:
@@ -80,11 +79,9 @@ def _format_product(p):
         f"Plataforma: {platform}",
         f"Categoría: {category}",
     ]
-
     parsed = urlparse(url)
     if parsed.scheme in ("http", "https") and parsed.netloc:
-        lines.append(
-            f'<a href="{html.escape(url, quote=True)}">Ver producto</a>')
+        lines.append(f'<a href="{html.escape(url, quote=True)}">Ver producto</a>')
     return "\n".join(lines)
 
 
@@ -95,12 +92,12 @@ def _top_products(limit=5):
             cur.execute(
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url,
-                        p.rating, p.reviews_count, p.sales_estimate,
-                        pl.name AS platform, c.name AS category,
-                        COALESCE(s.price_score, 0) AS price_score,
-                        COALESCE(s.demand_score, 0) AS demand_score,
-                        COALESCE(s.trend_score, 0) AS trend_score,
-                        COALESCE(s.opportunity_score, 0) AS opportunity_score
+                       p.rating, p.reviews_count, p.sales_estimate,
+                       pl.name AS platform, c.name AS category,
+                       COALESCE(s.price_score, 0) AS price_score,
+                       COALESCE(s.demand_score, 0) AS demand_score,
+                       COALESCE(s.trend_score, 0) AS trend_score,
+                       COALESCE(s.opportunity_score, 0) AS opportunity_score
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
@@ -112,134 +109,37 @@ def _top_products(limit=5):
                 (limit,),
             )
             return cur.fetchall()
-    except Exception as exc:
-        print(f"[telegram-bot] top query error: {exc}")
-        return []
     finally:
         conn.close()
 
 
-def _search_products(term, limit=5):
+def _search_products(term, limit=8):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url,
-                        p.rating, p.reviews_count, p.sales_estimate,
-                        pl.name AS platform, c.name AS category,
-                        COALESCE(s.price_score, 0) AS price_score,
-                        COALESCE(s.demand_score, 0) AS demand_score,
-                        COALESCE(s.trend_score, 0) AS trend_score,
-                        COALESCE(s.opportunity_score, 0) AS opportunity_score
+                       p.rating, p.reviews_count, p.sales_estimate,
+                       pl.name AS platform, c.name AS category,
+                       COALESCE(s.price_score, 0) AS price_score,
+                       COALESCE(s.demand_score, 0) AS demand_score,
+                       COALESCE(s.trend_score, 0) AS trend_score,
+                       COALESCE(s.opportunity_score, 0) AS opportunity_score
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
-                WHERE p.is_active = TRUE AND p.title ILIKE %s
-                ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
+                WHERE p.is_active = TRUE
+                  AND p.title ILIKE %s
+                ORDER BY COALESCE(s.opportunity_score, 0) DESC
                 LIMIT %s
                 """,
                 (f"%{term}%", limit),
             )
             return cur.fetchall()
-    except Exception as exc:
-        print(f"[telegram-bot] search query error: {exc}")
-        return []
     finally:
         conn.close()
-
-
-def _model_product(argument):
-    parts = [part.strip() for part in argument.split("|")]
-    if len(parts) < 6:
-        return None, "Uso: /modelar plataforma|categoría|id|título|precio|url|rating|reseñas|ventas|imagen"
-
-    platform, category, external_id, title, price_raw, product_url = parts[:6]
-    rating_raw = parts[6] if len(parts) > 6 else ""
-    reviews_raw = parts[7] if len(parts) > 7 else ""
-    sales_raw = parts[8] if len(parts) > 8 else ""
-    image_url = parts[9] if len(parts) > 9 else ""
-
-    platform = platform.lower()
-    category = category.lower()
-
-    if platform not in ALLOWED_PLATFORMS:
-        return None, "Plataforma inválida. Usa: Mercado Libre o Amazon."
-    if category not in ALLOWED_CATEGORIES:
-        return None, "Categoría inválida. Usa: ropa, calzado o accesorios."
-    if not external_id or not title:
-        return None, "El id externo y el título son obligatorios."
-
-    try:
-        price = float(price_raw.replace(",", "."))
-        if price <= 0:
-            raise ValueError
-    except ValueError:
-        return None, "El precio debe ser un número mayor que cero."
-
-    parsed_url = urlparse(product_url)
-    if parsed_url.scheme not in ("http", "https") or not parsed_url.netloc:
-        return None, "La URL del producto debe comenzar con http:// o https://."
-
-    def _optional_float(value, name, minimum=0):
-        if not value:
-            return None
-        try:
-            number = float(value.replace(",", "."))
-        except ValueError:
-            raise ValueError(f"{name} debe ser numérico.")
-        if number < minimum:
-            raise ValueError(f"{name} no puede ser negativo.")
-        return number
-
-    try:
-        rating = _optional_float(rating_raw, "rating")
-        if rating is not None and rating > 5:
-            return None, "El rating debe estar entre 0 y 5."
-        reviews = int(_optional_float(reviews_raw, "reseñas") or 0)
-        sales = int(_optional_float(sales_raw, "ventas") or 0)
-    except ValueError as exc:
-        return None, str(exc)
-
-    conn = get_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT AVG(p.current_price) AS category_avg
-                FROM products p
-                JOIN categories c ON c.id = p.category_id
-                WHERE c.name = %s AND p.currency = 'COP'
-                AND p.current_price IS NOT NULL AND p.is_active = TRUE
-                """,
-                (category,),
-            )
-            row = cur.fetchone()
-            category_avg = float(
-                row["category_avg"]) if row and row["category_avg"] else price
-
-        product = {
-            "external_id": external_id,
-            "title": title,
-            "image_url": image_url or None,
-            "product_url": product_url,
-            "price": price,
-            "currency": "COP",
-            "rating": rating,
-            "reviews_count": reviews,
-            "sales_estimate": sales,
-        }
-        product_id = upsert_product(conn, platform, category, product)
-        opportunity = score_product(conn, product_id, category_avg)
-        return product_id, opportunity
-    except Exception as exc:
-        conn.rollback()
-        print(f"[telegram-bot] model product error: {exc}")
-        return None, "No fue posible guardar/modelar el producto. Revisa los datos y la conexión de base de datos."
-    finally:
-        conn.close()
-
 
 
 def _add_url(argument):
@@ -247,40 +147,70 @@ def _add_url(argument):
     if len(parts) < 2:
         return None, "Uso: /agregar categoría|url|precio|título|imagen", None
 
-    category, product_url = parts[:2]
-    price_raw = parts[2] if len(parts) > 2 else ""
-    title = parts[3] if len(parts) > 3 and parts[3] else None
-    image_url = parts[4] if len(parts) > 4 and parts[4] else None
-
-    if category.lower() not in ALLOWED_CATEGORIES:
-        return None, "Categoría inválida. Usa: ropa, calzado o accesorios.", None
-
-    price = None
-    if price_raw:
-        try:
-            price = float(price_raw.replace(",", "."))
-            if price <= 0:
-                raise ValueError
-        except ValueError:
-            return None, "El precio debe ser un número mayor que cero.", None
+    category, url = parts[0].lower(), parts[1]
+    if category not in ALLOWED_CATEGORIES:
+        return None, "Categoría no válida.", None
 
     try:
+        price = float(parts[2]) if len(parts) > 2 and parts[2] else None
         product = import_url(
-            product_url,
-            category.lower(),
-            title=title,
+            url,
+            category,
+            title=parts[3] if len(parts) > 3 and parts[3] else None,
             price=price,
-            currency="USD" if "amazon." in product_url.lower() else "COP",
-            image_url=image_url,
+            image_url=parts[4] if len(parts) > 4 and parts[4] else None,
         )
-    except ValueError as exc:
-        return None, str(exc), None
+        if product["platform"] not in ALLOWED_PLATFORMS:
+            return None, "Plataforma no habilitada para importación.", None
 
-    conn = get_connection()
+        conn = get_connection()
+        try:
+            product_id = upsert_product(conn, product["platform"], category, product)
+            score = None
+            if product.get("price") is not None:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT AVG(p.current_price) AS category_avg
+                        FROM products p
+                        JOIN categories c ON c.id = p.category_id
+                        WHERE c.name = %s AND p.currency = %s
+                          AND p.current_price IS NOT NULL AND p.is_active = TRUE
+                        """,
+                        (category, product["currency"]),
+                    )
+                    row = cur.fetchone()
+                score = score_product(conn, product_id, float(row["category_avg"] or product["price"]))
+            return product_id, product, score
+        finally:
+            conn.close()
+    except Exception as exc:
+        print(f"[telegram-bot] url import error: {exc}")
+        return None, "No fue posible agregar el producto desde la URL.", None
+
+
+def _model_product(argument):
+    parts = [part.strip() for part in argument.split("|")]
+    if len(parts) < 10:
+        return None, "Uso: plataforma|categoría|id|título|precio|url|rating|reseñas|ventas|imagen"
+    platform, category = parts[0].lower(), parts[1].lower()
+    if platform not in ALLOWED_PLATFORMS or category not in ALLOWED_CATEGORIES:
+        return None, "Plataforma o categoría no permitida."
     try:
-        product_id = upsert_product(conn, product["platform"], category.lower(), product)
-        score = None
-        if product.get("price") is not None:
+        product = {
+            "external_id": parts[2],
+            "title": parts[3],
+            "price": float(parts[4]),
+            "currency": "COP" if platform == "mercadolibre" else "USD",
+            "product_url": parts[5],
+            "rating": float(parts[6]) if parts[6] else None,
+            "reviews_count": int(parts[7] or 0),
+            "sales_estimate": int(parts[8] or 0),
+            "image_url": parts[9] or None,
+        }
+        conn = get_connection()
+        try:
+            product_id = upsert_product(conn, platform, category, product)
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -290,17 +220,15 @@ def _add_url(argument):
                     WHERE c.name = %s AND p.currency = %s
                       AND p.current_price IS NOT NULL AND p.is_active = TRUE
                     """,
-                    (category.lower(), product["currency"]),
+                    (category, product["currency"]),
                 )
                 row = cur.fetchone()
             score = score_product(conn, product_id, float(row["category_avg"] or product["price"]))
-        return product_id, product, score
+            return product_id, score
+        finally:
+            conn.close()
     except Exception as exc:
-        conn.rollback()
-        print(f"[telegram-bot] url import error: {exc}")
-        return None, "No fue posible agregar el producto desde la URL.", None
-    finally:
-        conn.close()
+        return None, str(exc)
 
 
 def _handle(token, chat_id, text):
@@ -315,21 +243,16 @@ def _handle(token, chat_id, text):
             "/modelar — registrar y puntuar un producto\n"
             "/agregar — importar un producto desde Amazon o Mercado Libre por URL\n"
             "/estado — estado del catálogo\n"
-            "/help — ayuda\n\n"
-            "<b>Formato /modelar</b>\n"
-            "plataforma|categoría|id|título|precio|url|rating|reseñas|ventas|imagen\n\n"
-            "<b>Formato /agregar</b>\n"
-            "categoría|url|precio|título|imagen"
+            "/help — ayuda"
         ))
 
     if command == "/top":
         products = _top_products()
         if not products:
             return _send(token, chat_id, "No hay oportunidades disponibles en la base de datos.")
-        body = "<b>Top oportunidades</b>\n\n" + "\n\n".join(
+        return _send(token, chat_id, "<b>Top oportunidades</b>\n\n" + "\n\n".join(
             f"{i}. {_format_product(p)}" for i, p in enumerate(products, 1)
-        )
-        return _send(token, chat_id, body)
+        ))
 
     if command == "/buscar":
         term = argument.strip()
@@ -338,45 +261,35 @@ def _handle(token, chat_id, text):
         products = _search_products(term)
         if not products:
             return _send(token, chat_id, f"No encontré productos modelados para: {html.escape(term)}")
-        body = f"<b>Resultados: {html.escape(term)}</b>\n\n" + \
-            "\n\n".join(_format_product(p) for p in products)
-        return _send(token, chat_id, body)
-
+        return _send(token, chat_id, f"<b>Resultados: {html.escape(term)}</b>\n\n" + "\n\n".join(
+            _format_product(p) for p in products
+        ))
 
     if command == "/agregar":
         result, payload, score = _add_url(argument.strip())
         if result is None:
             return _send(token, chat_id, f"<b>Error de importación</b>\n{html.escape(str(payload))}")
-        title = html.escape(payload["title"])
-        link = html.escape(payload["product_url"], quote=True)
-        image = payload.get("image_url")
         score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score: pendiente (sin precio)"
         message = (
-            f"<b>Producto agregado</b>\n{title}\n"
-            f"Plataforma: {html.escape(payload['platform'])}\n"
-            f"{score_text}\n<a href=\"{link}\">Abrir producto original</a>"
+            f"<b>Producto agregado</b>\n{html.escape(payload['title'])}\n"
+            f"Plataforma: {html.escape(payload['platform'])}\n{score_text}\n"
+            f'<a href="{html.escape(payload["product_url"], quote=True)}">Abrir producto original</a>'
         )
-        if image:
-            message += f'\nImagen: <a href=\"{html.escape(image, quote=True)}\">ver imagen</a>'
+        if payload.get("image_url"):
+            message += f'\nImagen: <a href="{html.escape(payload["image_url"], quote=True)}">ver imagen</a>'
         return _send(token, chat_id, message)
 
     if command == "/modelar":
         result, error = _model_product(argument.strip())
         if result is None:
             return _send(token, chat_id, f"<b>Error de modelado</b>\n{html.escape(str(error))}")
-        return _send(
-            token,
-            chat_id,
-            f"<b>Producto modelado</b>\nID: {result}\nOportunidad: {float(error):.1f}/100\n"
-            "Ya está disponible para /top y /buscar.",
-        )
+        return _send(token, chat_id, f"<b>Producto modelado</b>\nID: {result}\nOportunidad: {float(error):.1f}/100")
 
     if command == "/estado":
         conn = get_connection()
         try:
             with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT COUNT(*) AS total FROM products WHERE is_active = TRUE")
+                cur.execute("SELECT COUNT(*) AS total FROM products WHERE is_active = TRUE")
                 total = cur.fetchone()["total"]
                 cur.execute(
                     """
@@ -387,15 +300,28 @@ def _handle(token, chat_id, text):
                     """
                 )
                 modeled = cur.fetchone()["modeled"]
-            return _send(
-                token,
-                chat_id,
-                f"<b>Estado del catálogo</b>\nProductos activos: {total}\nProductos modelados: {modeled}",
-            )
+            return _send(token, chat_id, f"<b>Estado del catálogo</b>\nProductos activos: {total}\nProductos modelados: {modeled}")
         finally:
             conn.close()
 
     return _send(token, chat_id, "Comando no reconocido. Usa /help.")
+
+
+def _clear_webhook(token):
+    try:
+        response = requests.post(
+            f"{API_BASE}/bot{token}/deleteWebhook",
+            json={"drop_pending_updates": False},
+            timeout=10,
+        )
+        payload = response.json()
+        if not response.ok or not payload.get("ok"):
+            print(f"[telegram-bot] no se pudo limpiar webhook: {payload.get('description', 'respuesta inválida')}")
+            return False
+        return True
+    except (requests.RequestException, ValueError) as exc:
+        print(f"[telegram-bot] error limpiando webhook: {exc}")
+        return False
 
 
 def run_bot():
@@ -403,11 +329,11 @@ def run_bot():
     if not token:
         print("[telegram-bot] Bot deshabilitado: falta TELEGRAM_BOT_TOKEN.")
         return
-
     if not (os.getenv("TELEGRAM_CHAT_ID") or os.getenv("CHAT_ID")):
         print("[telegram-bot] Bot deshabilitado: falta TELEGRAM_CHAT_ID.")
         return
 
+    _clear_webhook(token)
     offset = None
     print("[telegram-bot] Bot interactivo iniciado.")
 
@@ -416,7 +342,6 @@ def run_bot():
             params = {"timeout": 25}
             if offset is not None:
                 params["offset"] = offset
-
             response = requests.get(
                 f"{API_BASE}/bot{token}/getUpdates",
                 params=params,
@@ -424,29 +349,23 @@ def run_bot():
             )
             response.raise_for_status()
             payload = response.json()
-
             if not payload.get("ok"):
-                raise RuntimeError(payload.get(
-                    "description", "respuesta inválida"))
-
+                raise RuntimeError(payload.get("description", "respuesta inválida"))
             for update in payload.get("result", []):
                 offset = update["update_id"] + 1
                 message = update.get("message") or {}
                 chat = message.get("chat") or {}
                 text = message.get("text") or ""
                 chat_id = chat.get("id")
-
                 if chat_id is None or not _allowed_chat(chat_id) or not text:
                     continue
-
                 _handle(token, chat_id, text)
-
         except requests.HTTPError as exc:
             response = getattr(exc, "response", None)
             status = response.status_code if response is not None else "?"
             if status == 409:
-                print("[telegram-bot] polling bloqueado: otro proceso está usando el bot (HTTP 409).")
-                time.sleep(max(POLL_INTERVAL, 15))
+                print("[telegram-bot] polling bloqueado: ya existe otro consumidor getUpdates.")
+                time.sleep(max(POLL_INTERVAL, 20))
             else:
                 print(f"[telegram-bot] polling HTTP error: {status}")
                 time.sleep(max(POLL_INTERVAL, 5))
