@@ -35,7 +35,7 @@ def _metadata(url: str) -> dict:
         return {}
 
     content = response.text[:2_000_000]
-    result = {}
+    result = {"resolved_url": response.url}
 
     patterns = {
         "title": r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']',
@@ -65,7 +65,7 @@ def import_url(url: str, category: str, title: str | None = None,
     platform = detect_platform(url)
     metadata = _metadata(url)
 
-    external_id = _asin(url) if platform == "amazon" else None
+    resolved_url = metadata.get("resolved_url") or url\n    external_id = _asin(resolved_url) if platform == "amazon" else None
     if not external_id:
         path_id = re.search(r"/([A-Z]{2,4}-?[0-9]{6,})", parsed.path, re.I)
         external_id = path_id.group(1).upper() if path_id else re.sub(r"[^a-zA-Z0-9]+", "-", parsed.path.strip("/"))[:120]
@@ -81,7 +81,7 @@ def import_url(url: str, category: str, title: str | None = None,
         "external_id": external_id,
         "title": final_title[:500],
         "image_url": final_image,
-        "product_url": url,
+        "product_url": resolved_url,
         "price": price,
         "currency": currency.upper()[:10] if currency else "USD",
         "rating": None,
@@ -90,6 +90,6 @@ def import_url(url: str, category: str, title: str | None = None,
         "source_metadata": {
             "import_method": "product_url",
             "metadata_source": "open_graph" if metadata else "url_only",
-            "original_url": url,
+            "original_url": url,\n            "resolved_url": resolved_url,
         },
     }
