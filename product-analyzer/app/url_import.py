@@ -25,10 +25,8 @@ def _asin(url: str) -> str | None:
 
 def _parse_price(content: str) -> tuple[float | None, str | None]:
     patterns = [
-        r'"priceAmount"\s*:\s*([0-9]+(?:\.[0-9]+)?)',
-        r'"price"\s*:\s*"([0-9]+(?:\.[0-9]+)?)"',
-        r'<span[^>]+class=["\'][^"\']*a-price-whole[^"\']*["\'][^>]*>([0-9,]+)',
         r'<span[^>]+class=["\'][^"\']*a-offscreen[^"\']*["\'][^>]*>\s*[$€£]?\s*([0-9]+(?:[.,][0-9]{1,2})?)',
+        r'"priceAmount"\s*:\s*([0-9]+(?:\.[0-9]+)?)',
     ]
     for pattern in patterns:
         match = re.search(pattern, content, re.I)
@@ -60,12 +58,13 @@ def _metadata(url: str) -> dict:
 
     patterns = {
         "title": r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']',
-        "image_url": r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']',
+        "image_url": r'<meta[^>]+(?:property|name)=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']|<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property|name)=["\']og:image["\']',
     }
     for key, pattern in patterns.items():
         match = re.search(pattern, content, re.I)
         if match:
-            result[key] = html.unescape(match.group(1)).strip()
+            value = match.group(1) or match.group(2)
+            result[key] = html.unescape(value).strip()
 
     price, price_currency = _parse_price(content)
     if price is not None:
