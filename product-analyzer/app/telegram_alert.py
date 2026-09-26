@@ -7,10 +7,11 @@ import requests
 
 from analysis import score_product
 from db import get_connection, upsert_product
+from url_import import import_url
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
-ALLOWED_PLATFORMS = {"mercadolibre"}
+ALLOWED_PLATFORMS = {"mercadolibre", "amazon"}
 ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios"}
 
 
@@ -162,7 +163,7 @@ def _model_product(argument):
     category = category.lower()
 
     if platform not in ALLOWED_PLATFORMS:
-        return None, "Plataforma inválida. Usa: Mercado Libre."
+        return None, "Plataforma inválida. Usa: Mercado Libre o Amazon."
     if category not in ALLOWED_CATEGORIES:
         return None, "Categoría inválida. Usa: ropa, calzado o accesorios."
     if not external_id or not title:
@@ -237,6 +238,68 @@ def _model_product(argument):
         conn.close()
 
 
+
+def _add_url(argument):
+    parts = [part.strip() for part in argument.split("|")]
+    if len(parts) < 2:
+        return None, "Uso: /agregar categoría|url|precio|título|imagen", None
+
+    category, product_url = parts[:2]
+    price_raw = parts[2] if len(parts) > 2 else ""
+    title = parts[3] if len(parts) > 3 and parts[3] else None
+    image_url = parts[4] if len(parts) > 4 and parts[4] else None
+
+    if category.lower() not in ALLOWED_CATEGORIES:
+        return None, "Categoría inválida. Usa: ropa, calzado o accesorios.", None
+
+    price = None
+    if price_raw:
+        try:
+            price = float(price_raw.replace(",", "."))
+            if price <= 0:
+                raise ValueError
+        except ValueError:
+            return None, "El precio debe ser un número mayor que cero.", None
+
+    try:
+        product = import_url(
+            product_url,
+            category.lower(),
+            title=title,
+            price=price,
+            currency="USD" if "amazon." in product_url.lower() else "COP",
+            image_url=image_url,
+        )
+    except ValueError as exc:
+        return None, str(exc), None
+
+    conn = get_connection()
+    try:
+        product_id = upsert_product(conn, product["platform"], category.lower(), product)
+        score = None
+        if product.get("price") is not None:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT AVG(p.current_price) AS category_avg
+                    FROM products p
+                    JOIN categories c ON c.id = p.category_id
+                    WHERE c.name = %s AND p.currency = %s
+                      AND p.current_price IS NOT NULL AND p.is_active = TRUE
+                    """,
+                    (category.lower(), product["currency"]),
+                )
+                row = cur.fetchone()
+            score = score_product(conn, product_id, float(row["category_avg"] or product["price"]))
+        return product_id, product, score
+    except Exception as exc:
+        conn.rollback()
+        print(f"[telegram-bot] url import error: {exc}")
+        return None, "No fue posible agregar el producto desde la URL.", None
+    finally:
+        conn.close()
+
+
 def _handle(token, chat_id, text):
     command, _, argument = text.partition(" ")
     command = command.lower().strip()
@@ -247,10 +310,13 @@ def _handle(token, chat_id, text):
             "/top — oportunidades con mayor score\n"
             "/buscar producto — buscar en los datos modelados\n"
             "/modelar — registrar y puntuar un producto\n"
+            "/agregar — importar un producto desde Amazon o Mercado Libre por URL\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda\n\n"
             "<b>Formato /modelar</b>\n"
-            "plataforma|categoría|id|título|precio|url|rating|reseñas|ventas|imagen"
+            "plataforma|categoría|id|título|precio|url|rating|reseñas|ventas|imagen\n\n"
+            "<b>Formato /agregar</b>\n"
+            "categoría|url|precio|título|imagen"
         ))
 
     if command == "/top":
@@ -271,6 +337,24 @@ def _handle(token, chat_id, text):
             return _send(token, chat_id, f"No encontré productos modelados para: {html.escape(term)}")
         body = f"<b>Resultados: {html.escape(term)}</b>\n\n" + "\n\n".join(_format_product(p) for p in products)
         return _send(token, chat_id, body)
+
+
+    if command == "/agregar":
+        result, payload, score = _add_url(argument.strip())
+        if result is None:
+            return _send(token, chat_id, f"<b>Error de importación</b>\n{html.escape(str(payload))}")
+        title = html.escape(payload["title"])
+        link = html.escape(payload["product_url"], quote=True)
+        image = payload.get("image_url")
+        score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score: pendiente (sin precio)"
+        message = (
+            f"<b>Producto agregado</b>\n{title}\n"
+            f"Plataforma: {html.escape(payload['platform'])}\n"
+            f"{score_text}\n<a href=\"{link}\">Abrir producto original</a>"
+        )
+        if image:
+            message += f'\nImagen: <a href=\"{html.escape(image, quote=True)}\">ver imagen</a>'
+        return _send(token, chat_id, message)
 
     if command == "/modelar":
         result, error = _model_product(argument.strip())
