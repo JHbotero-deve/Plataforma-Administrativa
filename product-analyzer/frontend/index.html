@@ -37,9 +37,6 @@
 </script>
 <script type="module">
 import * as THREE from "three";
-import {OrbitControls} from "three/addons/controls/OrbitControls.js";
-import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
-import {RoundedBoxGeometry} from "three/addons/geometries/RoundedBoxGeometry.js";
 (()=>{"use strict";
 const API="/api", $=id=>document.getElementById(id);
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -53,53 +50,89 @@ async function load(){try{const [top,items,summary]=await Promise.all([get("/opp
 $("importForm").addEventListener("submit",async e=>{e.preventDefault();const btn=$("importBtn"),out=$("importResult");btn.disabled=true;btn.textContent="Importando…";out.textContent="Leyendo la URL y guardando el producto…";try{const r=await fetch(API+"/products/import-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:$("url").value,category:$("category").value})});const data=await r.json();if(!r.ok)throw new Error(data.detail||"No fue posible importar");out.textContent="Producto importado: "+(data.product?.title||"OK")+(data.opportunity_score!=null?" · score "+Math.round(data.opportunity_score):" · score pendiente por falta de precio");$("url").value="";await load()}catch(err){out.textContent="Error: "+err.message}finally{btn.disabled=false;btn.textContent="Importar"}});
 $("refreshBtn").addEventListener("click",load);
 const viewers=new Map();
-async function open3dInCard(p){
- const host=$("viewer-"+p.id); if(!host||viewers.has(String(p.id)))return;
+function open3dInCard(p){
+ const host=$("viewer-"+p.id);if(!host||viewers.has(String(p.id)))return;
  host.classList.add("open");
- const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0d131a);
- const camera=new THREE.PerspectiveCamera(34,1,.1,100); camera.position.set(0,.45,3.6); camera.lookAt(0,0,0);
- const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false}); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.outputColorSpace=THREE.SRGBColorSpace; host.appendChild(renderer.domElement);
- const controls=new OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.enablePan=false; controls.enableRotate=false; controls.enableZoom=true; controls.minDistance=2.5; controls.maxDistance=6;
- scene.add(new THREE.HemisphereLight(0xffffff,0x334455,2.4));
- const key=new THREE.DirectionalLight(0xffffff,3); key.position.set(3,4,5); scene.add(key);
- const fill=new THREE.DirectionalLight(0x7f9bb8,1.4); fill.position.set(-4,1,3); scene.add(fill);
- const group=new THREE.Group(); group.position.y=.25; scene.add(group);
- const mat=new THREE.MeshStandardMaterial({color:0xd6dde5,roughness:.3,metalness:.12});
+ const scene=new THREE.Scene();scene.background=new THREE.Color(0x0d131a);
+ const camera=new THREE.PerspectiveCamera(34,1,.1,100);camera.position.set(0,.05,4.1);camera.lookAt(0,-.05,0);
+ const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:"high-performance"});renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;host.appendChild(renderer.domElement);
+ scene.add(new THREE.HemisphereLight(0xffffff,0x26323d,2.2));
+ const key=new THREE.DirectionalLight(0xffffff,3.2);key.position.set(3,4,5);scene.add(key);
+ const rim=new THREE.DirectionalLight(0x9fb5c9,1.6);rim.position.set(-4,2,-2);scene.add(rim);
+ const group=new THREE.Group();group.position.y=.18;scene.add(group);
+ const mat=(color,roughness=.35,metalness=.12)=>new THREE.MeshStandardMaterial({color,roughness,metalness});
+ const addBox=(w,h,d,color,rough=.3,metal=.1,x=0,y=0,z=0,rx=0,ry=0,rz=0)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(color,rough,metal));m.position.set(x,y,z);m.rotation.set(rx,ry,rz);group.add(m);return m};
+ const addCyl=(r1,r2,h,color,segments=32,x=0,y=0,z=0,rx=0,ry=0,rz=0)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,segments),mat(color,.3,.25));m.position.set(x,y,z);m.rotation.set(rx,ry,rz);group.add(m);return m};
+ const addTorus=(r,t,color,x=0,y=0,z=0,rx=0,ry=0,rz=0)=>{const m=new THREE.Mesh(new THREE.TorusGeometry(r,t,16,40),mat(color,.3,.2));m.position.set(x,y,z);m.rotation.set(rx,ry,rz);group.add(m);return m};
  const cat=(String(p.category||"")+" "+String(p.title||"")).toLowerCase();
- let mesh;
- if(cat.includes("mouse")||cat.includes("raton")||cat.includes("arc touch")){\n   const body=new THREE.Mesh(new RoundedBoxGeometry(1.35,.32,1.05,8,.16),new THREE.MeshStandardMaterial({color:0xd7dbe0,roughness:.28,metalness:.18}));\n   body.rotation.x=-.12; body.position.y=.02; group.add(body);\n   const top=new THREE.Mesh(new RoundedBoxGeometry(.7,.035,.52,6,.035),new THREE.MeshStandardMaterial({color:0x3c434b,roughness:.3,metalness:.25}));\n   top.position.set(0,.2,.02); group.add(top);\n   const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.075,.075,.055,24),new THREE.MeshStandardMaterial({color:0xb9c0c8,roughness:.25,metalness:.55}));\n   wheel.rotation.z=Math.PI/2; wheel.position.set(0,.235,.02); group.add(wheel);\n   mesh=body;\n }else if(cat.includes("smarttag")||cat.includes("tag2")||cat.includes("tracker")||cat.includes("bluetooth")){
-   const body=new RoundedBoxGeometry(.92,.16,.92,8,.14); mesh=new THREE.Mesh(body,mat);
-   mesh.rotation.x=-.08;
-   const hole=new THREE.Mesh(new THREE.TorusGeometry(.16,.055,16,32),new THREE.MeshStandardMaterial({color:0x20262c,roughness:.25,metalness:.35}));
-   hole.position.set(.25,.11,.25); hole.rotation.x=Math.PI/2; group.add(hole);
-   const accent=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,.03,20),new THREE.MeshStandardMaterial({color:0x20262c,roughness:.25,metalness:.2}));
-   accent.position.set(-.18,.1,-.18); group.add(accent);
+ let main;
+ if(cat.includes("mic")||cat.includes("microphone")||cat.includes("microfono")||cat.includes("dji mic")||cat.includes("transmisor")||cat.includes("wireless audio")||cat.includes("lavalier")){
+   main=addBox(1.05,.34,.55,0x252a30,.25,.45,0,.05,0);
+   addBox(.58,.20,.025,0x0b0e12,.2,.05,0,.16,.29);
+   addBox(.34,.025,.025,0x9aa6b3,.2,.15,0,.18,.305);
+   addBox(.12,.035,.025,0x56616c,.2,.15,-.24,.18,.305);
+   addBox(.12,.035,.025,0x56616c,.2,.15,.24,.18,.305);
+   addBox(.82,.025,.38,0x11151a,.3,.35,0,.22,-.02);
+   addCyl(.045,.045,.08,0xb6e85a,20,-.38,.20,.30,Math.PI/2);
+   addCyl(.055,.055,.10,0x7f8994,20,.37,.20,.30,Math.PI/2);
+   addBox(.10,.18,.05,0x3e4650,.28,.3,-.47,-.02,.02);
+ }else if(cat.includes("mouse")||cat.includes("raton")||cat.includes("arc touch")){
+   main=addBox(1.35,.34,1.0,0xd7dbe0,.25,.18,0,.02,0,-.12,0,0);
+   addBox(.62,.04,.48,0x343b44,.25,.25,0,.20,.03,-.12,0,0);
+   addCyl(.075,.075,.055,0xb9c0c8,24,0,.245,.03,Math.PI/2);
+ }else if(cat.includes("smarttag")||cat.includes("tag2")||cat.includes("tracker")||cat.includes("bluetooth")){
+   main=addCyl(.48,.48,.14,0xd7dbe0,48,0,.04,0,Math.PI/2);
+   addTorus(.15,.045,0x20262c,.25,.12,.20,Math.PI/2);
+   addCyl(.045,.045,.025,0x20262c,20,-.18,.12,-.18);
+ }else if(cat.includes("audif")||cat.includes("headphone")||cat.includes("earbud")){
+   addTorus(.62,.13,0x343b44,0,.18,0,Math.PI/2);
+   addBox(.30,.48,.20,0xd6dce3,.28,.15,-.62,-.02,0);
+   addBox(.30,.48,.20,0xd6dce3,.28,.15,.62,-.02,0);
+   main=group.children[0];
+ }else if(cat.includes("reloj")||cat.includes("watch")){
+   addBox(.24,.78,.18,0x252a30,.35,.35,0,.15,0);
+   addCyl(.42,.42,.15,0xd6dce3,48,0,.15,0,Math.PI/2);
+   addCyl(.31,.31,.158,0x15191e,48,0,.15,.01,Math.PI/2);
+   addBox(.18,.52,.12,0x252a30,.4,.3,0,-.38,0);
+   main=group.children[1];
+ }else if(cat.includes("celular")||cat.includes("phone")||cat.includes("tablet")){
+   main=addBox(.86,.10,1.55,0x222830,.22,.35,0,.1,0);
+   addBox(.70,.025,1.30,0x11151a,.2,.1,0,.16,0);
+   addCyl(.025,.025,.03,0x7f8994,20,0,.18,.66,Math.PI/2);
+ }else if(cat.includes("laptop")||cat.includes("notebook")||cat.includes("computador")){
+   main=addBox(1.55,.08,1.02,0xb9c0c8,.25,.35,0,.25,0);
+   addBox(1.38,.04,.86,0x15191e,.2,.15,0,.31,0);
+   addBox(1.85,.08,.72,0x8e98a3,.3,.3,0,-.10,.16,-.12);
+ }else if(cat.includes("camara")||cat.includes("camera")){
+   main=addBox(1.12,.72,.72,0x343b44,.28,.35,0,.05,0);
+   addCyl(.26,.26,.18,0x11151a,40,0,.08,.43,Math.PI/2);
+   addCyl(.15,.15,.19,0x5b6672,40,0,.08,.54,Math.PI/2);
+   addBox(.28,.14,.25,0x1c2229,.25,.25,.28,.48,-.08);
+ }else if(cat.includes("botella")||cat.includes("bottle")||cat.includes("termo")){
+   main=addCyl(.40,.46,1.25,0xb9c0c8,32,0,.18,0);
+   addCyl(.27,.30,.18,0x343b44,32,0,.90,0);
  }else if(cat.includes("calzado")||cat.includes("shoe")||cat.includes("zapato")){
-   const shape=new THREE.Shape(); shape.moveTo(-1.25,-.42);shape.lineTo(.25,-.42);shape.quadraticCurveTo(.65,-.38,.95,-.05);shape.lineTo(1.25,.08);shape.lineTo(1.12,.34);shape.lineTo(-.8,.34);shape.quadraticCurveTo(-1.15,.28,-1.25,-.05);shape.closePath();
-   const g=new THREE.ExtrudeGeometry(shape,{depth:.72,bevelEnabled:true,bevelSegments:3,steps:2,bevelSize:.08,bevelThickness:.08});g.center();g.rotateX(Math.PI/2);mesh=new THREE.Mesh(g,mat);
- }else if(cat.includes("ropa")||cat.includes("shirt")||cat.includes("camis"))mesh=new THREE.Mesh(new THREE.CapsuleGeometry(.62,.95,8,24),mat);
- else if(cat.includes("audif")||cat.includes("headphone"))mesh=new THREE.Mesh(new THREE.TorusGeometry(.62,.16,12,32,Math.PI),mat);
- else if(cat.includes("reloj")||cat.includes("watch")){mesh=new THREE.Mesh(new THREE.CylinderGeometry(.48,.48,.16,48),mat);mesh.rotation.x=Math.PI/2}
- else if(cat.includes("celular")||cat.includes("phone")||cat.includes("tablet"))mesh=new THREE.Mesh(new RoundedBoxGeometry(.9,.12,1.65,8,.08),mat);
- else if(cat.includes("laptop")||cat.includes("notebook")||cat.includes("computador"))mesh=new THREE.Mesh(new RoundedBoxGeometry(1.7,.10,1.05,8,.06),mat);
- else if(cat.includes("camara")||cat.includes("camera"))mesh=new THREE.Mesh(new RoundedBoxGeometry(1.05,.72,.72,8,.12),mat);
- else if(cat.includes("botella")||cat.includes("bottle")||cat.includes("termo"))mesh=new THREE.Mesh(new THREE.CylinderGeometry(.42,.48,1.35,32),mat);
- else mesh=new THREE.Mesh(new THREE.SphereGeometry(.7,32,24),mat);
- group.add(mesh);
- if(p.image_url&&!(cat.includes("smarttag")||cat.includes("tracker")||cat.includes("bluetooth"))){
-   new THREE.TextureLoader().load(p.image_url,t=>{t.colorSpace=THREE.SRGBColorSpace;mesh.material=new THREE.MeshStandardMaterial({map:t,roughness:.55,metalness:.05})},undefined,()=>{});
+   const shape=new THREE.Shape();shape.moveTo(-1.05,-.38);shape.lineTo(.10,-.38);shape.quadraticCurveTo(.58,-.34,.92,-.04);shape.lineTo(1.08,.08);shape.lineTo(.96,.28);shape.lineTo(-.72,.30);shape.quadraticCurveTo(-1.05,.20,-1.05,-.08);shape.closePath();
+   const g=new THREE.ExtrudeGeometry(shape,{depth:.62,bevelEnabled:true,bevelSegments:3,steps:2,bevelSize:.06,bevelThickness:.06});g.center();g.rotateX(Math.PI/2);main=new THREE.Mesh(g,mat(0xd6dce3,.34,.08));group.add(main);
+ }else if(cat.includes("ropa")||cat.includes("shirt")||cat.includes("camis")){
+   main=addBox(.95,1.15,.20,0x687583,.45,.05,0,.18,0);
+   addBox(.38,.55,.16,0x687583,.45,.05,-.62,.40,0,-.25,0,-.15);addBox(.38,.55,.16,0x687583,.45,.05,.62,.40,0,-.25,0,.15);
+ }else{
+   main=new THREE.Mesh(new THREE.SphereGeometry(.62,32,24),mat(0xbcc5ce,.32,.12));group.add(main);
  }
- const ball=new THREE.Mesh(new THREE.SphereGeometry(.13,24,24),new THREE.MeshStandardMaterial({color:0xc1cad2,roughness:.25,metalness:.5}));
- ball.position.set(0,-1.05,0); scene.add(ball);
- const ring=new THREE.Mesh(new THREE.TorusGeometry(.2,.022,12,40),new THREE.MeshStandardMaterial({color:0x66727f,roughness:.3,metalness:.45}));ring.rotation.x=-Math.PI/2;ring.position.set(0,-1.17,0);scene.add(ring);
+ const box=new THREE.Box3().setFromObject(group),size=box.getSize(new THREE.Vector3()),max=Math.max(size.x,size.y,size.z);if(max>0)group.scale.setScalar(1.55/max);
+ const shadow=new THREE.Mesh(new THREE.CircleGeometry(.55,40),new THREE.MeshBasicMaterial({color:0x07090c,transparent:true,opacity:.55}));shadow.rotation.x=-Math.PI/2;shadow.position.set(0,-.91,0);scene.add(shadow);
+ const ball=new THREE.Mesh(new THREE.SphereGeometry(.15,28,24),mat(0xc6ced7,.22,.5));ball.position.set(0,-1.05,0);scene.add(ball);
+ const ring=new THREE.Mesh(new THREE.TorusGeometry(.22,.022,12,40),mat(0x65717d,.3,.45));ring.rotation.x=-Math.PI/2;ring.position.set(0,-1.18,0);scene.add(ring);
  const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();let rotating=false,lastX=0,lastY=0;
  const point=e=>{const r=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-r.left)/r.width)*2-1;pointer.y=-((e.clientY-r.top)/r.height)*2+1;raycaster.setFromCamera(pointer,camera)};
- renderer.domElement.addEventListener("pointerdown",e=>{point(e);if(raycaster.intersectObject(ball).length){rotating=true;lastX=e.clientX;lastY=e.clientY;controls.enabled=false;renderer.domElement.setPointerCapture(e.pointerId)}});
- renderer.domElement.addEventListener("pointermove",e=>{if(!rotating)return;group.rotation.y+=(e.clientX-lastX)*.012;group.rotation.x+=(e.clientY-lastY)*.008;lastX=e.clientX;lastY=e.clientY});
- const stop=e=>{if(rotating){rotating=false;controls.enabled=true;try{renderer.domElement.releasePointerCapture(e.pointerId)}catch{}}};renderer.domElement.addEventListener("pointerup",stop);renderer.domElement.addEventListener("pointercancel",stop);
+ renderer.domElement.addEventListener("pointerdown",e=>{point(e);if(raycaster.intersectObject(ball).length){rotating=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId)}});
+ renderer.domElement.addEventListener("pointermove",e=>{if(!rotating)return;group.rotation.y+=(e.clientX-lastX)*.014;group.rotation.x+=(e.clientY-lastY)*.009;group.rotation.x=Math.max(-.8,Math.min(.8,group.rotation.x));lastX=e.clientX;lastY=e.clientY});
+ const stop=e=>{if(rotating){rotating=false;try{renderer.domElement.releasePointerCapture(e.pointerId)}catch{}}};renderer.domElement.addEventListener("pointerup",stop);renderer.domElement.addEventListener("pointercancel",stop);
+ renderer.domElement.addEventListener("wheel",e=>{e.preventDefault();camera.position.z=Math.max(2.8,Math.min(6,camera.position.z+e.deltaY*.002));camera.lookAt(0,-.05,0)},{passive:false});
  const resize=()=>{const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()};const ro=new ResizeObserver(resize);ro.observe(host);resize();
- const animate=()=>{if(!host.isConnected){renderer.dispose();controls.dispose();ro.disconnect();return}controls.update();renderer.render(scene,camera)};renderer.setAnimationLoop(animate);
- viewers.set(String(p.id),{controls,renderer,ro});
+ const animate=()=>{if(!host.isConnected){renderer.dispose();ro.disconnect();return}renderer.render(scene,camera)};renderer.setAnimationLoop(animate);
+ viewers.set(String(p.id),{renderer,ro});
 }
 $("featured").addEventListener("click",async e=>{
  const close=e.target.closest("[data-close3d]"); if(close){const id=String(close.dataset.close3d),host=$("viewer-"+id);host.classList.remove("open");const v=viewers.get(id);if(v){v.controls.dispose();v.renderer.dispose();v.ro.disconnect();viewers.delete(id)}return}
