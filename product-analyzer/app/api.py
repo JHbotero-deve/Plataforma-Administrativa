@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from analysis import score_product
 from db import get_connection, upsert_product
 from monetization import router as monetization_router
+from tiktok_api import router as tiktok_creator_router
 from url_import import import_url
 from wompi import router as wompi_router
 
@@ -27,6 +28,8 @@ app.include_router(monetization_router)
 app.include_router(monetization_router, prefix="/api/v1")
 app.include_router(wompi_router)
 app.include_router(wompi_router, prefix="/api/v1")
+app.include_router(tiktok_creator_router)
+app.include_router(tiktok_creator_router, prefix="/api/v1")
 
 default_origins = ",".join(
     [
