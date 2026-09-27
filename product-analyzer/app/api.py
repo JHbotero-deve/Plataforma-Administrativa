@@ -71,7 +71,7 @@ def health():
             return {"status": "ok", "database": "ok", "version": API_VERSION}
         finally:
             conn.close()
-    except Exception as exc:
+    except Exception:
         raise HTTPException(
             status_code=503,
             detail={"status": "degraded", "database": "error"},
@@ -155,8 +155,8 @@ def import_product_from_url(payload: ProductImport):
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"No fue posible leer la URL: {exc}")
+    except Exception:
+        raise HTTPException(status_code=502, detail="No fue posible leer la URL")
 
     conn = get_connection()
     try:
