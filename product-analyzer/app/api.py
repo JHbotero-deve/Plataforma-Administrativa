@@ -111,7 +111,7 @@ def list_products(
             query = """
                 SELECT p.id, p.title, pl.name AS platform, c.name AS category,
                        p.current_price, p.currency, p.rating, p.reviews_count,
-                       p.sales_estimate, p.image_url, p.product_url, p.updated_at,
+                       p.sales_estimate, p.image_url, p.product_url, p.updated_at, p.source_metadata,
                        p.catalog_expires_at, p.model_url, p.model_shape,
                        s.opportunity_score
                 FROM products p

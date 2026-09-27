@@ -1,4 +1,5 @@
 import html
+import json
 import re
 from urllib.parse import urlparse
 
@@ -71,6 +72,7 @@ def _metadata(url: str) -> dict:
         result["price"] = price
     if price_currency:
         result["currency"] = price_currency
+    result["gallery_urls"] = _gallery_from_content(content)
 
     if not result.get("title"):
         match = re.search(r"<title[^>]*>(.*?)</title>", content, re.I | re.S)
@@ -79,6 +81,24 @@ def _metadata(url: str) -> dict:
 
     return result
 
+
+def _gallery_from_content(content: str) -> list[str]:
+    urls = []
+    for match in re.finditer(r'<script[^>]+type=["\\\']application/ld\\+json["\\\'][^>]*>(.*?)</script>', content, re.I | re.S):
+        try:
+            data = json.loads(html.unescape(match.group(1)))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        nodes = data if isinstance(data, list) else [data]
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            images = node.get("image")
+            if isinstance(images, str):
+                images = [images]
+            if isinstance(images, list):
+                urls.extend(x for x in images if isinstance(x, str))
+    return list(dict.fromkeys(x.strip() for x in urls if re.match(r"^https?://", x.strip())))[:24]
 
 def import_url(url: str, category: str, title: str | None = None,
                price: float | None = None, currency: str = "USD",
@@ -121,5 +141,6 @@ def import_url(url: str, category: str, title: str | None = None,
             "metadata_source": "open_graph" if metadata else "url_only",
             "original_url": url,
             "resolved_url": resolved_url,
+            "gallery_urls": metadata.get("gallery_urls") or ([final_image] if final_image else []),
         },
     }
