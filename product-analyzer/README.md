@@ -4,12 +4,15 @@
 - Frontend estático en Vercel desde `product-analyzer/frontend`.
 - API y worker en Railway desde `product-analyzer/app`.
 - PostgreSQL como persistencia.
-- Mercado Libre Colombia como única fuente automática de catálogo.
+- Amazon y Mercado Libre como fuentes de catálogo según las credenciales y permisos disponibles.
 - Telegram para consulta y alertas.
 - Wompi preparado para pagos.
 
 ## Flujo
-Mercado Libre -> ingesta cada 2 horas -> PostgreSQL -> scoring -> API -> Vercel.
+Fuentes -> ingesta cada 2 horas -> PostgreSQL -> scoring -> API -> Vercel.
+
+## Tarjetas
+Cada producto se representa en una tarjeta única. La zona multimedia admite imágenes reales y, cuando `model_url` apunta a un modelo GLB/GLTF accesible, activa el visor 3D dentro de la misma tarjeta. Sin modelo válido, no se simula 3D.
 Los productos activos caducan a las 48 horas; cuando vuelven a detectarse, su vigencia se renueva 48 horas.
 
 ## Regla de datos
