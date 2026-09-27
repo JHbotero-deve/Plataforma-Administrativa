@@ -28,6 +28,16 @@ app.include_router(monetization_router, prefix="/api/v1")
 app.include_router(wompi_router, prefix="/api/v1")
 app.include_router(tiktok_creator_router, prefix="/api/v1")
 
+
+@app.middleware("http")
+async def normalize_legacy_api_prefix(request, call_next):
+    path = request.scope.get("path", "")
+    if path.startswith("/api/v1/v1/"):
+        request.scope["path"] = "/api/v1/" + path[len("/api/v1/v1/"):]
+    elif path == "/api/v1/v1":
+        request.scope["path"] = "/api/v1"
+    return await call_next(request)
+
 default_origins = ",".join(
     [
         "http://localhost:3000",
