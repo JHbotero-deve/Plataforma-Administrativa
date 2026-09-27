@@ -305,5 +305,4 @@ def top_opportunities(limit: int = Query(20, ge=1, le=100)):
         conn.close()
 
 
-app.include_router(core_router)
 app.include_router(core_router, prefix="/api/v1")
