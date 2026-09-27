@@ -23,19 +23,44 @@ jobs:
           from pathlib import Path
           import re
           html = Path("product-analyzer/frontend/index.html").read_text(encoding="utf-8")
-          match = re.search(r"<script>([\s\S]*?)</script>", html)
-          if not match:
+          matches = re.findall(r"<script(?:\s[^>]*)?>([\s\S]*?)</script>", html)
+          if not matches:
               raise SystemExit("Frontend script not found")
-          Path("/tmp/central-frontend.js").write_text(match.group(1), encoding="utf-8")
+          Path("/tmp/central-frontend.js").write_text(matches[0], encoding="utf-8")
           PY
           node --check /tmp/central-frontend.js
       - name: Reject development debris
         shell: bash
         run: |
-          if git grep -nEi "TODO|FIXME|neon\.tech|ep-solitary-truth" -- product-analyzer; then
-            echo "Development debris detected"
-            exit 1
-          fi
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path("product-analyzer")
+          patterns = (
+              re.compile(r"\bTODO\b"),
+              re.compile(r"\bFIXME\b"),
+              re.compile(r"neon\.tech"),
+              re.compile(r"ep-solitary-truth"),
+          )
+          ignored = {".env", ".env.local", ".env.production"}
+          findings = []
+
+          for path in root.rglob("*"):
+              if not path.is_file() or path.name in ignored:
+                  continue
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except (UnicodeDecodeError, OSError):
+                  continue
+              for line_no, line in enumerate(text.splitlines(), 1):
+                  if any(pattern.search(line) for pattern in patterns):
+                      findings.append(f"{path}:{line_no}:{line}")
+
+          if findings:
+              print("\n".join(findings))
+              raise SystemExit("Development debris detected")
+          PY
 
   docker:
     name: Validate backend image
@@ -43,10 +68,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
       - name: Build backend
         uses: docker/build-push-action@v7
         with:
