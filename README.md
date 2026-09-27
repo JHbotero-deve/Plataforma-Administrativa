@@ -27,10 +27,13 @@ Funciones disponibles:
 - catálogo de productos reales;
 - importación de Amazon y Mercado Libre mediante URL;
 - imágenes reales cuando la fuente las proporciona;
-- visualización 3D procedimental como apoyo visual;
+- soporte de modelo 3D real dentro de la misma tarjeta cuando `model_url` está configurado;
 - estado de fuentes y vigencia del catálogo.
 
 No existe fallback de productos ficticios en producción.
+
+### Tarjetas de producto
+La tarjeta es el contenedor único del producto. Si existe `model_url` válido, la zona multimedia usa un visor 3D interactivo con rotación y zoom dentro de la propia tarjeta. Si no existe modelo 3D, conserva las imágenes reales disponibles y permite recorrerlas dentro de la tarjeta. No se fabrica un modelo 3D cuando la fuente no lo proporciona.
 
 ## API
 
