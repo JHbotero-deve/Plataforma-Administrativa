@@ -30,7 +30,12 @@ jobs:
           PY
           node --check /tmp/central-frontend.js
       - name: Reject development debris
-        run: '! grep -RniE "TODO|FIXME|neon\\.tech|ep-solitary-truth" product-analyzer --exclude-dir=.git'
+        shell: bash
+        run: |
+          if git grep -nEi "TODO|FIXME|neon\.tech|ep-solitary-truth" -- product-analyzer; then
+            echo "Development debris detected"
+            exit 1
+          fi
 
   docker:
     name: Validate backend image
