@@ -17,7 +17,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Validate frontend JavaScript
-        run: node -e "const fs=require('fs'); const s=fs.readFileSync('product-analyzer/frontend/index.html','utf8'); const m=s.match(/<script>([\\s\\S]*?)<\\/script>/); if(!m) throw new Error('Frontend script not found'); new Function(m[1]);"
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path("product-analyzer/frontend/index.html").read_text(encoding="utf-8")
+          match = re.search(r"<script>([\\s\\S]*?)</script>", html)
+          if not match:
+              raise SystemExit("Frontend script not found")
+          Path("/tmp/central-frontend.js").write_text(match.group(1), encoding="utf-8")
+          PY
+          node --check /tmp/central-frontend.js
       - name: Reject development debris
         run: '! grep -RniE "TODO|FIXME|neon\\.tech|ep-solitary-truth" product-analyzer --exclude-dir=.git'
 
