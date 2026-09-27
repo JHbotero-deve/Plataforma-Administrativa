@@ -61,12 +61,10 @@ def _sale_price(item_id):
 
 
 def fetch_mercadolibre(query, limit=20):
-    # La búsqueda de listados se hace sin el token de seller para evitar que
-    # un token vencido o con scopes insuficientes bloquee todo el catálogo.
     data = _get(
         MELI_SEARCH,
         {"q": query, "limit": min(limit, 50)},
-        include_auth=False,
+        include_auth=True,
     )
     products = []
 
