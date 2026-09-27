@@ -6,16 +6,9 @@ from psycopg2.extras import Json, RealDictCursor
 
 def get_connection():
     db_url = os.getenv("DATABASE_URL", "").strip()
-    if db_url:
-        return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
-    return psycopg2.connect(
-        host=os.getenv("DB_HOST", "db"),
-        port=os.getenv("DB_PORT", "5432"),
-        dbname=os.getenv("DB_NAME", "productos_db"),
-        user=os.getenv("DB_USER", "productos_user"),
-        password=os.getenv("DB_PASSWORD", "productos_pass"),
-        cursor_factory=RealDictCursor,
-    )
+    if not db_url:
+        raise RuntimeError("DATABASE_URL es obligatoria; Central usa PostgreSQL de Railway como unica base de datos.")
+    return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
 
 
 def upsert_product(conn, platform_name: str, category_name: str, product: dict):
