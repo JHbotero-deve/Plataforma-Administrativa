@@ -10,6 +10,17 @@ permissions:
   contents: read
 
 jobs:
+  source-validation:
+    name: Validate source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate frontend JavaScript
+        run: node -e "const fs=require('fs'); const s=fs.readFileSync('product-analyzer/frontend/index.html','utf8'); const m=s.match(/<script>([\\s\\S]*?)<\\/script>/); if(!m) throw new Error('Frontend script not found'); new Function(m[1]);"
+      - name: Reject development debris
+        run: '! grep -RniE "TODO|FIXME|neon\\.tech|ep-solitary-truth" product-analyzer --exclude-dir=.git'
+
   docker:
     name: Validate backend image
     runs-on: ubuntu-latest
