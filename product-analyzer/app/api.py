@@ -24,11 +24,8 @@ app = FastAPI(
     version=API_VERSION,
 )
 
-app.include_router(monetization_router)
 app.include_router(monetization_router, prefix="/api/v1")
-app.include_router(wompi_router)
 app.include_router(wompi_router, prefix="/api/v1")
-app.include_router(tiktok_creator_router)
 app.include_router(tiktok_creator_router, prefix="/api/v1")
 
 default_origins = ",".join(
@@ -67,7 +64,7 @@ def health():
     except Exception as exc:
         raise HTTPException(
             status_code=503,
-            detail={"status": "degraded", "database": "error", "message": str(exc)[:300]},
+            detail={"status": "degraded", "database": "error"},
         )
 
 
