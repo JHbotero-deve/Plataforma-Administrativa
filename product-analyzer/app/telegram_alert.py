@@ -324,6 +324,21 @@ def _clear_webhook(token):
         return False
 
 
+def _acquire_polling_lock():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_try_advisory_lock(%s) AS locked", (834271,))
+            locked = bool(cur.fetchone()["locked"])
+        if not locked:
+            conn.close()
+            return None
+        return conn
+    except Exception:
+        conn.close()
+        raise
+
+
 def run_bot():
     token = _token()
     if not token:
@@ -333,42 +348,55 @@ def run_bot():
         print("[telegram-bot] Bot deshabilitado: falta TELEGRAM_CHAT_ID.")
         return
 
-    _clear_webhook(token)
-    offset = None
-    print("[telegram-bot] Bot interactivo iniciado.")
+    try:
+        lock_conn = _acquire_polling_lock()
+    except Exception as exc:
+        print(f"[telegram-bot] Bot deshabilitado: no se pudo obtener el bloqueo de polling ({type(exc).__name__}).")
+        return
 
-    while True:
-        try:
-            params = {"timeout": 25}
-            if offset is not None:
-                params["offset"] = offset
-            response = requests.get(
-                f"{API_BASE}/bot{token}/getUpdates",
-                params=params,
-                timeout=35,
-            )
-            response.raise_for_status()
-            payload = response.json()
-            if not payload.get("ok"):
-                raise RuntimeError(payload.get("description", "respuesta inválida"))
-            for update in payload.get("result", []):
-                offset = update["update_id"] + 1
-                message = update.get("message") or {}
-                chat = message.get("chat") or {}
-                text = message.get("text") or ""
-                chat_id = chat.get("id")
-                if chat_id is None or not _allowed_chat(chat_id) or not text:
-                    continue
-                _handle(token, chat_id, text)
-        except requests.HTTPError as exc:
-            response = getattr(exc, "response", None)
-            status = response.status_code if response is not None else "?"
-            if status == 409:
-                print("[telegram-bot] polling bloqueado: ya existe otro consumidor getUpdates.")
-                time.sleep(max(POLL_INTERVAL, 20))
-            else:
-                print(f"[telegram-bot] polling HTTP error: {status}")
+    if lock_conn is None:
+        print("[telegram-bot] Otra instancia ya posee el consumidor de Telegram; esta instancia se detiene.")
+        return
+
+    try:
+        _clear_webhook(token)
+        offset = None
+        print("[telegram-bot] Bot interactivo iniciado.")
+
+        while True:
+            try:
+                params = {"timeout": 25}
+                if offset is not None:
+                    params["offset"] = offset
+                response = requests.get(
+                    f"{API_BASE}/bot{token}/getUpdates",
+                    params=params,
+                    timeout=35,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                if not payload.get("ok"):
+                    raise RuntimeError(payload.get("description", "respuesta inválida"))
+                for update in payload.get("result", []):
+                    offset = update["update_id"] + 1
+                    message = update.get("message") or {}
+                    chat = message.get("chat") or {}
+                    text = message.get("text") or ""
+                    chat_id = chat.get("id")
+                    if chat_id is None or not _allowed_chat(chat_id) or not text:
+                        continue
+                    _handle(token, chat_id, text)
+            except requests.HTTPError as exc:
+                response = getattr(exc, "response", None)
+                status = response.status_code if response is not None else "?"
+                if status == 409:
+                    print("[telegram-bot] polling bloqueado por otro consumidor externo.")
+                    time.sleep(max(POLL_INTERVAL, 20))
+                else:
+                    print(f"[telegram-bot] polling HTTP error: {status}")
+                    time.sleep(max(POLL_INTERVAL, 5))
+            except (requests.RequestException, ValueError, RuntimeError) as exc:
+                print(f"[telegram-bot] polling error: {type(exc).__name__}")
                 time.sleep(max(POLL_INTERVAL, 5))
-        except (requests.RequestException, ValueError, RuntimeError) as exc:
-            print(f"[telegram-bot] polling error: {type(exc).__name__}")
-            time.sleep(max(POLL_INTERVAL, 5))
+    finally:
+        lock_conn.close()
