@@ -33,72 +33,27 @@
 <footer><div class="wrap">Central · datos reales · ciclo automático 2h · vigencia 48h · Amazon · Mercado Libre · Telegram · Wompi preparado.</div></footer>
 
 <script>
-import * as THREE from "three";
 (()=>{"use strict";
-const API="/api", $=id=>document.getElementById(id);
-const esc=v=>String(v??"").replace(/[&<>"function open3dInCard(p){
- const host=$("viewer-"+p.id);if(!host||viewers.has(String(p.id)))return;
- const title=(String(p.title||"")+" "+String(p.category||"")).toLowerCase();
- let type=title.includes("ray-ban")||title.includes("rayban")||title.includes("glasses")||title.includes("gafas")?"m-glasses":title.includes("mic")||title.includes("microphone")||title.includes("microfono")||title.includes("transmisor")||title.includes("lavalier")?"m-mic":title.includes("mouse")||title.includes("raton")?"m-mouse":title.includes("smarttag")||title.includes("tracker")||title.includes("bluetooth")?"m-tag":title.includes("phone")||title.includes("celular")||title.includes("tablet")?"m-phone":title.includes("watch")||title.includes("reloj")?"m-watch":title.includes("camera")||title.includes("camara")?"m-camera":title.includes("headphone")||title.includes("audif")?"m-headphones":title.includes("bottle")||title.includes("botella")||title.includes("termo")?"m-bottle":"m-default";
- host.innerHTML='<div class="model3d-css '+type+'"><div class="object"><div class="part body"></div><div class="part screen"></div><div class="part line"></div><div class="part led"></div><div class="part bridge"></div><div class="part lens l"></div><div class="part lens r"></div><div class="part arm l"></div><div class="part arm r"></div><div class="part stripe"></div><div class="part wheel"></div><div class="part hole"></div><div class="part face"></div><div class="part strap"></div><div class="part cap"></div><div class="part band"></div><div class="part cup l"></div><div class="part cup r"></div></div><div class="shadow"></div><div class="ball" title="Arrastra para girar"></div><span class="hint">3D · arrastra la bola para girar · rueda para zoom</span></div>';
- const stage=host.querySelector(".model3d-css"),obj=host.querySelector(".object"),ball=host.querySelector(".ball");let rx=-12,ry=28,drag=false,lx=0,ly=0,zoom=1;
- const render=()=>obj.style.transform="scale("+zoom+") rotateX("+rx+"deg) rotateY("+ry+"deg)";
- ball.addEventListener("pointerdown",e=>{drag=true;lx=e.clientX;ly=e.clientY;ball.setPointerCapture(e.pointerId);ball.style.cursor="grabbing"});
- ball.addEventListener("pointermove",e=>{if(!drag)return;ry+=(e.clientX-lx)*.8;rx+=(e.clientY-ly)*.45;rx=Math.max(-55,Math.min(35,rx));lx=e.clientX;ly=e.clientY;render()});
- const stop=e=>{drag=false;ball.style.cursor="grab";try{ball.releasePointerCapture(e.pointerId)}catch{}};
- ball.addEventListener("pointerup",stop);ball.addEventListener("pointercancel",stop);
- stage.addEventListener("wheel",e=>{e.preventDefault();zoom=Math.max(.7,Math.min(1.45,zoom-e.deltaY*.0008));render()},{passive:false});
- viewers.set(String(p.id),{host});
- render();
-}2);
-   addCyl(.31,.31,.158,0x15191e,48,0,.15,.01,Math.PI/2);
-   addBox(.18,.52,.12,0x252a30,.4,.3,0,-.38,0);
-   main=group.children[1];
- }else if(cat.includes("celular")||cat.includes("phone")||cat.includes("tablet")){
-   main=addBox(.86,.10,1.55,0x222830,.22,.35,0,.1,0);
-   addBox(.70,.025,1.30,0x11151a,.2,.1,0,.16,0);
-   addCyl(.025,.025,.03,0x7f8994,20,0,.18,.66,Math.PI/2);
- }else if(cat.includes("laptop")||cat.includes("notebook")||cat.includes("computador")){
-   main=addBox(1.55,.08,1.02,0xb9c0c8,.25,.35,0,.25,0);
-   addBox(1.38,.04,.86,0x15191e,.2,.15,0,.31,0);
-   addBox(1.85,.08,.72,0x8e98a3,.3,.3,0,-.10,.16,-.12);
- }else if(cat.includes("camara")||cat.includes("camera")){
-   main=addBox(1.12,.72,.72,0x343b44,.28,.35,0,.05,0);
-   addCyl(.26,.26,.18,0x11151a,40,0,.08,.43,Math.PI/2);
-   addCyl(.15,.15,.19,0x5b6672,40,0,.08,.54,Math.PI/2);
-   addBox(.28,.14,.25,0x1c2229,.25,.25,.28,.48,-.08);
- }else if(cat.includes("botella")||cat.includes("bottle")||cat.includes("termo")){
-   main=addCyl(.40,.46,1.25,0xb9c0c8,32,0,.18,0);
-   addCyl(.27,.30,.18,0x343b44,32,0,.90,0);
- }else if(cat.includes("calzado")||cat.includes("shoe")||cat.includes("zapato")){
-   const shape=new THREE.Shape();shape.moveTo(-1.05,-.38);shape.lineTo(.10,-.38);shape.quadraticCurveTo(.58,-.34,.92,-.04);shape.lineTo(1.08,.08);shape.lineTo(.96,.28);shape.lineTo(-.72,.30);shape.quadraticCurveTo(-1.05,.20,-1.05,-.08);shape.closePath();
-   const g=new THREE.ExtrudeGeometry(shape,{depth:.62,bevelEnabled:true,bevelSegments:3,steps:2,bevelSize:.06,bevelThickness:.06});g.center();g.rotateX(Math.PI/2);main=new THREE.Mesh(g,mat(0xd6dce3,.34,.08));group.add(main);
- }else if(cat.includes("ropa")||cat.includes("shirt")||cat.includes("camis")){
-   main=addBox(.95,1.15,.20,0x687583,.45,.05,0,.18,0);
-   addBox(.38,.55,.16,0x687583,.45,.05,-.62,.40,0,-.25,0,-.15);addBox(.38,.55,.16,0x687583,.45,.05,.62,.40,0,-.25,0,.15);
- }else{
-   main=new THREE.Mesh(new THREE.SphereGeometry(.62,32,24),mat(0xbcc5ce,.32,.12));group.add(main);
- }
- const box=new THREE.Box3().setFromObject(group),size=box.getSize(new THREE.Vector3()),max=Math.max(size.x,size.y,size.z);if(max>0)group.scale.setScalar(1.55/max);
- const shadow=new THREE.Mesh(new THREE.CircleGeometry(.55,40),new THREE.MeshBasicMaterial({color:0x07090c,transparent:true,opacity:.55}));shadow.rotation.x=-Math.PI/2;shadow.position.set(0,-.91,0);scene.add(shadow);
- const ball=new THREE.Mesh(new THREE.SphereGeometry(.15,28,24),mat(0xc6ced7,.22,.5));ball.position.set(0,-1.05,0);scene.add(ball);
- const ring=new THREE.Mesh(new THREE.TorusGeometry(.22,.022,12,40),mat(0x65717d,.3,.45));ring.rotation.x=-Math.PI/2;ring.position.set(0,-1.18,0);scene.add(ring);
- const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();let rotating=false,lastX=0,lastY=0;
- const point=e=>{const r=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-r.left)/r.width)*2-1;pointer.y=-((e.clientY-r.top)/r.height)*2+1;raycaster.setFromCamera(pointer,camera)};
- renderer.domElement.addEventListener("pointerdown",e=>{point(e);if(raycaster.intersectObject(ball).length){rotating=true;lastX=e.clientX;lastY=e.clientY;renderer.domElement.setPointerCapture(e.pointerId)}});
- renderer.domElement.addEventListener("pointermove",e=>{if(!rotating)return;group.rotation.y+=(e.clientX-lastX)*.014;group.rotation.x+=(e.clientY-lastY)*.009;group.rotation.x=Math.max(-.8,Math.min(.8,group.rotation.x));lastX=e.clientX;lastY=e.clientY});
- const stop=e=>{if(rotating){rotating=false;try{renderer.domElement.releasePointerCapture(e.pointerId)}catch{}}};renderer.domElement.addEventListener("pointerup",stop);renderer.domElement.addEventListener("pointercancel",stop);
- renderer.domElement.addEventListener("wheel",e=>{e.preventDefault();camera.position.z=Math.max(2.8,Math.min(6,camera.position.z+e.deltaY*.002));camera.lookAt(0,-.05,0)},{passive:false});
- const resize=()=>{const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()};const ro=new ResizeObserver(resize);ro.observe(host);resize();
- const animate=()=>{if(!host.isConnected){renderer.dispose();ro.disconnect();return}renderer.render(scene,camera)};renderer.setAnimationLoop(animate);
- viewers.set(String(p.id),{renderer,ro});
-}
-$("featured").addEventListener("click",async e=>{
- const close=e.target.closest("[data-close3d]"); if(close){const id=String(close.dataset.close3d),host=$("viewer-"+id);host.classList.remove("open");const v=viewers.get(id);if(v){v.controls.dispose();v.renderer.dispose();v.ro.disconnect();viewers.delete(id)}return}
- const b=e.target.closest(".view3d");if(!b)return;const id=String(b.dataset.id),host=$("viewer-"+id);if(host.classList.contains("open")){host.classList.remove("open");return}
- try{const r=await get("/products/"+id);await open3dInCard(r.product)}catch(err){console.error(err)}
-});
-load();setInterval(load,10*60*1000);
+const API="/api",$=id=>document.getElementById(id);
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money=(v,c)=>{if(v==null||Number.isNaN(Number(v)))return"—";const n=Number(v),cur=String(c||"COP").toUpperCase();if(cur==="USD"||cur==="US$"||cur==="$"){const cop=n*3329.61;return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(cop)+" COP"}try{return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(n)+" COP"}catch{return n.toLocaleString("es-CO")+" COP"}};
+const date=v=>v?new Date(v).toLocaleString("es-CO"):"—";
+async function get(path){const r=await fetch(API+path,{cache:"no-store",headers:{Accept:"application/json"}});if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}
+function status(kind,label){$("status").innerHTML='<span class="dot '+(kind==="ok"?"ok":kind==="warn"?"warn":"")+'"></span>'+esc(label)}
+function typeFor(p){const t=(String(p.title||"")+" "+String(p.category||"")).toLowerCase();if(/ray-ban|rayban|glasses|gafas/.test(t))return"m-glasses";if(/mic|microphone|microfono|transmisor|lavalier/.test(t))return"m-mic";if(/mouse|raton/.test(t))return"m-mouse";if(/smarttag|tracker|bluetooth/.test(t))return"m-tag";if(/phone|celular|tablet/.test(t))return"m-phone";if(/watch|reloj/.test(t))return"m-watch";if(/camera|camara/.test(t))return"m-camera";if(/headphone|audif/.test(t))return"m-headphones";if(/bottle|botella|termo/.test(t))return"m-bottle";return"m-default"}
+function open3dInCard(p){const host=$("viewer-"+p.id);if(!host)return;const type=typeFor(p);host.innerHTML='<div class="model3d-css '+type+'"><div class="object"><div class="part body"></div><div class="part screen"></div><div class="part line"></div><div class="part led"></div><div class="part bridge"></div><div class="part lens l"></div><div class="part lens r"></div><div class="part arm l"></div><div class="part arm r"></div><div class="part stripe"></div><div class="part wheel"></div><div class="part hole"></div><div class="part face"></div><div class="part strap"></div><div class="part cap"></div><div class="part band"></div><div class="part cup l"></div><div class="part cup r"></div></div><div class="shadow"></div><div class="ball" title="Arrastra para girar"></div><span class="hint">3D · arrastra la bola para girar · rueda para zoom</span></div>';
+const obj=host.querySelector(".object"),ball=host.querySelector(".ball");let rx=-12,ry=28,zoom=1,drag=false,lx=0,ly=0;
+const render=()=>{obj.style.transform="scale("+zoom+") rotateX("+rx+"deg) rotateY("+ry+"deg)"};
+ball.addEventListener("pointerdown",e=>{drag=true;lx=e.clientX;ly=e.clientY;ball.setPointerCapture(e.pointerId);ball.style.cursor="grabbing"});
+ball.addEventListener("pointermove",e=>{if(!drag)return;ry+=(e.clientX-lx)*.8;rx+=(e.clientY-ly)*.45;rx=Math.max(-55,Math.min(35,rx));lx=e.clientX;ly=e.clientY;render()});
+const stop=e=>{drag=false;ball.style.cursor="grab";try{ball.releasePointerCapture(e.pointerId)}catch{}};
+ball.addEventListener("pointerup",stop);ball.addEventListener("pointercancel",stop);
+host.addEventListener("wheel",e=>{e.preventDefault();zoom=Math.max(.7,Math.min(1.45,zoom-e.deltaY*.0008));render()},{passive:false});render()}
+function card(p){const score=p.opportunity_score==null?"—":Math.round(Number(p.opportunity_score));return '<article class="card" data-product="'+esc(p.id)+'"><div class="card-media">'+(p.image_url?'<img src="'+esc(p.image_url)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="noimg" style="display:none">Sin imagen</span>':'<span class="noimg">Sin imagen</span>')+'</div><div class="inline-3d" id="viewer-'+esc(p.id)+'"></div><div class="card-body"><span class="badge">'+esc(p.platform||"—")+'</span><div class="title">'+esc(p.title)+'</div><div class="price">'+money(p.current_price,p.currency)+'</div><div class="score">Score '+score+'/100</div><div class="card-actions">'+(p.product_url?'<a class="btn small" href="'+esc(p.product_url)+'" target="_blank" rel="noopener noreferrer">Abrir original</a>':"")+'</div></div></article>'}
+function row(p){return '<tr><td>'+esc(p.title)+'</td><td>'+esc(p.platform)+'</td><td>'+money(p.current_price,p.currency)+'</td><td>'+esc(p.opportunity_score==null?"—":Math.round(Number(p.opportunity_score)))+'</td><td>'+date(p.catalog_expires_at)+'</td></tr>'}
+async function load(){try{const [top,items,summary]=await Promise.all([get("/opportunities/top?limit=12"),get("/products?limit=50"),get("/pipeline/summary")]);$("featured").innerHTML=top.length?top.map(card).join(""):'<div class="empty">No hay oportunidades reales disponibles.</div>';top.forEach(open3dInCard);$("catalog").innerHTML=items.length?items.map(row).join(""):'<tr><td colspan="5">No hay productos reales disponibles.</td></tr>';const total=summary.reduce((n,x)=>n+Number(x.product_count||0),0);$("count").textContent=total;const ml=summary.find(x=>x.platform==="mercadolibre"),amz=summary.find(x=>x.platform==="amazon");$("mlCount").textContent=ml?.product_count??0;$("amzCount").textContent=amz?.product_count??0;const last=summary.map(x=>x.last_update).filter(Boolean).sort().pop();$("last").textContent=date(last);$("updated").textContent=new Date().toLocaleTimeString("es-CO");status("ok","API conectada")}catch(e){console.error(e);$("featured").innerHTML='<div class="empty">API no disponible. No se muestran datos de respaldo.</div>';$("catalog").innerHTML='<tr><td colspan="5">API no disponible.</td></tr>';status("error","API no disponible")}}
+$("importForm").addEventListener("submit",async e=>{e.preventDefault();const btn=$("importBtn"),out=$("importResult");btn.disabled=true;btn.textContent="Importando…";out.textContent="Leyendo la URL y guardando el producto…";try{const r=await fetch(API+"/products/import-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:$("url").value,category:$("category").value})});const data=await r.json();if(!r.ok)throw new Error(data.detail||"No fue posible importar");out.textContent="Producto importado: "+(data.product?.title||"OK")+(data.opportunity_score!=null?" · score "+Math.round(data.opportunity_score):" · score pendiente por falta de precio");$("url").value="";await load()}catch(err){out.textContent="Error: "+err.message}finally{btn.disabled=false;btn.textContent="Importar"}});
+$("refreshBtn").addEventListener("click",load);load();setInterval(load,10*60*1000);
 })();</script>
 </body>
 </html>
