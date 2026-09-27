@@ -23,7 +23,7 @@ jobs:
           from pathlib import Path
           import re
           html = Path("product-analyzer/frontend/index.html").read_text(encoding="utf-8")
-          match = re.search(r"<script>([\\s\\S]*?)</script>", html)
+          match = re.search(r"<script>([\s\S]*?)</script>", html)
           if not match:
               raise SystemExit("Frontend script not found")
           Path("/tmp/central-frontend.js").write_text(match.group(1), encoding="utf-8")
