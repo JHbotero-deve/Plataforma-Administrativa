@@ -5,6 +5,7 @@ MELI_SEARCH = "https://api.mercadolibre.com/sites/MCO/search"
 MELI_ITEM = "https://api.mercadolibre.com/items/{id}"
 MELI_PRICES = "https://api.mercadolibre.com/items/{id}/prices"
 MELI_SALE_PRICE = "https://api.mercadolibre.com/items/{id}/sale_price"
+MELI_OAUTH = "https://api.mercadolibre.com/oauth/token"
 
 
 def _headers(include_auth=True):
@@ -12,21 +13,55 @@ def _headers(include_auth=True):
         "User-Agent": "CentralProductAnalyzer/2.2",
         "Accept": "application/json",
     }
-    token = os.getenv("MELI_ACCESS_TOKEN", "").strip()
+    token = (os.getenv("MELI_ACCESS_TOKEN", "").strip() or os.getenv("MERCADOLIBRE_ACCESS_TOKEN", "").strip())
     if include_auth and token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
 
 
-def _get(url, params=None, include_auth=True):
+def _refresh_access_token():
+    refresh_token = os.getenv("MELI_REFRESH_TOKEN", "").strip()
+    client_id = os.getenv("MERCADOLIBRE_CLIENT_ID", "").strip()
+    client_secret = os.getenv("MERCADOLIBRE_CLIENT_SECRET", "").strip()
+    if not (refresh_token and client_id and client_secret):
+        return None
+    response = requests.post(MELI_OAUTH, data={
+        "grant_type": "refresh_token",
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "refresh_token": refresh_token,
+    }, timeout=20)
+    if not response.ok:
+        print(f"[Mercado Libre] renovación de token: HTTP {response.status_code}")
+        return None
+    token = str(response.json().get("access_token") or "").strip()
+    if token:
+        print("[Mercado Libre] access token renovado.")
+    return token or None
+
+
+def _get(url, params=None, include_auth=True, retry_auth=True):
     response = requests.get(
         url,
         params=params,
         headers=_headers(include_auth),
         timeout=20,
     )
+    if response.status_code in (401, 403) and include_auth and retry_auth:
+        refreshed = _refresh_access_token()
+        if refreshed:
+            response = requests.get(
+                url,
+                params=params,
+                headers={
+                    "User-Agent": "CentralProductAnalyzer/2.3",
+                    "Accept": "application/json",
+                    "Authorization": f"Bearer {refreshed}",
+                },
+                timeout=20,
+            )
     if response.status_code == 401:
-        raise RuntimeError("Mercado Libre rechazó MELI_ACCESS_TOKEN")
+        raise RuntimeError("Mercado Libre rechazó el token de acceso")
     if response.status_code == 403:
         raise RuntimeError("Mercado Libre rechazó la consulta (403)")
     response.raise_for_status()
@@ -64,7 +99,7 @@ def fetch_mercadolibre(query, limit=20):
     data = _get(
         MELI_SEARCH,
         {"q": query, "limit": min(limit, 50)},
-        include_auth=True,
+        include_auth=False,
     )
     products = []
 
