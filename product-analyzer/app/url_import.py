@@ -5,8 +5,20 @@ from urllib.parse import urlparse
 
 import requests
 
-ASIN_RE = re.compile(r"(?:/dp/|/gp/product/|/product/)([A-Z0-9]{10})(?:[/?]|$)", re.I)
-AMAZON_HOST_RE = re.compile(r"(^|\.)amazon\.[a-z.]+$", re.I)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def detect_platform(url: str) -> str:
@@ -25,21 +37,108 @@ def _asin(url: str) -> str | None:
 
 
 def _parse_price(content: str) -> tuple[float | None, str | None]:
-    patterns = [
-        r'<span[^>]+class=["\'][^"\']*a-offscreen[^"\']*["\'][^>]*>\s*[$€£]?\s*([0-9]+(?:[.,][0-9]{1,2})?)',
-        r'"priceAmount"\s*:\s*([0-9]+(?:\.[0-9]+)?)',
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, content, re.I)
+    """
+    Obtiene únicamente el precio principal visible del producto Amazon.
+
+    Prioridad:
+    1. Estructura a-price del producto principal.
+    2. Formatos antiguos de Amazon.
+    3. Si no puede identificarse con seguridad, devuelve None.
+    """
+
+    content = html.unescape(content)
+
+    marker = re.search(
+        r'id=["\']corePriceDisplay_desktop_feature_div["\']',
+        content,
+        re.I,
+    )
+
+    if marker:
+        block = content[marker.start():marker.start() + 30000]
+
+        price_match = re.search(
+            r'<span[^>]+class=["\'][^"\']*a-price[^"\']*["\'][^>]*>'
+            r'.{0,5000}?'
+            r'<span[^>]+class=["\'][^"\']*a-price-symbol[^"\']*["\'][^>]*>'
+            r'\s*([^<]+?)\s*</span>'
+            r'.{0,3000}?'
+            r'<span[^>]+class=["\'][^"\']*a-price-whole[^"\']*["\'][^>]*>'
+            r'\s*([0-9][0-9,]*)\s*</span>'
+            r'.{0,1000}?'
+            r'<span[^>]+class=["\'][^"\']*a-price-fraction[^"\']*["\'][^>]*>'
+            r'\s*([0-9]{1,2})\s*</span>',
+            block,
+            re.I | re.S,
+        )
+
+        if price_match:
+            symbol = price_match.group(1).strip()
+            whole = price_match.group(2).replace(",", "")
+            fraction = price_match.group(3)
+
+            if symbol == "$":
+                currency = "USD"
+            elif symbol == "€":
+                currency = "EUR"
+            elif symbol == "£":
+                currency = "GBP"
+            else:
+                currency = None
+
+            if currency:
+                try:
+                    value = float(f"{whole}.{fraction}")
+
+                    if value > 0:
+                        return value, currency
+
+                except ValueError:
+                    pass
+
+    for element_id in (
+        "priceblock_ourprice",
+        "priceblock_dealprice",
+        "priceblock_saleprice",
+    ):
+        match = re.search(
+            rf'id=["\']{element_id}["\'][^>]*>\s*([^<]+)',
+            content,
+            re.I | re.S,
+        )
+
         if not match:
             continue
-        raw = match.group(1).replace(",", "")
+
+        text = html.unescape(match.group(1)).strip()
+
+        if "$" in text:
+            currency = "USD"
+        elif "€" in text:
+            currency = "EUR"
+        elif "£" in text:
+            currency = "GBP"
+        else:
+            continue
+
+        number = re.search(
+            r'([0-9][0-9,]*(?:\.[0-9]{1,2})?)',
+            text,
+        )
+
+        if not number:
+            continue
+
         try:
-            return float(raw), None
+            value = float(number.group(1).replace(",", ""))
         except ValueError:
             continue
-    currency_match = re.search(r'"currencyCode"\s*:\s*"([A-Z]{3})"', content, re.I)
-    return None, currency_match.group(1).upper() if currency_match else None
+
+        if value > 0:
+            return value, currency
+
+
+    return None, None
 
 def _metadata(url: str) -> dict:
     headers = {
