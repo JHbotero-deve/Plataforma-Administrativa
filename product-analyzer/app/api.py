@@ -289,7 +289,7 @@ def top_opportunities(limit: int = Query(20, ge=1, le=100)):
                        p.sales_estimate, s.price_score, s.demand_score,
                        s.trend_score, s.opportunity_score, p.product_url,
                        p.image_url, p.updated_at, p.catalog_expires_at,
-                       p.model_url, p.model_shape
+                       p.model_url, p.model_shape, p.source_metadata
                 FROM product_scores s
                 JOIN products p ON p.id = s.product_id
                 JOIN platforms pl ON pl.id = p.platform_id
