@@ -26,7 +26,7 @@ jobs:
           matches = re.findall(r"<script(?:\s[^>]*)?>([\s\S]*?)</script>", html)
           if not matches:
               raise SystemExit("Frontend script not found")
-          Path("/tmp/central-frontend.js").write_text(matches[0], encoding="utf-8")
+          Path("/tmp/central-frontend.js").write_text("\n".join(matches), encoding="utf-8")
           PY
           node --check /tmp/central-frontend.js
       - name: Reject development debris
