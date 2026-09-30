@@ -49,9 +49,10 @@ def ingest_amazon(conn) -> list[int]:
     ids = []
     with conn.cursor() as cur:
         cur.execute("""
-            SELECT external_id
-            FROM products
-            WHERE source = 'amazon' AND is_active = TRUE
+            SELECT p.external_id
+            FROM products p
+            JOIN platforms pl ON pl.id = p.platform_id
+            WHERE pl.name = 'amazon' AND p.is_active = TRUE
         """)
         existing_ids = {str(row["external_id"]).upper() for row in cur.fetchall()}
 
