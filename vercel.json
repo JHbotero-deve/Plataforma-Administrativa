@@ -51,5 +51,5 @@
       ]
     }
   ],
-  "buildCommand": "npm --prefix product-analyzer/headphones install --no-audit --no-fund && npm --prefix product-analyzer/headphones run build && rm -rf product-analyzer/frontend/headphones && mkdir -p product-analyzer/frontend/headphones && cp -R product-analyzer/headphones/dist/. product-analyzer/frontend/headphones/"
+  "buildCommand": "npm --prefix product-analyzer/headphones install --no-audit --no-fund && npm --prefix product-analyzer/headphones run build"
 }
