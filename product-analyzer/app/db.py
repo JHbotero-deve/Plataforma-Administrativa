@@ -63,7 +63,7 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
             )
             VALUES (
                 %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, NOW(), NOW() + INTERVAL '48 hours', NOW()
+                %s, %s, %s, %s, %s, %s, %s, NOW(), NOW() + INTERVAL '48 hours', NOW()
             )
             ON CONFLICT (platform_id, external_id) DO UPDATE SET
                 category_id = EXCLUDED.category_id,
