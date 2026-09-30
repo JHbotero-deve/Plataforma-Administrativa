@@ -69,7 +69,6 @@ def ingest_amazon(conn) -> list[int]:
         products = [
             ("accesorios", {**product, "source_metadata": {"source": "amazon-manual-fallback", "reason": "Creators API no disponible", "verified_at": "2026-09"}})
             for product in AMAZON_FALLBACK_PRODUCTS
-            if product["external_id"].upper() not in existing_ids
         ]
         print(f"[amazon] fallback manual con URLs Amazon reales: {len(products)}")
     print(f"[amazon] lote recibido desde Creators API: {len(products)}")
