@@ -38,7 +38,7 @@ jobs:
         run: |
           npm --prefix product-analyzer/headphones install --no-audit --no-fund
           npm --prefix product-analyzer/headphones run build
-          test -f product-analyzer/headphones/dist/index.html
+          test -f product-analyzer/frontend/headphones/index.html
 
       - name: Validate backend Python
         shell: bash
