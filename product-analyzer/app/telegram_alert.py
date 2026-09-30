@@ -85,13 +85,37 @@ def _format_product(p):
     return "\n".join(lines)
 
 
+def _send_product(token, chat_id, product):
+    image_url = str(product.get("image_url") or "").strip()
+    text = _format_product(product)
+    if image_url.startswith(("http://", "https://")):
+        try:
+            r = requests.post(
+                f"{API_BASE}/bot{token}/sendPhoto",
+                json={
+                    "chat_id": chat_id,
+                    "photo": image_url,
+                    "caption": text[:1024],
+                    "parse_mode": "HTML",
+                },
+                timeout=15,
+            )
+            payload = r.json()
+            if r.ok and payload.get("ok"):
+                return True
+            print(f"[telegram-bot] sendPhoto rejected: {payload.get('description', 'respuesta inválida')}")
+        except (requests.RequestException, ValueError) as exc:
+            print(f"[telegram-bot] sendPhoto error: {exc}")
+    return _send(token, chat_id, text)
+
+
 def _top_products(limit=5):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.title, p.current_price, p.currency, p.product_url,
+                SELECT p.title, p.current_price, p.currency, p.product_url, p.image_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -119,7 +143,7 @@ def _search_products(term, limit=8):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.title, p.current_price, p.currency, p.product_url,
+                SELECT p.title, p.current_price, p.currency, p.product_url, p.image_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -250,9 +274,11 @@ def _handle(token, chat_id, text):
         products = _top_products()
         if not products:
             return _send(token, chat_id, "No hay oportunidades disponibles en la base de datos.")
-        return _send(token, chat_id, "<b>Top oportunidades</b>\n\n" + "\n\n".join(
-            f"{i}. {_format_product(p)}" for i, p in enumerate(products, 1)
-        ))
+        _send(token, chat_id, "<b>Top oportunidades</b>")
+        for i, product in enumerate(products, 1):
+            product["title"] = f"{i}. {product['title']}"
+            _send_product(token, chat_id, product)
+        return True
 
     if command == "/buscar":
         term = argument.strip()
@@ -261,9 +287,10 @@ def _handle(token, chat_id, text):
         products = _search_products(term)
         if not products:
             return _send(token, chat_id, f"No encontré productos modelados para: {html.escape(term)}")
-        return _send(token, chat_id, f"<b>Resultados: {html.escape(term)}</b>\n\n" + "\n\n".join(
-            _format_product(p) for p in products
-        ))
+        _send(token, chat_id, f"<b>Resultados: {html.escape(term)}</b>")
+        for product in products:
+            _send_product(token, chat_id, product)
+        return True
 
     if command == "/agregar":
         result, payload, score = _add_url(argument.strip())
