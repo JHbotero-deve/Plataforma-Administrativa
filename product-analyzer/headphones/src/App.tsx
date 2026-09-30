@@ -247,7 +247,8 @@ export default function App() {
     setActiveVarIdx(0);
   };
 
-  // Handlers – panel products  const togglePublished = (id: string) => {
+  // Handlers – panel products
+  const togglePublished = (id: string) => {
     setProducts(prev => {
       const next = prev.map(p => p.id === id ? { ...p, published: !p.published } : p);
       const nowPub = next.filter(p => p.published);
