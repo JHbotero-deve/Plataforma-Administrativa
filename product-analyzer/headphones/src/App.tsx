@@ -247,8 +247,7 @@ export default function App() {
     setActiveVarIdx(0);
   };
 
-  // Handlers – panel products
-  const togglePublished = (id: string) => {
+  // Handlers – panel products  const togglePublished = (id: string) => {
     setProducts(prev => {
       const next = prev.map(p => p.id === id ? { ...p, published: !p.published } : p);
       const nowPub = next.filter(p => p.published);
@@ -497,8 +496,7 @@ export default function App() {
                   </motion.div>
                 </div>
 
-                {/* Info */}
-                <motion.div
+                {/* Info */}                <motion.div
                   key={`info-${activeProdId}`}
                   initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.7, delay: 0.1 }}
@@ -747,8 +745,7 @@ export default function App() {
                             <button
                               onClick={() => deleteProduct(prod.id)}
                               className="p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-all"
-                            >
-                              <Trash2 size={13} />
+                            >                              <Trash2 size={13} />
                             </button>
                           </div>
                         </div>
@@ -998,3 +995,13 @@ export default function App() {
                     >
                       Cancelar
                     </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
