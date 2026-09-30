@@ -155,7 +155,9 @@ def public_product(product_id: int):
         with conn.cursor() as cur:
             cur.execute("""SELECT pc.id AS publication_id,pc.product_id,pc.title,pc.subtitle,pc.price_display,
                 pc.sale_price,pc.opportunity_score,pc.footer,p.description,p.current_price,p.previous_price,p.currency,
-                p.image_url,p.image_gallery,p.product_url,p.affiliate_url,p.sku,p.external_id,p.stock,
+                COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) AS image_url,p.image_gallery,
+                COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) AS product_url,
+                p.affiliate_url,p.sku,p.external_id,p.stock,
                 pl.name AS platform,c.name AS category,p.rating,p.reviews_count,p.updated_at
                 FROM published_cards pc JOIN products p ON p.id=pc.product_id JOIN platforms pl ON pl.id=p.platform_id
                 LEFT JOIN categories c ON c.id=p.category_id
