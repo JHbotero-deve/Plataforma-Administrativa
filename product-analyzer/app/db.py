@@ -15,7 +15,7 @@ def get_connection():
 def _affiliate_url(product: dict) -> str | None:
     url=(product.get("product_url") or "").strip()
     if product.get("platform")!="amazon" or not url: return None
-    tag=os.getenv("AMAZON_ASSOCIATE_TAG","").strip()
+    tag=(os.getenv("AMAZON_PARTNER_TAG") or os.getenv("AMAZON_ASSOCIATE_TAG") or "").strip()
     if not tag: return None
     result=url+("&" if "?" in url else "?")+"tag="+quote(tag,safe="")
     tracking=os.getenv("AMAZON_TRACKING_ID","").strip()
