@@ -191,7 +191,7 @@ byId("importPublishUrl")?.addEventListener("click",async()=>{
   if(!url){if(msg)msg.textContent="Pega un enlace real del producto.";return}
   try{
     if(msg)msg.textContent="Importando enlace y preparando producto…";
-    const result=await pubGet("/products/import-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,category,currency:"COP"})});
+    const result=await pubGet("/products/import-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url,category})});
     const product=result?.product;
     if(!product?.id)throw Error("La API no devolvió el producto importado");
     byId("publishUrl").value="";
