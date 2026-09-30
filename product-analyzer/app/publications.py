@@ -35,7 +35,9 @@ def list_publications(limit: int = Query(20, ge=1, le=100), include_unpublished:
             cur.execute(
                 f"""
                 SELECT pc.id, pc.product_id, pc.title, pc.subtitle, pc.price_display,
-                       pc.image_url, pc.product_url, pc.sale_price, pc.cost_price,
+                       COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) AS image_url,
+                       COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) AS product_url,
+                       pc.sale_price, pc.cost_price,
                        pc.profit_amount, pc.profit_margin_pct, pc.opportunity_score, pc.footer,
                        pc.accent, pc.is_published, pc.sort_order, pc.published_at,
                        p.current_price, p.currency, p.image_gallery, p.affiliate_url, p.external_id, p.sku, p.description, p.stock, pl.name AS platform, c.name AS category
