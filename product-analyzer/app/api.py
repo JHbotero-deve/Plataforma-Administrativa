@@ -5,6 +5,7 @@ Central Product Analyzer REST API.
 import os
 import time
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.responses import Response
@@ -170,22 +171,47 @@ def public_product(product_id: int):
 
 @core_router.post("/affiliate/click")
 def affiliate_click(payload: dict):
-    product_id=int(payload.get("product_id") or 0)
-    if product_id <= 0: raise HTTPException(400,"product_id es obligatorio")
-    conn=get_connection()
+    product_id = int(payload.get("product_id") or 0)
+    if product_id <= 0:
+        raise HTTPException(400, "product_id es obligatorio")
+    conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("""SELECT p.affiliate_url,pl.name AS platform FROM products p
-                JOIN platforms pl ON pl.id=p.platform_id JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
-                WHERE p.id=%s AND p.is_active=TRUE""",(product_id,))
-            row=cur.fetchone()
-            if not row: raise HTTPException(404,"Producto no encontrado")
-            if str(row["platform"]).lower()!="amazon" or not row["affiliate_url"]:
-                raise HTTPException(400,"Enlace afiliado Amazon no configurado")
-            cur.execute("INSERT INTO affiliate_clicks(product_id,platform,target_url) VALUES(%s,%s,%s)",(product_id,row["platform"],row["affiliate_url"]))
+            cur.execute("""SELECT p.product_url,p.affiliate_url,pl.name AS platform
+                FROM products p
+                JOIN platforms pl ON pl.id=p.platform_id
+                JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
+                WHERE p.id=%s AND p.is_active=TRUE""", (product_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(404, "Producto no encontrado")
+            if str(row["platform"]).lower() != "amazon":
+                raise HTTPException(400, "Este producto no pertenece a Amazon")
+
+            target_url = (row["affiliate_url"] or "").strip()
+            if not target_url:
+                product_url = (row["product_url"] or "").strip()
+                partner_tag = (os.getenv("AMAZON_PARTNER_TAG") or os.getenv("AMAZON_ASSOCIATE_TAG") or "").strip()
+                if product_url and partner_tag:
+                    target_url = product_url + ("&" if "?" in product_url else "?") + "tag=" + quote(partner_tag, safe="")
+                else:
+                    target_url = product_url
+
+            if not target_url:
+                raise HTTPException(400, "El producto no tiene una URL de Amazon válida")
+
+            cur.execute(
+                "INSERT INTO affiliate_clicks(product_id,platform,target_url) VALUES(%s,%s,%s)",
+                (product_id, row["platform"], target_url),
+            )
         conn.commit()
-        return {"product_id":product_id,"url":row["affiliate_url"]}
-    finally: conn.close()
+        return {
+            "product_id": product_id,
+            "url": target_url,
+            "tracking": target_url != row["product_url"],
+        }
+    finally:
+        conn.close()
 
 @core_router.get("/public/robots.txt")
 def public_robots():
