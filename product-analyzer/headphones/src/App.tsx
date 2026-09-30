@@ -216,6 +216,96 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem("sp-products", JSON.stringify(products)); } catch {}
   }, [products]);
+
+  // Sincronización con el catálogo real de Central.
+  // Si la API no está disponible, conserva el catálogo local como respaldo.
+  useEffect(() => {
+    let cancelled = false;
+
+    const categoryMap: Record<string, string> = {
+      ropa: "camisetas",
+      calzado: "zapatos",
+      accesorios: "accesorios",
+      electronicos: "electronicos",
+      hogar: "hogar",
+    };
+
+    const gradientFor = (category: string) => {
+      if (category === "zapatos") return GRAD_PRESETS[0];
+      if (category === "camisetas") return GRAD_PRESETS[1];
+      if (category === "electronicos") return GRAD_PRESETS[2];
+      if (category === "hogar") return GRAD_PRESETS[3];
+      return GRAD_PRESETS[4];
+    };
+
+    const loadCentralCatalog = async () => {
+      try {
+        const response = await fetch("/api/products?limit=200", {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const data = await response.json();
+        const rows = Array.isArray(data) ? data : [];
+
+        const mapped: Product[] = rows
+          .filter((p: any) => p?.id && p?.title)
+          .map((p: any) => {
+            const category = String(p.category || "accesorios").toLowerCase();
+            const categoryId = categoryMap[category] || "otros";
+            const preset = gradientFor(categoryId);
+            const image = typeof p.image_url === "string" ? p.image_url : "";
+
+            return {
+              id: `central-${p.id}`,
+              name: String(p.title),
+              brand: String(p.platform || "Central"),
+              description: `Producto disponible en Central · ${category}`,
+              features: [
+                p.rating ? `Valoración ${Number(p.rating).toFixed(1)}` : "Producto real",
+                p.reviews_count ? `${Number(p.reviews_count).toLocaleString("es-CO")} reseñas` : "Catálogo Central",
+                p.sales_estimate ? `${Number(p.sales_estimate).toLocaleString("es-CO")} ventas estimadas` : "Disponible para publicación",
+                "Datos sincronizados desde Central",
+              ],
+              basePrice: Number(p.current_price || 0),
+              originalPrice: Number(p.current_price || 0),
+              rating: Number(p.rating || 0),
+              reviews: Number(p.reviews_count || 0),
+              badge: p.opportunity_score != null
+                ? `Score ${Math.round(Number(p.opportunity_score))}`
+                : "Central",
+              categoryId,
+              variants: [{
+                id: `central-variant-${p.id}`,
+                name: "Producto",
+                image,
+                gradient: preset.value,
+                glow: preset.glow,
+              }],
+              amazon: p.platform === "amazon" ? String(p.product_url || "") : "",
+              ml: p.platform === "mercadolibre" ? String(p.product_url || "") : "",
+              wompi: "",
+              published: true,
+            };
+          });
+
+        if (!cancelled && mapped.length > 0) {
+          setProducts(mapped);
+          const first = mapped[0];
+          const firstCategory = mapped.find(p => p.categoryId)?.categoryId || "accesorios";
+          setActiveCatId(firstCategory);
+          setActiveProdId(first.id);
+          setActiveVarIdx(0);
+        }
+      } catch {
+        // El catálogo local sigue funcionando como respaldo offline.
+      }
+    };
+
+    loadCentralCatalog();
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => {
     try { localStorage.setItem("sp-bg", bgTheme); } catch {}
   }, [bgTheme]);
