@@ -38,6 +38,9 @@ interface Product {
   features: string[];
   basePrice: number;
   originalPrice: number;
+  currency?: string;
+  sourceUrl?: string;
+  sourcePlatform?: string;
   rating: number;
   reviews: number;
   badge?: string;
@@ -89,6 +92,14 @@ const GRAD_PRESETS = [
 ];
 
 const mkId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+const formatMoney = (value: number, currency = "USD") => {
+  try {
+    return new Intl.NumberFormat("es-CO", { style: "currency", currency, maximumFractionDigits: 0 }).format(value);
+  } catch {
+    return `${currency} ${Number(value || 0).toLocaleString("es-CO")}`;
+  }
+};
 
 const DEFAULT_PRODUCTS: Product[] = [
   {
@@ -270,6 +281,9 @@ export default function App() {
               ],
               basePrice: Number(p.current_price || 0),
               originalPrice: Number(p.current_price || 0),
+              currency: String(p.currency || "USD").toUpperCase(),
+              sourceUrl: String(p.product_url || ""),
+              sourcePlatform: String(p.platform || ""),
               rating: Number(p.rating || 0),
               reviews: Number(p.reviews_count || 0),
               badge: p.opportunity_score != null
@@ -650,9 +664,9 @@ export default function App() {
 
                   {/* Price */}
                   <div className="flex items-baseline gap-3 flex-wrap">
-                    <span className="text-4xl font-black text-white">${activeProd.basePrice.toFixed(2)}</span>
+                    <span className="text-4xl font-black text-white">{formatMoney(activeProd.basePrice, activeProd.currency)}</span>
                     {activeProd.originalPrice > activeProd.basePrice && (
-                      <span className="text-white/35 line-through text-lg">${activeProd.originalPrice.toFixed(2)}</span>
+                      <span className="text-white/35 line-through text-lg">{formatMoney(activeProd.originalPrice, activeProd.currency)}</span>
                     )}
                     {discount > 0 && (
                       <span className={`text-xs font-black px-2 py-1 rounded-lg bg-gradient-to-r ${activeCat.accentGradient} text-white`}>
@@ -679,6 +693,15 @@ export default function App() {
                         className="flex items-center gap-2 bg-gradient-to-r from-yellow-300 to-yellow-500 text-black font-black px-5 py-3 rounded-2xl hover:shadow-xl hover:shadow-yellow-400/30 transition-all text-sm"
                       >
                         Ver en <strong>Mercado Libre</strong> <ExternalLink size={13} />
+                      </motion.a>
+                    )}
+                    {activeProd.sourceUrl && !activeProd.amazon && !activeProd.ml && (
+                      <motion.a
+                        href={activeProd.sourceUrl} target="_blank" rel="noopener noreferrer"
+                        whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }}
+                        className="flex items-center gap-2 bg-white text-black font-black px-5 py-3 rounded-2xl hover:shadow-xl hover:shadow-white/20 transition-all text-sm"
+                      >
+                        Ver producto <ExternalLink size={13} />
                       </motion.a>
                     )}
                     {activeProd.wompi && (
