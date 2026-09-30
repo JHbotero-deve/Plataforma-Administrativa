@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
-  root: "product-analyzer/headphones",
+  root: ".",
   plugins: [react(), tailwindcss()],
   base: "/headphones/",
   build: {
