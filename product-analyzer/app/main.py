@@ -17,16 +17,21 @@ SEARCH_CONFIG = [
     ("calzado", "zapatillas urbanas"),
 ]
 AMAZON_SEED = [
-    ("accesorios", "B0BFJ4CRKD", "https://www.amazon.com/dp/B0BFJ4CRKD"),
-    ("accesorios", "B006JH8T3S", "https://www.amazon.com/dp/B006JH8T3S"),
-    ("accesorios", "B08XXGSLPK", "https://www.amazon.com/dp/B08XXGSLPK"),
-    ("accesorios", "B0DDLD9X2P", "https://www.amazon.com/dp/B0DDLD9X2P"),
-    ("accesorios", "B0C6XK77HJ", "https://www.amazon.com/dp/B0C6XK77HJ"),
-    ("accesorios", "B073QKC8Q8", "https://www.amazon.com/dp/B073QKC8Q8"),
-    ("accesorios", "B0CKTCZPQS", "https://www.amazon.com/dp/B0CKTCZPQS"),
-    ("accesorios", "B0CYNXD439", "https://www.amazon.com/dp/B0CYNXD439"),
-    ("accesorios", "B0CHN2D8KM", "https://www.amazon.com/dp/B0CHN2D8KM"),
-    ("accesorios", "B0CGXYM9TP", "https://www.amazon.com/dp/B0CGXYM9TP"),
+    ("hogar", "B0BZYCJK89", "https://www.amazon.com/dp/B0BZYCJK89"),
+    ("hogar", "B0C59B9VJ4", "https://www.amazon.com/dp/B0C59B9VJ4"),
+    ("hogar", "B0B6DCN2CJ", "https://www.amazon.com/dp/B0B6DCN2CJ"),
+    ("hogar", "B085DV8T75", "https://www.amazon.com/dp/B085DV8T75"),
+    ("accesorios", "B0DCC4RWT3", "https://www.amazon.com/dp/B0DCC4RWT3"),
+    ("automovil", "B07G61YN8K", "https://www.amazon.com/dp/B07G61YN8K"),
+    ("automovil", "B08DKHHTFX", "https://www.amazon.com/dp/B08DKHHTFX"),
+    ("automovil", "B09CMV7YVJ", "https://www.amazon.com/dp/B09CMV7YVJ"),
+    ("electronica", "B0CXDXP8VR", "https://www.amazon.com/dp/B0CXDXP8VR"),
+    ("electronica", "B0F66LNB8D", "https://www.amazon.com/dp/B0F66LNB8D"),
+    ("videojuegos", "B0C4F9JGTJ", "https://www.amazon.com/dp/B0C4F9JGTJ"),
+    ("audio", "B0CMJTSVRW", "https://www.amazon.com/dp/B0CMJTSVRW"),
+    ("audio", "B0C146LJ6G", "https://www.amazon.com/dp/B0C146LJ6G"),
+    ("audio", "B0DDL8WGH5", "https://www.amazon.com/dp/B0DDL8WGH5"),
+    ("electronica", "B0916TKFF2", "https://www.amazon.com/dp/B0916TKFF2"),
 ]
 
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
@@ -67,7 +72,7 @@ def ingest_amazon_seed(conn) -> list[int]:
                 raise ValueError(f"ASIN inesperado: {product['external_id']}")
             if not product.get("title") or product.get("price") is None or not product.get("image_url"):
                 raise ValueError("Amazon no devolvió metadatos completos y verificables")
-            product["source_metadata"]["seed_batch"] = "amazon-initial-10"
+            product["source_metadata"]["seed_batch"] = "amazon-renewal-15-2026-09-30"
             ids.append(upsert_product(conn, "amazon", category, product))
             print(f"[amazon] {asin} -> {product['title']} | {product['currency']} {product['price']} | imagen=si")
         except Exception as exc:
