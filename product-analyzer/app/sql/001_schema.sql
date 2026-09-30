@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS products (
     image_url       TEXT,
     product_url     TEXT,
     current_price   NUMERIC(12,2),
-    currency        VARCHAR(10) DEFAULT 'ARS',
+    currency        VARCHAR(10) DEFAULT 'COP',
     rating          NUMERIC(3,2),
     reviews_count   INTEGER DEFAULT 0,
     sales_estimate  INTEGER,                 -- ventas estimadas si la plataforma lo expone
