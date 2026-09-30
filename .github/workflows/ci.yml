@@ -29,6 +29,18 @@ jobs:
           Path("/tmp/central-frontend.js").write_text("\n".join(matches), encoding="utf-8")
           PY
           node --check /tmp/central-frontend.js
+      - name: Build Figma showcase
+        shell: bash
+        run: |
+          npm --prefix product-analyzer/headphones install --no-audit --no-fund
+          npm --prefix product-analyzer/headphones run build
+          test -f product-analyzer/headphones/dist/index.html
+
+      - name: Validate backend Python
+        shell: bash
+        run: |
+          python -m compileall -q product-analyzer/app
+
       - name: Reject development debris
         shell: bash
         run: |
