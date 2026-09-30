@@ -3,38 +3,21 @@ import time
 
 import schedule
 
+from amazon_api import fetch_amazon_products
 from analysis import score_product
 from db import get_connection, upsert_product
 from ingest import fetch_mercadolibre
 from init_db import init_database
 from notifications import send_telegram_alert
 from tiktok_creator import creator_configured, sync_showcase
-from url_import import import_url
 
 SEARCH_CONFIG = [
     ("ropa", "remera hombre"),
     ("ropa", "campera mujer"),
     ("calzado", "zapatillas urbanas"),
 ]
-AMAZON_SEED = [
-    ("hogar", "B0BZYCJK89", "https://www.amazon.com/dp/B0BZYCJK89"),
-    ("hogar", "B0C59B9VJ4", "https://www.amazon.com/dp/B0C59B9VJ4"),
-    ("hogar", "B0B6DCN2CJ", "https://www.amazon.com/dp/B0B6DCN2CJ"),
-    ("hogar", "B085DV8T75", "https://www.amazon.com/dp/B085DV8T75"),
-    ("accesorios", "B0DCC4RWT3", "https://www.amazon.com/dp/B0DCC4RWT3"),
-    ("automovil", "B07G61YN8K", "https://www.amazon.com/dp/B07G61YN8K"),
-    ("automovil", "B08DKHHTFX", "https://www.amazon.com/dp/B08DKHHTFX"),
-    ("automovil", "B09CMV7YVJ", "https://www.amazon.com/dp/B09CMV7YVJ"),
-    ("electronica", "B0CXDXP8VR", "https://www.amazon.com/dp/B0CXDXP8VR"),
-    ("electronica", "B0F66LNB8D", "https://www.amazon.com/dp/B0F66LNB8D"),
-    ("videojuegos", "B0C4F9JGTJ", "https://www.amazon.com/dp/B0C4F9JGTJ"),
-    ("audio", "B0CMJTSVRW", "https://www.amazon.com/dp/B0CMJTSVRW"),
-    ("audio", "B0C146LJ6G", "https://www.amazon.com/dp/B0C146LJ6G"),
-    ("audio", "B0DDL8WGH5", "https://www.amazon.com/dp/B0DDL8WGH5"),
-    ("electronica", "B0916TKFF2", "https://www.amazon.com/dp/B0916TKFF2"),
-]
-
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
+AMAZON_BATCH_SIZE = int(os.getenv("AMAZON_BATCH_SIZE", "15"))
 
 
 def build_url(title: str, product_url: str | None) -> str:
@@ -62,22 +45,26 @@ def expire_catalog():
         conn.close()
 
 
-
-def ingest_amazon_seed(conn) -> list[int]:
+def ingest_amazon(conn) -> list[int]:
     ids = []
-    for category, asin, url in AMAZON_SEED:
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT external_id
+            FROM products
+            WHERE source = 'amazon' AND is_active = TRUE
+        """)
+        existing_ids = {str(row["external_id"]).upper() for row in cur.fetchall()}
+
+    products = fetch_amazon_products(existing_ids, AMAZON_BATCH_SIZE)
+    print(f"[amazon] lote recibido desde Creators API: {len(products)}")
+    for category, product in products:
         try:
-            product = import_url(url, category)
-            if product["external_id"] != asin:
-                raise ValueError(f"ASIN inesperado: {product['external_id']}")
-            if not product.get("title") or product.get("price") is None or not product.get("image_url"):
-                raise ValueError("Amazon no devolvió metadatos completos y verificables")
-            product["source_metadata"]["seed_batch"] = "amazon-renewal-15-2026-09-30"
+            product["source_metadata"]["seed_batch"] = f"amazon-renewal-{AMAZON_BATCH_SIZE}"
             ids.append(upsert_product(conn, "amazon", category, product))
-            print(f"[amazon] {asin} -> {product['title']} | {product['currency']} {product['price']} | imagen=si")
+            print(f"[amazon] {product['external_id']} -> {product['title']} | {product['currency']} {product['price']} | imagen=si")
         except Exception as exc:
             conn.rollback()
-            print(f"[amazon] error {asin}: {exc}")
+            print(f"[amazon] error insertando {product.get('external_id')}: {exc}")
     return ids
 
 
@@ -86,9 +73,11 @@ def run_pipeline():
     expire_catalog()
     conn = get_connection()
     product_ids = []
-
     try:
-        product_ids.extend(ingest_amazon_seed(conn))
+        try:
+            product_ids.extend(ingest_amazon(conn))
+        except Exception as exc:
+            print(f"[amazon] ciclo abortado: {exc}")
 
         for category, term in SEARCH_CONFIG:
             try:
@@ -96,11 +85,9 @@ def run_pipeline():
             except Exception as exc:
                 print(f"[mercadolibre] error trayendo '{term}': {exc}")
                 continue
-
             if not products:
                 print(f"[mercadolibre] sin resultados reales para '{term}'.")
                 continue
-
             for product in products:
                 try:
                     product_ids.append(upsert_product(conn, "mercadolibre", category, product))
@@ -129,26 +116,14 @@ def run_pipeline():
                     WHERE p.id = %s
                 """, (product_id,))
                 row = cur.fetchone()
-
             if not row:
                 continue
-
-            score = score_product(
-                conn,
-                product_id,
-                averages.get((row["category"], row["currency"]), 0),
-            )
+            score = score_product(conn, product_id, averages.get((row["category"], row["currency"]), 0))
             print(f"Producto {product_id} -> opportunity_score = {score}")
-
             if score >= SCORE_THRESHOLD:
                 with conn.cursor() as cur:
-                    cur.execute("""
-                        SELECT p.title, p.current_price, p.product_url
-                        FROM products p
-                        WHERE p.id = %s
-                    """, (product_id,))
+                    cur.execute("SELECT p.title, p.current_price, p.product_url FROM products p WHERE p.id = %s", (product_id,))
                     product = cur.fetchone()
-
                 if product:
                     send_telegram_alert({
                         "title": product["title"],
@@ -167,7 +142,6 @@ def run_pipeline():
             print(f"[tiktok] error sincronizando Creator: {exc}")
     else:
         print("[tiktok] integración no configurada; se conserva el ciclo principal.")
-
     print("== Ciclo completo ==")
 
 
