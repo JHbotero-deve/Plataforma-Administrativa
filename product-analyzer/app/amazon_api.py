@@ -15,12 +15,15 @@ _TOKEN: str | None = None
 _TOKEN_EXPIRES_AT = 0.0
 
 
-def _token_endpoint() -> str:
-    if CREDENTIAL_VERSION.startswith("3.2"):
-        return "https://api.amazon.co.uk/auth/o2/token"
-    if CREDENTIAL_VERSION.startswith("3.3"):
-        return "https://api.amazon.co.jp/auth/o2/token"
-    return "https://api.amazon.com/auth/o2/token"
+def _token_endpoints() -> list[str]:
+    configured = CREDENTIAL_VERSION[:3]
+    endpoints = {
+        "3.1": "https://api.amazon.com/auth/o2/token",
+        "3.2": "https://api.amazon.co.uk/auth/o2/token",
+        "3.3": "https://api.amazon.co.jp/auth/o2/token",
+    }
+    preferred = endpoints.get(configured, endpoints["3.1"])
+    return [preferred] + [url for version, url in endpoints.items() if url != preferred]
 
 
 def _access_token() -> str:
@@ -30,25 +33,39 @@ def _access_token() -> str:
     if not CREDENTIAL_ID or not CREDENTIAL_SECRET or not PARTNER_TAG:
         raise RuntimeError("Faltan AMAZON_CREDENTIAL_ID, AMAZON_CREDENTIAL_SECRET o AMAZON_PARTNER_TAG")
 
-    response = requests.post(
-        _token_endpoint(),
-        headers={"Content-Type": "application/json"},
-        json={
-            "grant_type": "client_credentials",
-            "client_id": CREDENTIAL_ID,
-            "client_secret": CREDENTIAL_SECRET,
-            "scope": "creatorsapi::default",
-        },
-        timeout=20,
-    )
-    response.raise_for_status()
-    data = response.json()
-    token = data.get("access_token")
-    if not token:
-        raise RuntimeError("Amazon no devolvió access_token")
-    _TOKEN = token
-    _TOKEN_EXPIRES_AT = time.time() + int(data.get("expires_in", 3600))
-    return token
+    last_error = "sin respuesta"
+    for endpoint in _token_endpoints():
+        try:
+            response = requests.post(
+                endpoint,
+                headers={"Content-Type": "application/json"},
+                json={
+                    "grant_type": "client_credentials",
+                    "client_id": CREDENTIAL_ID,
+                    "client_secret": CREDENTIAL_SECRET,
+                    "scope": "creatorsapi::default",
+                },
+                timeout=20,
+            )
+            if response.ok:
+                data = response.json()
+                token = data.get("access_token")
+                if token:
+                    _TOKEN = token
+                    _TOKEN_EXPIRES_AT = time.time() + int(data.get("expires_in", 3600))
+                    return token
+                last_error = "respuesta sin access_token"
+            else:
+                try:
+                    detail = response.json()
+                    detail = detail.get("error_description") or detail.get("error") or str(detail)
+                except ValueError:
+                    detail = response.text[:300]
+                last_error = f"HTTP {response.status_code}: {detail}"
+        except requests.RequestException as exc:
+            last_error = str(exc)
+
+    raise RuntimeError(f"Amazon OAuth rechazó las credenciales: {last_error}")
 
 
 def _request(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
