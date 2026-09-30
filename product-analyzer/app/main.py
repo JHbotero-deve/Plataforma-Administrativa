@@ -21,6 +21,12 @@ SEARCH_CONFIG = [
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
 AMAZON_BATCH_SIZE = int(os.getenv("AMAZON_BATCH_SIZE", "15"))
 
+AMAZON_FALLBACK_PRODUCTS = [
+    {"external_id":"B07G61YN8K","title":"VANMASS 85+LBS Strongest Suction Military-Grade Car Phone Mount","price":24.68,"currency":"USD","product_url":"https://www.amazon.com/dp/B07G61YN8K"},
+    {"external_id":"B08DKHHTFX","title":"VANMASS True Military-Grade Car Phone Holder with Strong Suction & Clip","price":25.98,"currency":"USD","product_url":"https://www.amazon.com/dp/B08DKHHTFX"},
+    {"external_id":"B09CMV7YVJ","title":"VANMASS Car Phone Holder Ultimate Strong Suction & Clip","price":24.97,"currency":"USD","product_url":"https://www.amazon.com/dp/B09CMV7YVJ"},
+]
+
 
 def build_url(title: str, product_url: str | None) -> str:
     if product_url and product_url != "#":
@@ -59,6 +65,13 @@ def ingest_amazon(conn) -> list[int]:
         existing_ids = {str(row["external_id"]).upper() for row in cur.fetchall()}
 
     products = fetch_amazon_products(existing_ids, AMAZON_BATCH_SIZE)
+    if not products:
+        products = [
+            ("accesorios", {**product, "source_metadata": {"source": "amazon-manual-fallback", "reason": "Creators API no disponible", "verified_at": "2026-09"}})
+            for product in AMAZON_FALLBACK_PRODUCTS
+            if product["external_id"].upper() not in existing_ids
+        ]
+        print(f"[amazon] fallback manual con URLs Amazon reales: {len(products)}")
     print(f"[amazon] lote recibido desde Creators API: {len(products)}")
     for category, product in products:
         try:
