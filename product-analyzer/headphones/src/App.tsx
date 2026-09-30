@@ -206,8 +206,20 @@ function newEmptyForm() {
 export default function App() {
   // Showcase state
   const [products, setProducts] = useState<Product[]>(() => {
-    try { const s = localStorage.getItem("sp-products"); return s ? JSON.parse(s) : DEFAULT_PRODUCTS; }
-    catch { return DEFAULT_PRODUCTS; }
+    try {
+      const cached = localStorage.getItem("sp-products");
+      if (!cached) return import.meta.env.DEV ? DEFAULT_PRODUCTS : [];
+      const parsed = JSON.parse(cached);
+      if (!Array.isArray(parsed)) return import.meta.env.DEV ? DEFAULT_PRODUCTS : [];
+      const hasDemo = parsed.some((p: Product) => ["air-street", "running-elite", "urban-tee", "oversized-graphic", "headphones-pro", "laptop-ultra"].includes(p?.id));
+      if (import.meta.env.PROD && hasDemo) {
+        localStorage.removeItem("sp-products");
+        return [];
+      }
+      return parsed;
+    } catch {
+      return import.meta.env.DEV ? DEFAULT_PRODUCTS : [];
+    }
   });
   const [activeCatId, setActiveCatId] = useState("zapatos");
   const [activeProdId, setActiveProdId] = useState("air-street");
@@ -304,7 +316,12 @@ export default function App() {
             };
           });
 
-        if (!cancelled && mapped.length > 0) {
+        if (!cancelled) {
+          if (mapped.length === 0) {
+            setProducts([]);
+            try { localStorage.removeItem("sp-products"); } catch {}
+            return;
+          }
           setProducts(mapped);
           const first = mapped[0];
           const firstCategory = mapped.find(p => p.categoryId)?.categoryId || "accesorios";
