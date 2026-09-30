@@ -211,6 +211,7 @@ class ProductImport(BaseModel):
     title: Optional[str] = Field(default=None, max_length=500)
     price: Optional[float] = Field(default=None, gt=0)
     currency: str = Field(default="USD", min_length=3, max_length=10)
+    image_url: Optional[str] = Field(default=None, max_length=2_000_000)
 
 
 @core_router.post("/products/import-url")
@@ -222,6 +223,7 @@ def import_product_from_url(payload: ProductImport):
             title=payload.title,
             price=payload.price,
             currency=payload.currency,
+            image_url=payload.image_url,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
