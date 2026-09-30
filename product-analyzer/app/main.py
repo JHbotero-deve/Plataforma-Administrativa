@@ -17,16 +17,16 @@ SEARCH_CONFIG = [
     ("calzado", "zapatillas urbanas"),
 ]
 AMAZON_SEED = [
-    ("accesorios", "B0BFJ4CRKD", "https://www.amazon.com/dp/B0BFJ4CRKD", "Logitech MX Brio Ultra HD 4K Webcam", 199.99),
-    ("accesorios", "B006JH8T3S", "https://www.amazon.com/dp/B006JH8T3S", "Logitech HD Pro Webcam C920", 69.99),
-    ("accesorios", "B08XXGSLPK", "https://www.amazon.com/dp/B08XXGSLPK", "MAONO USB/XLR Dynamic Microphone HD300T", 69.99),
-    ("accesorios", "B0DDLD9X2P", "https://www.amazon.com/dp/B0DDLD9X2P", "DJI Mic Mini Transmitter", 24.99),
-    ("accesorios", "B0C6XK77HJ", "https://www.amazon.com/dp/B0C6XK77HJ", "Anker Nano Power Bank 5000mAh USB-C", 22.99),
-    ("accesorios", "B073QKC8Q8", "https://www.amazon.com/dp/B073QKC8Q8", "Microsoft Surface Arc Touch Mouse", 69.99),
-    ("accesorios", "B0CKTCZPQS", "https://www.amazon.com/dp/B0CKTCZPQS", "VINTAR Universal Travel Adapter", 19.99),
-    ("accesorios", "B0CYNXD439", "https://www.amazon.com/dp/B0CYNXD439", "BAGSMART 30L Travel Backpack", 23.99),
-    ("accesorios", "B0CHN2D8KM", "https://www.amazon.com/dp/B0CHN2D8KM", "Samsung Galaxy SmartTag2", 29.99),
-    ("accesorios", "B0CGXYM9TP", "https://www.amazon.com/dp/B0CGXYM9TP", "Ray-Ban Meta Wayfarer Smart Glasses", 299.00),
+    ("accesorios", "B0BFJ4CRKD", "https://www.amazon.com/dp/B0BFJ4CRKD"),
+    ("accesorios", "B006JH8T3S", "https://www.amazon.com/dp/B006JH8T3S"),
+    ("accesorios", "B08XXGSLPK", "https://www.amazon.com/dp/B08XXGSLPK"),
+    ("accesorios", "B0DDLD9X2P", "https://www.amazon.com/dp/B0DDLD9X2P"),
+    ("accesorios", "B0C6XK77HJ", "https://www.amazon.com/dp/B0C6XK77HJ"),
+    ("accesorios", "B073QKC8Q8", "https://www.amazon.com/dp/B073QKC8Q8"),
+    ("accesorios", "B0CKTCZPQS", "https://www.amazon.com/dp/B0CKTCZPQS"),
+    ("accesorios", "B0CYNXD439", "https://www.amazon.com/dp/B0CYNXD439"),
+    ("accesorios", "B0CHN2D8KM", "https://www.amazon.com/dp/B0CHN2D8KM"),
+    ("accesorios", "B0CGXYM9TP", "https://www.amazon.com/dp/B0CGXYM9TP"),
 ]
 
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
@@ -60,22 +60,16 @@ def expire_catalog():
 
 def ingest_amazon_seed(conn) -> list[int]:
     ids = []
-    for category, asin, url, fallback_title, fallback_price in AMAZON_SEED:
+    for category, asin, url in AMAZON_SEED:
         try:
             product = import_url(url, category)
             if product["external_id"] != asin:
                 raise ValueError(f"ASIN inesperado: {product['external_id']}")
-            if not product.get("title") or product["title"].startswith("Producto Amazon"):
-                product["title"] = fallback_title
-            if not product.get("price") or float(product["price"]) <= 0:
-                product["price"] = fallback_price
-            if not product.get("image_url"):
-                product["image_url"] = f"https://images-na.ssl-images-amazon.com/images/P/{asin}.01.L.jpg"
-            product["source_metadata"]["seed_reference_price"] = fallback_price
+            if not product.get("title") or product.get("price") is None or not product.get("image_url"):
+                raise ValueError("Amazon no devolvió metadatos completos y verificables")
             product["source_metadata"]["seed_batch"] = "amazon-initial-10"
             ids.append(upsert_product(conn, "amazon", category, product))
-            image_state = "si" if product.get("image_url") else "no"
-            print(f"[amazon] {asin} -> {product['title']} | USD {product['price']} | imagen={image_state}")
+            print(f"[amazon] {asin} -> {product['title']} | {product['currency']} {product['price']} | imagen=si")
         except Exception as exc:
             conn.rollback()
             print(f"[amazon] error {asin}: {exc}")

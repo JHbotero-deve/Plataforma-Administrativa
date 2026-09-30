@@ -6,17 +6,46 @@
       "destination": "https://gracious-renewal-production-9f45.up.railway.app/api/v1/:path*"
     },
     {
-      "source": "/headphones",
-      "destination": "/headphones/index.html"
+      "source": "/admin",
+      "destination": "/index.html"
     },
     {
-      "source": "/((?!api/|headphones(?:/|$)).*)",
-      "destination": "/index.html"
+      "source": "/",
+      "destination": "/tienda.html"
+    },
+    {
+      "source": "/tienda",
+      "destination": "/tienda.html"
+    },
+    {
+      "source": "/producto/:slug",
+      "destination": "/producto.html?slug=:slug"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "https://gracious-renewal-production-9f45.up.railway.app/api/v1/public/robots.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://gracious-renewal-production-9f45.up.railway.app/api/v1/public/sitemap.xml"
+    },
+    {
+      "source": "/((?!api/|admin(?:/|$)|tienda(?:/|$)).*)",
+      "destination": "/tienda.html"
     }
   ],
   "headers": [
     {
       "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/tienda.html",
       "headers": [
         {
           "key": "Cache-Control",
@@ -51,5 +80,5 @@
       ]
     }
   ],
-  "buildCommand": "npm --prefix product-analyzer/headphones install --no-audit --no-fund && npm --prefix product-analyzer/headphones run build"
+  "buildCommand": null
 }

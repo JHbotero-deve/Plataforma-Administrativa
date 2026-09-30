@@ -11,6 +11,10 @@ SQL_FILES = [
     "sql/005_source_metadata.sql",
     "sql/007_tiktok_creator.sql",
     "sql/008_catalog_lifecycle.sql",
+    "sql/009_published_cards.sql",
+    "sql/010_personal_products.sql",
+    "sql/011_store_commerce.sql",
+    "sql/012_seo_affiliate_cart_invoice.sql",
 ]
 
 

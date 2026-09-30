@@ -1,4 +1,5 @@
 import os
+from urllib.parse import quote
 
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor
@@ -10,6 +11,16 @@ def get_connection():
         raise RuntimeError("DATABASE_URL es obligatoria; Central usa PostgreSQL de Railway como unica base de datos.")
     return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
 
+
+def _affiliate_url(product: dict) -> str | None:
+    url=(product.get("product_url") or "").strip()
+    if product.get("platform")!="amazon" or not url: return None
+    tag=os.getenv("AMAZON_ASSOCIATE_TAG","").strip()
+    if not tag: return None
+    result=url+("&" if "?" in url else "?")+"tag="+quote(tag,safe="")
+    tracking=os.getenv("AMAZON_TRACKING_ID","").strip()
+    if tracking: result+="&ascsubtag="+quote(tracking,safe="")
+    return result
 
 def upsert_product(conn, platform_name: str, category_name: str, product: dict):
     with conn.cursor() as cur:
@@ -46,7 +57,7 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
             """
             INSERT INTO products (
                 platform_id, category_id, seller_id, external_id, title,
-                image_url, product_url, current_price, currency, rating,
+                image_url, image_gallery, product_url, affiliate_url, current_price, currency, rating,
                 reviews_count, sales_estimate, source_metadata,
                 catalog_batch_id, catalog_expires_at, updated_at
             )
@@ -59,7 +70,9 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
                 seller_id = COALESCE(EXCLUDED.seller_id, products.seller_id),
                 title = EXCLUDED.title,
                 image_url = COALESCE(EXCLUDED.image_url, products.image_url),
+                image_gallery = CASE WHEN EXCLUDED.image_gallery <> '[]'::jsonb THEN EXCLUDED.image_gallery ELSE products.image_gallery END,
                 product_url = COALESCE(EXCLUDED.product_url, products.product_url),
+                affiliate_url = COALESCE(EXCLUDED.affiliate_url, products.affiliate_url),
                 current_price = COALESCE(EXCLUDED.current_price, products.current_price),
                 currency = COALESCE(EXCLUDED.currency, products.currency),
                 rating = COALESCE(EXCLUDED.rating, products.rating),
@@ -79,7 +92,9 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
                 product["external_id"],
                 product["title"],
                 product.get("image_url"),
+                Json(product.get("gallery_urls") or ([product.get("image_url")] if product.get("image_url") else [])),
                 product.get("product_url"),
+                _affiliate_url(product),
                 product.get("price"),
                 product.get("currency") or "COP",
                 product.get("rating"),

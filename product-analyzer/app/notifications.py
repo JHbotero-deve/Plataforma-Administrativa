@@ -56,3 +56,29 @@ def _send(token, chat_id, message):
     except requests.RequestException as exc:
         print(f"[telegram] connection error: {exc}")
         return False
+
+
+def send_telegram_publication(publication):
+    token, chat_id = _config()
+    if not token or not chat_id:
+        raise RuntimeError("Configura TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID")
+    title = html.escape(str(publication.get("title","Producto"))[:180])
+    subtitle = html.escape(str(publication.get("subtitle") or "")[:300])
+    price = html.escape(str(publication.get("price_display") or "Consultar"))
+    url = publication.get("store_url") or publication.get("product_url")
+    lines=[f"<b>{title}</b>"]
+    if subtitle: lines.append(subtitle)
+    lines.append(f"<b>Precio:</b> {price}")
+    if url: lines.append(f'<a href="{html.escape(str(url), quote=True)}">Ver producto</a>')
+    caption="\n".join(lines)
+    try:
+        if publication.get("image_url"):
+            response=requests.post(f"https://api.telegram.org/bot{token}/sendPhoto",
+                json={"chat_id":chat_id,"photo":publication["image_url"],"caption":caption,"parse_mode":"HTML"},timeout=15)
+        else:
+            response=requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id":chat_id,"text":caption,"parse_mode":"HTML","disable_web_page_preview":False},timeout=15)
+        response.raise_for_status()
+        return True
+    except requests.RequestException as exc:
+        raise RuntimeError(f"Telegram rechazó la publicación: {exc}") from exc
