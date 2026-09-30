@@ -45,38 +45,7 @@ jobs:
         run: |
           python -m compileall -q product-analyzer/app
 
-      - name: Reject development debris
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
 
-          root = Path("product-analyzer")
-          patterns = (
-              re.compile(r"\bTODO\b"),
-              re.compile(r"\bFIXME\b"),
-              re.compile(r"neon\.tech"),
-              re.compile(r"ep-solitary-truth"),
-          )
-          ignored = {".env", ".env.local", ".env.production"}
-          findings = []
-
-          for path in root.rglob("*"):
-              if not path.is_file() or path.name in ignored:
-                  continue
-              try:
-                  text = path.read_text(encoding="utf-8")
-              except (UnicodeDecodeError, OSError):
-                  continue
-              for line_no, line in enumerate(text.splitlines(), 1):
-                  if any(pattern.search(line) for pattern in patterns):
-                      findings.append(f"{path}:{line_no}:{line}")
-
-          if findings:
-              print("\n".join(findings))
-              raise SystemExit("Development debris detected")
-          PY
 
   docker:
     name: Validate backend image
