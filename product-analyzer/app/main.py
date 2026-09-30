@@ -1,4 +1,5 @@
 import os
+import threading
 import time
 
 import schedule
@@ -10,6 +11,7 @@ from ingest import fetch_mercadolibre
 from init_db import init_database
 from notifications import send_telegram_alert
 from tiktok_creator import creator_configured, sync_showcase
+from telegram_alert import run_bot
 
 SEARCH_CONFIG = [
     ("ropa", "remera hombre"),
@@ -146,10 +148,20 @@ def run_pipeline():
     print("== Ciclo completo ==")
 
 
+def _start_telegram_bot():
+    if not (os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_TOKEN")):
+        print("[telegram-bot] integración no configurada; se conserva el worker principal.")
+        return
+    thread = threading.Thread(target=run_bot, name="telegram-bot", daemon=True)
+    thread.start()
+    print("[telegram-bot] consumidor interactivo iniciado en segundo plano.")
+
+
 def run_worker():
     print("Esperando a que la base de datos esté lista...")
     time.sleep(5)
     init_database()
+    _start_telegram_bot()
     run_pipeline()
     schedule.every(2).hours.do(run_pipeline)
     while True:
