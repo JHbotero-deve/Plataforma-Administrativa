@@ -15,15 +15,25 @@ _TOKEN: str | None = None
 _TOKEN_EXPIRES_AT = 0.0
 
 
-def _token_endpoints() -> list[str]:
-    configured = CREDENTIAL_VERSION[:3]
+def _credential_version() -> str:
+    configured = os.getenv("AMAZON_CREDENTIAL_VERSION", "").strip()
+    if configured:
+        return configured
+    if CREDENTIAL_ID.startswith("amzn1.application-oa2-client."):
+        return "3.1"
+    return "2.1"
+
+
+def _token_endpoint(version: str) -> str:
     endpoints = {
         "3.1": "https://api.amazon.com/auth/o2/token",
         "3.2": "https://api.amazon.co.uk/auth/o2/token",
         "3.3": "https://api.amazon.co.jp/auth/o2/token",
+        "2.1": "https://creatorsapi.auth.us-east-1.amazoncognito.com/oauth2/token",
+        "2.2": "https://creatorsapi.auth.eu-south-2.amazoncognito.com/oauth2/token",
+        "2.3": "https://creatorsapi.auth.us-west-2.amazoncognito.com/oauth2/token",
     }
-    preferred = endpoints.get(configured, endpoints["3.1"])
-    return [preferred] + [url for version, url in endpoints.items() if url != preferred]
+    return endpoints.get(version, endpoints["3.1"])
 
 
 def _access_token() -> str:
@@ -33,9 +43,10 @@ def _access_token() -> str:
     if not CREDENTIAL_ID or not CREDENTIAL_SECRET or not PARTNER_TAG:
         raise RuntimeError("Faltan AMAZON_CREDENTIAL_ID, AMAZON_CREDENTIAL_SECRET o AMAZON_PARTNER_TAG")
 
-    last_error = "sin respuesta"
-    for endpoint in _token_endpoints():
-        try:
+    version = _credential_version()
+    endpoint = _token_endpoint(version)
+    try:
+        if version.startswith("3."):
             response = requests.post(
                 endpoint,
                 headers={"Content-Type": "application/json"},
@@ -47,35 +58,50 @@ def _access_token() -> str:
                 },
                 timeout=20,
             )
-            if response.ok:
-                data = response.json()
-                token = data.get("access_token")
-                if token:
-                    _TOKEN = token
-                    _TOKEN_EXPIRES_AT = time.time() + int(data.get("expires_in", 3600))
-                    return token
-                last_error = "respuesta sin access_token"
-            else:
-                try:
-                    detail = response.json()
-                    detail = detail.get("error_description") or detail.get("error") or str(detail)
-                except ValueError:
-                    detail = response.text[:300]
-                last_error = f"HTTP {response.status_code}: {detail}"
-        except requests.RequestException as exc:
-            last_error = str(exc)
+        else:
+            response = requests.post(
+                endpoint,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                data={
+                    "grant_type": "client_credentials",
+                    "scope": "creatorsapi/default",
+                },
+                auth=(CREDENTIAL_ID, CREDENTIAL_SECRET),
+                timeout=20,
+            )
+        if response.ok:
+            data = response.json()
+            token = data.get("access_token")
+            if token:
+                _TOKEN = token
+                _TOKEN_EXPIRES_AT = time.time() + int(data.get("expires_in", 3600))
+                return token
+            detail = "respuesta sin access_token"
+        else:
+            try:
+                payload = response.json()
+                detail = payload.get("error_description") or payload.get("error") or str(payload)
+            except ValueError:
+                detail = response.text[:300]
+            detail = f"HTTP {response.status_code}: {detail}"
+    except requests.RequestException as exc:
+        detail = str(exc)
 
-    raise RuntimeError(f"Amazon OAuth rechazó las credenciales: {last_error}")
+    raise RuntimeError(f"Amazon OAuth rechazó las credenciales (versión {version}): {detail}")
 
 
 def _request(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     payload = dict(payload)
     payload["marketplace"] = MARKETPLACE
     payload["partnerTag"] = PARTNER_TAG
+    version = _credential_version()
+    auth_value = f"Bearer {_access_token()}"
+    if version.startswith("2."):
+        auth_value += f", Version {version}"
     response = requests.post(
         f"{BASE_URL}/catalog/v1/{operation}",
         headers={
-            "Authorization": f"Bearer {_access_token()}",
+            "Authorization": auth_value,
             "Content-Type": "application/json",
             "x-marketplace": MARKETPLACE,
         },
@@ -89,7 +115,10 @@ def _request(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
         response = requests.post(
             f"{BASE_URL}/catalog/v1/{operation}",
             headers={
-                "Authorization": f"Bearer {_access_token()}",
+                "Authorization": (
+                    f"Bearer {_access_token()}"
+                    + (f", Version {_credential_version()}" if _credential_version().startswith("2.") else "")
+                ),
                 "Content-Type": "application/json",
                 "x-marketplace": MARKETPLACE,
             },
