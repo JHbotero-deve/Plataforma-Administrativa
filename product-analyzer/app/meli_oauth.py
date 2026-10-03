@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 
 import requests
 from cryptography.fernet import Fernet
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from db import get_connection
@@ -16,6 +16,7 @@ MELI_OAUTH = "https://api.mercadolibre.com/oauth/token"
 MELI_AUTH = "https://auth.mercadolibre.com.co/authorization"
 
 router = APIRouter(prefix="/meli/oauth", tags=["mercadolibre-oauth"])
+notification_router = APIRouter(prefix="/meli", tags=["mercadolibre-notifications"])
 
 
 def _env(name: str) -> str:
@@ -59,9 +60,7 @@ def start_oauth():
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                "DELETE FROM meli_oauth_state WHERE expires_at < NOW()"
-            )
+            cur.execute("DELETE FROM meli_oauth_state WHERE expires_at < NOW()")
             cur.execute(
                 """
                 INSERT INTO meli_oauth_state(state, code_verifier, expires_at)
@@ -85,7 +84,12 @@ def start_oauth():
 
 
 @router.get("/callback")
-def oauth_callback(code: str | None = None, state: str | None = None, error: str | None = None, error_description: str | None = None):
+def oauth_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None,
+):
     if error:
         detail = error_description or error
         return HTMLResponse(f"<h2>Mercado Libre OAuth rechazado</h2><p>{detail}</p>", status_code=400)
@@ -180,6 +184,18 @@ def oauth_callback(code: str | None = None, state: str | None = None, error: str
         "<h2>Mercado Libre conectado correctamente</h2>"
         "<p>Los tokens fueron almacenados de forma cifrada. Puedes cerrar esta ventana.</p>"
     )
+
+
+@notification_router.post("/notifications")
+async def meli_notifications(request: Request):
+    payload = {}
+    try:
+        payload = await request.json()
+    except Exception:
+        pass
+
+    print(f"[Mercado Libre] Notificación recibida: {payload}")
+    return {"status": "ok"}
 
 
 def get_meli_tokens() -> tuple[str | None, str | None]:
