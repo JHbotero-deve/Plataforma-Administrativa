@@ -21,7 +21,7 @@ from store_orders import router as store_orders_router
 from tiktok_api import router as tiktok_creator_router
 from url_import import import_url
 from wompi import router as wompi_router
-from meli_oauth import router as meli_oauth_router
+from meli_oauth import router as meli_oauth_router, notification_router as meli_notification_router
 
 API_VERSION = "1.3.0"
 
@@ -34,6 +34,7 @@ app = FastAPI(
 app.include_router(monetization_router, prefix="/api/v1")
 app.include_router(wompi_router, prefix="/api/v1")
 app.include_router(meli_oauth_router, prefix="/api/v1")
+app.include_router(meli_notification_router, prefix="/api/v1")
 app.include_router(tiktok_creator_router, prefix="/api/v1")
 app.include_router(publication_router, prefix="/api/v1")
 app.include_router(store_orders_router, prefix="/api/v1")
@@ -47,6 +48,7 @@ async def normalize_legacy_api_prefix(request, call_next):
     elif path == "/api/v1/v1":
         request.scope["path"] = "/api/v1"
     return await call_next(request)
+
 
 default_origins = ",".join(
     [
