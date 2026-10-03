@@ -52,6 +52,33 @@ def list_publications(limit: int = Query(20, ge=1, le=100), include_unpublished:
                 (limit,),
             )
             rows=cur.fetchall()
+            # Si todavía no hay tarjetas publicadas, la tienda no debe quedar vacía:
+            # muestra temporalmente las mejores oportunidades activas del catálogo.
+            if not rows and not include_unpublished:
+                cur.execute(
+                    """
+                    SELECT p.id AS product_id, p.id, p.title, NULL AS subtitle, NULL AS price_display,
+                           p.image_url, COALESCE(NULLIF(p.affiliate_url, ''), NULLIF(p.product_url, '')) AS product_url,
+                           p.current_price AS sale_price, p.current_price AS cost_price,
+                           0::numeric AS profit_amount, 0::numeric AS profit_margin_pct,
+                           COALESCE(s.opportunity_score, 0) AS opportunity_score,
+                           'Disponible en Central' AS footer, '#b6f23a' AS accent,
+                           FALSE AS is_published, 0 AS sort_order, p.updated_at AS published_at,
+                           p.current_price, p.currency, p.image_gallery, p.affiliate_url, p.external_id, p.sku,
+                           p.description, p.stock, pl.name AS platform, c.name AS category
+                    FROM products p
+                    JOIN platforms pl ON pl.id = p.platform_id
+                    LEFT JOIN categories c ON c.id = p.category_id
+                    LEFT JOIN product_scores s ON s.product_id = p.id
+                    WHERE p.is_active = TRUE
+                      AND (p.image_url IS NOT NULL OR jsonb_array_length(COALESCE(p.image_gallery, '[]'::jsonb)) > 0)
+                    ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
+                    LIMIT %s
+                    """,
+                    (limit,),
+                )
+                rows = cur.fetchall()
+
             import re, unicodedata
             for row in rows:
                 slug=unicodedata.normalize("NFKD",row["title"] or "").encode("ascii","ignore").decode().lower()
