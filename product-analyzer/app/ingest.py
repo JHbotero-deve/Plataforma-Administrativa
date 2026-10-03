@@ -104,7 +104,7 @@ def fetch_mercadolibre(query, limit=20):
     data = _get(
         MELI_SEARCH,
         {"q": query, "limit": min(limit, 50)},
-        include_auth=False,
+        include_auth=True,
     )
     products = []
 
