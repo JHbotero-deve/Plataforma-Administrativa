@@ -79,6 +79,7 @@ def start_oauth():
         "state": state,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
+        "scope": "offline_access read",
     }
     return RedirectResponse(f"{MELI_AUTH}?{urlencode(params)}", status_code=302)
 
