@@ -14,19 +14,19 @@ from tiktok_creator import creator_configured, sync_showcase
 from telegram_alert import run_bot
 
 SEARCH_CONFIG = [
-    ("ropa", "remera hombre"),
+    ("accesorios", "soporte celular"),
+    ("accesorios", "audifonos bluetooth"),
+    ("electronica", "smartwatch"),
+    ("electronica", "teclado mecanico"),
+    ("electronica", "mouse gamer"),
+    ("hogar", "organizador hogar"),
+    ("hogar", "lampara led"),
     ("ropa", "campera mujer"),
     ("calzado", "zapatillas urbanas"),
+    ("fitness", "accesorios gimnasio"),
 ]
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
 AMAZON_BATCH_SIZE = int(os.getenv("AMAZON_BATCH_SIZE", "15"))
-
-AMAZON_FALLBACK_PRODUCTS = [
-    {"external_id":"B07G61YN8K","title":"VANMASS 85+LBS Strongest Suction Military-Grade Car Phone Mount","price":24.68,"currency":"USD","product_url":"https://www.amazon.com/dp/B07G61YN8K"},
-    {"external_id":"B08DKHHTFX","title":"VANMASS True Military-Grade Car Phone Holder with Strong Suction & Clip","price":25.98,"currency":"USD","product_url":"https://www.amazon.com/dp/B08DKHHTFX"},
-    {"external_id":"B09CMV7YVJ","title":"VANMASS Car Phone Holder Ultimate Strong Suction & Clip","price":24.97,"currency":"USD","product_url":"https://www.amazon.com/dp/B09CMV7YVJ"},
-]
-
 
 def build_url(title: str, product_url: str | None) -> str:
     if product_url and product_url != "#":
@@ -66,12 +66,9 @@ def ingest_amazon(conn) -> list[int]:
 
     products = fetch_amazon_products(existing_ids, AMAZON_BATCH_SIZE)
     if not products:
-        products = [
-            ("accesorios", {**product, "source_metadata": {"source": "amazon-manual-fallback", "reason": "Creators API no disponible", "verified_at": "2026-09"}})
-            for product in AMAZON_FALLBACK_PRODUCTS
-        ]
-        print(f"[amazon] fallback manual con URLs Amazon reales: {len(products)}")
-    print(f"[amazon] lote recibido desde Creators API: {len(products)}")
+        print("[amazon] Creators API sin resultados. Amazon queda como fuente opcional; se conserva el catalogo existente.")
+        return ids
+    print(f"[amazon] lote valido recibido desde Creators API: {len(products)}")
     for category, product in products:
         try:
             product["source_metadata"]["seed_batch"] = f"amazon-renewal-{AMAZON_BATCH_SIZE}"
