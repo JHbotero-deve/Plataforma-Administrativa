@@ -100,12 +100,19 @@ def _sale_price(item_id):
         return {}
 
 
+def _public_search(query, limit=20):
+    """Fallback real-data search for Mercado Libre when OAuth is temporarily rejected."""
+    return _get(MELI_SEARCH, {"q": query, "limit": min(limit, 50)}, include_auth=False, retry_auth=False)
+
+
 def fetch_mercadolibre(query, limit=20):
-    data = _get(
-        MELI_SEARCH,
-        {"q": query, "limit": min(limit, 50)},
-        include_auth=True,
-    )
+    try:
+        data = _get(MELI_SEARCH, {"q": query, "limit": min(limit, 50)}, include_auth=True)
+    except RuntimeError as exc:
+        if "403" not in str(exc):
+            raise
+        print(f"[Mercado Libre] OAuth rechazado para '{query}'; usando búsqueda pública real como respaldo.")
+        data = _public_search(query, limit)
     products = []
 
     for item in data.get("results", []):
