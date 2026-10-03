@@ -1,3 +1,4 @@
+from meli_oauth import get_meli_tokens, save_meli_tokens
 import os
 import requests
 
@@ -13,16 +14,17 @@ def _headers(include_auth=True):
         "User-Agent": "CentralProductAnalyzer/2.2",
         "Accept": "application/json",
     }
-    token = (os.getenv("MELI_ACCESS_TOKEN", "").strip() or os.getenv("MERCADOLIBRE_ACCESS_TOKEN", "").strip())
+    token, _ = get_meli_tokens()
+    token = token or (os.getenv("MELI_ACCESS_TOKEN", "").strip() or os.getenv("MERCADOLIBRE_ACCESS_TOKEN", "").strip())
     if include_auth and token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
 
 
 def _refresh_access_token():
-    refresh_token = os.getenv("MELI_REFRESH_TOKEN", "").strip()
-    client_id = os.getenv("MERCADOLIBRE_CLIENT_ID", "").strip()
-    client_secret = os.getenv("MERCADOLIBRE_CLIENT_SECRET", "").strip()
+    _, refresh_token = get_meli_tokens()
+    client_id = os.getenv("MELI_CLIENT_ID", "").strip()
+    client_secret = os.getenv("MELI_CLIENT_SECRET", "").strip()
     if not (refresh_token and client_id and client_secret):
         return None
     response = requests.post(MELI_OAUTH, data={
@@ -34,8 +36,11 @@ def _refresh_access_token():
     if not response.ok:
         print(f"[Mercado Libre] renovación de token: HTTP {response.status_code}")
         return None
-    token = str(response.json().get("access_token") or "").strip()
-    if token:
+    payload = response.json()
+    token = str(payload.get("access_token") or "").strip()
+    new_refresh = str(payload.get("refresh_token") or "").strip()
+    if token and new_refresh:
+        save_meli_tokens(token, new_refresh, int(payload.get("expires_in") or 0))
         print("[Mercado Libre] access token renovado.")
     return token or None
 
