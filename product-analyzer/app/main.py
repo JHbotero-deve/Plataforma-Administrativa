@@ -146,7 +146,12 @@ def run_pipeline():
     finally:
         conn.close()
 
-    try:\n        publish_top_opportunities(15)\n    except Exception as exc:\n        print(f"[storefront] no se pudieron materializar publicaciones: {exc}")\n\n    if creator_configured():
+    try:
+        publish_top_opportunities(15)
+    except Exception as exc:
+        print(f"[storefront] no se pudieron materializar publicaciones: {exc}")
+
+    if creator_configured():
         try:
             result = sync_showcase(limit=200)
             print(f"[tiktok] productos sincronizados: {result.get('synced', 0)}")
