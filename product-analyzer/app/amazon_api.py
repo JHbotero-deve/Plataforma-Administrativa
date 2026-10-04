@@ -14,6 +14,7 @@ CREDENTIAL_VERSION = os.getenv("AMAZON_CREDENTIAL_VERSION", "3.1").strip()
 
 _TOKEN: str | None = None
 _TOKEN_EXPIRES_AT = 0.0
+_TOKEN_VERSION = ""
 
 
 def _access_token() -> str:
@@ -25,7 +26,8 @@ def _access_token() -> str:
     if not CREDENTIAL_ID or not CREDENTIAL_SECRET or not PARTNER_TAG:
         raise RuntimeError("Faltan AMAZON_CREDENTIAL_ID, AMAZON_CREDENTIAL_SECRET o AMAZON_PARTNER_TAG")
 
-    candidates = [CREDENTIAL_VERSION] if CREDENTIAL_VERSION in {"2.1","2.2","2.3","3.1","3.2","3.3"} else ["3.1","2.1"]
+    versions = ["3.1","3.2","3.3","2.1","2.2","2.3"]
+    candidates = ([CREDENTIAL_VERSION] + [v for v in versions if v != CREDENTIAL_VERSION]) if CREDENTIAL_VERSION in versions else versions
     configs = {
         "3.1": ("https://api.amazon.com/auth/o2/token", "creatorsapi::default", False),
         "3.2": ("https://api.amazon.co.uk/auth/o2/token", "creatorsapi::default", False),
