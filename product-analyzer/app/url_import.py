@@ -89,6 +89,37 @@ def _parse_price(content: str) -> tuple[float | None, str | None]:
     return None, None
 
 
+def _amazon_web_metadata(asin: str) -> dict:
+    """Obtiene metadatos reales de un ASIN mediante el índice web cuando Amazon bloquea la página."""
+    try:
+        response = requests.get(
+            "https://www.bing.com/search",
+            params={"q": f'site:amazon.com/dp "{asin}"', "count": 5},
+            headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140 Safari/537.36", "Accept-Language": "en-US,en;q=0.9"},
+            timeout=20,
+        )
+        response.raise_for_status()
+        content = response.text
+        result = {"resolved_url": f"https://www.amazon.com/dp/{asin}", "image_url": f"https://images-na.ssl-images-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg"}
+        title_match = re.search(r"<h2[^>]*>(.*?)</h2>|<h3[^>]*>(.*?)</h3>", content, re.I | re.S)
+        if title_match:
+            title = next((x for x in title_match.groups() if x), "")
+            title = re.sub(r"<[^>]+>", " ", title)
+            title = re.sub(r"\s+", " ", html.unescape(title)).strip()
+            if title and title.lower() not in {"amazon.com", "amazon"}:
+                result["title"] = title[:500]
+        price_match = re.search(r"\$\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)", content)
+        if price_match:
+            try:
+                result["price"] = float(price_match.group(1).replace(",", ""))
+                result["currency"] = "USD"
+            except ValueError:
+                pass
+        result["gallery_urls"] = [result["image_url"]]
+        return result
+    except (requests.RequestException, ValueError):
+        return []
+
 def _metadata(url: str) -> dict:
     headers = {
         "User-Agent": "Mozilla/5.0 (compatible; CentralProductRadar/1.0)",
@@ -168,6 +199,13 @@ def import_url(
     metadata = _metadata(url)
     resolved_url = metadata.get("resolved_url") or url
     external_id = _asin(resolved_url) if platform == "amazon" else None
+    if platform == "amazon" and external_id and (not metadata.get("title") or metadata.get("price") is None or not metadata.get("image_url")):
+        web_metadata = _amazon_web_metadata(external_id)
+        for key, value in web_metadata.items():
+            if key == "gallery_urls":
+                metadata[key] = list(dict.fromkeys((metadata.get(key) or []) + value))
+            elif not metadata.get(key):
+                metadata[key] = value
     if not external_id:
         path_id = re.search(r"/([A-Z]{2,4}-?[0-9]{6,})", parsed.path, re.I)
         external_id = path_id.group(1).upper() if path_id else re.sub(
