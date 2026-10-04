@@ -52,7 +52,7 @@ def seed_catalog():
     seeded = {"amazon":0,"mercadolibre":0,"personal":0}
     try:
         for category, asin, title in AMAZON_PRODUCTS:
-            image=f"https://images-na.ssl-images-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg"
+            image=f"https://m.media-amazon.com/images/P/{asin}.01._SL1000_.jpg"
             product={"external_id":asin,"title":title,"image_url":image,
                      "gallery_urls":[image],"product_url":f"https://www.amazon.com/dp/{asin}",
                      "price":None,"currency":"USD","rating":None,"reviews_count":0,
