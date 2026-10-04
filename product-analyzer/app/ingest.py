@@ -1,5 +1,8 @@
 from meli_oauth import get_meli_tokens, save_meli_tokens
 import os
+import json
+import re
+from urllib.parse import quote_plus
 import requests
 
 MELI_SEARCH = "https://api.mercadolibre.com/sites/MCO/search"
@@ -101,8 +104,66 @@ def _sale_price(item_id):
 
 
 def _public_search(query, limit=20):
-    """Fallback real-data search for Mercado Libre when OAuth is temporarily rejected."""
-    return _get(MELI_SEARCH, {"q": query, "limit": min(limit, 50)}, include_auth=False, retry_auth=False)
+    """Fallback real-data search from Mercado Libre's public storefront."""
+    url = "https://listado.mercadolibre.com.co/" + quote_plus(query).replace("+", "-")
+    response = requests.get(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
+            "Accept-Language": "es-CO,es;q=0.9,en;q=0.7",
+            "Accept": "text/html,application/xhtml+xml",
+        },
+        timeout=25,
+        allow_redirects=True,
+    )
+    response.raise_for_status()
+    html = response.text
+    products = []
+    seen = set()
+
+    for raw in re.findall(r'<script[^>]+type=["\\']application/ld\\+json["\\'][^>]*>(.*?)</script>', html, re.I | re.S):
+        try:
+            data = json.loads(raw.strip())
+        except (TypeError, ValueError):
+            continue
+        stack = data if isinstance(data, list) else [data]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, dict):
+                if isinstance(node.get("@graph"), list):
+                    stack.extend(node["@graph"])
+                if isinstance(node.get("item"), dict):
+                    stack.append(node["item"])
+                if str(node.get("@type", "")).lower() != "product":
+                    continue
+                name = str(node.get("name") or "").strip()
+                image = node.get("image")
+                if isinstance(image, list):
+                    image = image[0] if image else None
+                offers = node.get("offers") or {}
+                if isinstance(offers, list):
+                    offers = offers[0] if offers else {}
+                price = offers.get("price") if isinstance(offers, dict) else None
+                permalink = (offers.get("url") if isinstance(offers, dict) else None) or node.get("url")
+                match = re.search(r"(MCO-\d+)", str(permalink or ""))
+                if not match or not name or not image or price in (None, ""):
+                    continue
+                item_id = match.group(1)
+                if item_id in seen:
+                    continue
+                try:
+                    amount = float(str(price).replace(".", "").replace(",", "."))
+                except ValueError:
+                    continue
+                seen.add(item_id)
+                products.append({
+                    "id": item_id, "title": name, "thumbnail": str(image),
+                    "permalink": str(permalink), "price": amount, "currency_id": "COP",
+                })
+                if len(products) >= min(max(limit, 1), 20):
+                    return {"results": products, "_source": "public_web"}
+
+    return {"results": products, "_source": "public_web"}
 
 
 def fetch_mercadolibre(query, limit=20):
@@ -115,15 +176,19 @@ def fetch_mercadolibre(query, limit=20):
         data = _public_search(query, limit)
     products = []
 
+    public_web = data.get("_source") == "public_web"
     for item in data.get("results", []):
         item_id = item.get("id")
         title = item.get("title")
         if not item_id or not title:
             continue
 
-        detail = _details(item_id)
-        prices = _prices(item_id)
-        sale = _sale_price(item_id)
+        if public_web:
+            detail, prices, sale = {}, [], {}
+        else:
+            detail = _details(item_id)
+            prices = _prices(item_id)
+            sale = _sale_price(item_id)
 
         price = (
             sale.get("amount")
