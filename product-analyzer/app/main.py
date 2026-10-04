@@ -9,6 +9,7 @@ from db import get_connection, upsert_product
 from ingest import fetch_mercadolibre
 from init_db import init_database
 from notifications import send_telegram_alert
+from seed_catalog import seed_catalog
 from tiktok_creator import creator_configured, sync_showcase
 
 SEARCH_CONFIG = [
@@ -221,6 +222,8 @@ def run_worker():
     print("Esperando a que la base de datos esté lista...")
     time.sleep(5)
     init_database()
+    seeded = seed_catalog()
+    print(f"== Catalogo inicial: Amazon {seeded['amazon']} | Mercado Libre {seeded['mercadolibre']} | Propios {seeded['personal']} ==")
     run_pipeline()
     schedule.every(2).hours.do(run_pipeline)
     while True:
