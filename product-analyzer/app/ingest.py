@@ -120,7 +120,7 @@ def _public_search(query, limit=20):
     products = []
     seen = set()
 
-    links = re.findall(r'<a[^>]+href=["\\'](https://(?:articulo|www)\\.mercadolibre\\.com\\.co/[^"\\']+)["\\'][^>]*>(.*?)</a>', html, re.I | re.S)
+    links = re.findall(r"<a[^>]+href=[\"'](https://(?:articulo|www)\\.mercadolibre\\.com\\.co/[^\"']+)[\"'][^>]*>(.*?)</a>", html, re.I | re.S)
     for permalink, raw_title in links:
         match = re.search(r"(MCO-\\d+)", permalink)
         if not match:
