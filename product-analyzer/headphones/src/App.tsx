@@ -143,7 +143,7 @@ export default function App() {
     ? Math.round(((activeProd.originalPrice - activeProd.basePrice) / activeProd.originalPrice) * 100)
     : 0;
 
-  // Handlers – showcase
+  // Manejadores de la tienda
   const goCat = (catId: string) => {
     const prods = published.filter(p => p.categoryId === catId);
     if (!prods.length) return;
@@ -158,7 +158,7 @@ export default function App() {
     setActiveVarIdx(0);
   };
 
-  // Handlers – panel products
+  // Manejadores de productos
   const togglePublished = (id: string) => {
     setProducts(prev => {
       const next = prev.map(p => p.id === id ? { ...p, published: !p.published } : p);
@@ -223,7 +223,7 @@ export default function App() {
     cancelForm();
   };
 
-  // Handlers – image upload
+  // Manejadores de carga de imágenes
   const handleImageFile = (file: File, varIdx: number) => {
     const reader = new FileReader();
     reader.onload = e => {
@@ -233,7 +233,7 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  // Handlers – drag & drop (from panel → showcase)
+  // Manejadores de arrastre desde el panel hacia la tienda
   const handleDragStart = (e: React.DragEvent, productId: string) => {
     e.dataTransfer.setData("productId", productId);
     e.dataTransfer.effectAllowed = "copy";
@@ -301,7 +301,7 @@ export default function App() {
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               className={`text-xl font-black bg-gradient-to-r ${activeCat.accentGradient} bg-clip-text text-transparent tracking-tight shrink-0`}
             >
-              SHOPR
+              CENTRAL
             </motion.span>
 
             {/* Category tabs */}
@@ -334,7 +334,7 @@ export default function App() {
           </div>
         </motion.nav>
 
-        {/* Showcase content */}
+        {/* Contenido de la tienda */}
         <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6">
           {catProducts.length === 0 ? (
             /* Empty state */
@@ -752,7 +752,7 @@ export default function App() {
                   </div>
                   <div className="flex gap-2">
                     <div className="flex flex-col gap-2 flex-1">
-                      <label className="text-white/60 text-xs font-semibold">Rating (0–5)</label>
+                      <label className="text-white/60 text-xs font-semibold">Calificación (0–5)</label>
                       <input
                         type="number" min="0" max="5" step="0.1" value={form.rating}
                         onChange={e => setForm(f => ({ ...f, rating: e.target.value }))}
@@ -760,7 +760,7 @@ export default function App() {
                       />
                     </div>
                     <div className="flex flex-col gap-2 flex-1">
-                      <label className="text-white/60 text-xs font-semibold">N° reseñas</label>
+                      <label className="text-white/60 text-xs font-semibold">Número de reseñas</label>
                       <input
                         type="number" value={form.reviews}
                         onChange={e => setForm(f => ({ ...f, reviews: e.target.value }))}
@@ -836,7 +836,7 @@ export default function App() {
                         </div>
                         {/* Preview */}
                         {v.image && (
-                          <img src={v.image} alt="preview" className="w-full h-20 object-cover rounded-lg opacity-80" />
+                          <img src={v.image} alt="Vista previa" className="w-full h-20 object-cover rounded-lg opacity-80" />
                         )}
                         {/* Gradient picker */}
                         <div>
