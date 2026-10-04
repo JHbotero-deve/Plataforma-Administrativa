@@ -122,7 +122,7 @@ def _publish_external_product(conn, product_id, product, platform_label):
 
 @core_router.post("/store/sync")
 def sync_store_catalog():
-    """Importa 15 Amazon + 5 Mercado Libre reales y los publica en la tienda."""
+    """Importa productos reales al catálogo; las tarjetas se publican únicamente desde Studio."""
     conn = get_connection()
     amazon_imported = []
     meli_imported = []
@@ -156,7 +156,6 @@ def sync_store_catalog():
                         """, (category, product.get("currency") or "USD"))
                         average = cur.fetchone()["avg_price"]
                     product["_score"] = score_product(conn, product_id, float(average or 0))
-                    _publish_external_product(conn, product_id, product, "Amazon")
                     conn.commit()
                     amazon_imported.append({"id": product_id, "asin": product["external_id"], "title": product["title"]})
                 except Exception as exc:
@@ -191,7 +190,6 @@ def sync_store_catalog():
                             """, ("accesorios", product.get("currency") or "COP"))
                             average = cur.fetchone()["avg_price"]
                         product["_score"] = score_product(conn, product_id, float(average or 0))
-                        _publish_external_product(conn, product_id, product, "Mercado Libre")
                         conn.commit()
                         existing.add(key)
                         meli_imported.append({"id": product_id, "item_id": product["external_id"], "title": product["title"]})
@@ -209,9 +207,9 @@ def sync_store_catalog():
                 "errors": errors[:10],
             })
         return {
-            "amazon": {"imported": len(amazon_imported), "published": len(amazon_imported), "products": amazon_imported},
-            "mercadolibre": {"imported": len(meli_imported), "published": len(meli_imported), "products": meli_imported},
-            "total_published": len(amazon_imported) + len(meli_imported),
+            "amazon": {"imported": len(amazon_imported), "published": 0, "products": amazon_imported},
+            "mercadolibre": {"imported": len(meli_imported), "published": 0, "products": meli_imported},
+            "total_published": 0,
             "errors": errors[:10],
         }
     finally:
