@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from psycopg2.extras import Json
 
 from analysis import score_product
+from amazon_api import fetch_amazon_products
 from db import get_connection, upsert_product
 from monetization import router as monetization_router
 from publications import router as publication_router
@@ -88,6 +89,80 @@ def health():
             status_code=503,
             detail={"status": "degraded", "database": "error"},
         )
+
+
+@core_router.post("/amazon/sync")
+def sync_amazon_store(limit: int = Query(15, ge=1, le=15)):
+    """Import real Amazon products, score them and publish the selected batch."""
+    conn = get_connection()
+    imported = []
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT p.external_id
+                FROM products p
+                JOIN platforms pl ON pl.id = p.platform_id
+                WHERE pl.name = 'amazon' AND p.is_active = TRUE
+            """)
+            existing_ids = {str(row["external_id"]).upper() for row in cur.fetchall()}
+
+        products = fetch_amazon_products(existing_ids, limit)
+        if not products:
+            raise HTTPException(status_code=502, detail="Amazon no devolvió productos reales. Revisa las credenciales de Creators API.")
+
+        for category, product in products[:limit]:
+            try:
+                product_id = upsert_product(conn, "amazon", category, product)
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT AVG(p.current_price) AS avg_price
+                        FROM products p
+                        JOIN categories c ON c.id = p.category_id
+                        WHERE p.is_active = TRUE
+                          AND c.name = %s
+                          AND p.currency = %s
+                          AND p.current_price IS NOT NULL
+                    """, (category, product.get("currency") or "USD"))
+                    average = cur.fetchone()["avg_price"]
+                score = score_product(conn, product_id, float(average or 0))
+
+                price = product.get("price")
+                currency = product.get("currency") or "USD"
+                price_display = f"{price:,.2f} {currency}" if price is not None else "Consultar"
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO published_cards (
+                            product_id, title, subtitle, price_display, image_url, product_url,
+                            sale_price, cost_price, profit_amount, profit_margin_pct,
+                            opportunity_score, footer, accent, is_published, published_at, updated_at
+                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,0,0,%s,%s,%s,TRUE,NOW(),NOW())
+                        ON CONFLICT (product_id) DO UPDATE SET
+                            title=EXCLUDED.title, subtitle=EXCLUDED.subtitle,
+                            price_display=EXCLUDED.price_display, image_url=EXCLUDED.image_url,
+                            product_url=EXCLUDED.product_url, sale_price=EXCLUDED.sale_price,
+                            cost_price=EXCLUDED.cost_price, opportunity_score=EXCLUDED.opportunity_score,
+                            is_published=TRUE, published_at=NOW(), updated_at=NOW()
+                    """, (
+                        product_id, product["title"], "Amazon · producto original",
+                        price_display, product["image_url"], product["product_url"],
+                        price, price, score, "Oferta Amazon", "#b6f23a"
+                    ))
+                imported.append({
+                    "id": product_id,
+                    "asin": product["external_id"],
+                    "title": product["title"],
+                    "score": score,
+                })
+            except Exception as exc:
+                conn.rollback()
+                print(f"[amazon/sync] error insertando {product.get('external_id')}: {exc}")
+
+        if not imported:
+            raise HTTPException(status_code=502, detail="Amazon devolvió datos, pero no se pudo guardar ningún producto.")
+        conn.commit()
+        return {"source": "amazon", "imported": len(imported), "published": len(imported), "products": imported}
+    finally:
+        conn.close()
 
 
 @core_router.get("/pipeline/summary")
