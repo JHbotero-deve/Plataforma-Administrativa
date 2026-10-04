@@ -15,6 +15,7 @@ from psycopg2.extras import Json
 
 from analysis import score_product
 from amazon_api import fetch_amazon_products
+from ingest import fetch_mercadolibre
 from db import get_connection, upsert_product
 from monetization import router as monetization_router
 from publications import router as publication_router
@@ -91,78 +92,136 @@ def health():
         )
 
 
-@core_router.post("/amazon/sync")
-def sync_amazon_store(limit: int = Query(15, ge=1, le=15)):
-    """Import real Amazon products, score them and publish the selected batch."""
+def _publish_external_product(conn, product_id, product, platform_label):
+    price = product.get("price")
+    currency = product.get("currency") or "COP"
+    price_display = f"{price:,.2f} {currency}" if price is not None else "Consultar"
+    image_url = product.get("image_url") or None
+    product_url = product.get("product_url") or None
+    score = product.get("_score")
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO published_cards (
+                product_id, title, subtitle, price_display, image_url, product_url,
+                sale_price, cost_price, profit_amount, profit_margin_pct,
+                opportunity_score, footer, accent, is_published, published_at, updated_at
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,0,0,%s,%s,%s,TRUE,NOW(),NOW())
+            ON CONFLICT (product_id) DO UPDATE SET
+                title=EXCLUDED.title, subtitle=EXCLUDED.subtitle,
+                price_display=EXCLUDED.price_display, image_url=EXCLUDED.image_url,
+                product_url=EXCLUDED.product_url, sale_price=EXCLUDED.sale_price,
+                cost_price=EXCLUDED.cost_price, opportunity_score=EXCLUDED.opportunity_score,
+                is_published=TRUE, published_at=NOW(), updated_at=NOW()
+        """, (
+            product_id, product["title"], f"{platform_label} · producto original",
+            price_display, image_url, product_url,
+            price, price, score or 0, f"Oferta {platform_label}", "#b6f23a"
+        ))
+
+
+@core_router.post("/store/sync")
+def sync_store_catalog():
+    """Importa 15 Amazon + 5 Mercado Libre reales y los publica en la tienda."""
     conn = get_connection()
-    imported = []
+    amazon_imported = []
+    meli_imported = []
+    errors = []
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT p.external_id
+                SELECT p.external_id, pl.name AS platform
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
-                WHERE pl.name = 'amazon' AND p.is_active = TRUE
+                WHERE p.is_active = TRUE AND pl.name IN ('amazon', 'mercadolibre')
             """)
-            existing_ids = {str(row["external_id"]).upper() for row in cur.fetchall()}
+            existing = {(str(row["platform"]).lower(), str(row["external_id"]).upper()) for row in cur.fetchall()}
 
-        products = fetch_amazon_products(existing_ids, limit)
-        if not products:
-            raise HTTPException(status_code=502, detail="Amazon no devolvió productos reales. Revisa las credenciales de Creators API.")
+        # Amazon: hasta 15 productos reales nuevos.
+        try:
+            amazon_products = fetch_amazon_products(
+                {external_id for platform, external_id in existing if platform == "amazon"},
+                15,
+            )
+            for category, product in amazon_products[:15]:
+                try:
+                    product_id = upsert_product(conn, "amazon", category, product)
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            SELECT AVG(p.current_price) AS avg_price
+                            FROM products p
+                            JOIN categories c ON c.id = p.category_id
+                            WHERE p.is_active = TRUE AND c.name = %s
+                              AND p.currency = %s AND p.current_price IS NOT NULL
+                        """, (category, product.get("currency") or "USD"))
+                        average = cur.fetchone()["avg_price"]
+                    product["_score"] = score_product(conn, product_id, float(average or 0))
+                    _publish_external_product(conn, product_id, product, "Amazon")
+                    conn.commit()
+                    amazon_imported.append({"id": product_id, "asin": product["external_id"], "title": product["title"]})
+                except Exception as exc:
+                    conn.rollback()
+                    errors.append(f"Amazon {product.get('external_id')}: {exc}")
+        except Exception as exc:
+            conn.rollback()
+            errors.append(f"Amazon: {exc}")
 
-        for category, product in products[:limit]:
-            try:
-                product_id = upsert_product(conn, "amazon", category, product)
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        SELECT AVG(p.current_price) AS avg_price
-                        FROM products p
-                        JOIN categories c ON c.id = p.category_id
-                        WHERE p.is_active = TRUE
-                          AND c.name = %s
-                          AND p.currency = %s
-                          AND p.current_price IS NOT NULL
-                    """, (category, product.get("currency") or "USD"))
-                    average = cur.fetchone()["avg_price"]
-                score = score_product(conn, product_id, float(average or 0))
+        # Mercado Libre: toma los primeros 5 productos reales disponibles.
+        meli_queries = ("soporte celular", "audifonos bluetooth", "smartwatch", "mouse gamer", "lampara led")
+        try:
+            for query in meli_queries:
+                if len(meli_imported) >= 5:
+                    break
+                try:
+                    products = fetch_mercadolibre(query, limit=10)
+                    for product in products:
+                        if len(meli_imported) >= 5:
+                            break
+                        key = ("mercadolibre", str(product.get("external_id") or "").upper())
+                        if not key[1] or key in existing:
+                            continue
+                        product_id = upsert_product(conn, "mercadolibre", "accesorios", product)
+                        with conn.cursor() as cur:
+                            cur.execute("""
+                                SELECT AVG(p.current_price) AS avg_price
+                                FROM products p
+                                JOIN categories c ON c.id = p.category_id
+                                WHERE p.is_active = TRUE AND c.name = %s
+                                  AND p.currency = %s AND p.current_price IS NOT NULL
+                            """, ("accesorios", product.get("currency") or "COP"))
+                            average = cur.fetchone()["avg_price"]
+                        product["_score"] = score_product(conn, product_id, float(average or 0))
+                        _publish_external_product(conn, product_id, product, "Mercado Libre")
+                        conn.commit()
+                        existing.add(key)
+                        meli_imported.append({"id": product_id, "item_id": product["external_id"], "title": product["title"]})
+                except Exception as exc:
+                    conn.rollback()
+                    errors.append(f"Mercado Libre '{query}': {exc}")
 
-                price = product.get("price")
-                currency = product.get("currency") or "USD"
-                price_display = f"{price:,.2f} {currency}" if price is not None else "Consultar"
-                with conn.cursor() as cur:
-                    cur.execute("""
-                        INSERT INTO published_cards (
-                            product_id, title, subtitle, price_display, image_url, product_url,
-                            sale_price, cost_price, profit_amount, profit_margin_pct,
-                            opportunity_score, footer, accent, is_published, published_at, updated_at
-                        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,0,0,%s,%s,%s,TRUE,NOW(),NOW())
-                        ON CONFLICT (product_id) DO UPDATE SET
-                            title=EXCLUDED.title, subtitle=EXCLUDED.subtitle,
-                            price_display=EXCLUDED.price_display, image_url=EXCLUDED.image_url,
-                            product_url=EXCLUDED.product_url, sale_price=EXCLUDED.sale_price,
-                            cost_price=EXCLUDED.cost_price, opportunity_score=EXCLUDED.opportunity_score,
-                            is_published=TRUE, published_at=NOW(), updated_at=NOW()
-                    """, (
-                        product_id, product["title"], "Amazon · producto original",
-                        price_display, product["image_url"], product["product_url"],
-                        price, price, score, "Oferta Amazon", "#b6f23a"
-                    ))
-                imported.append({
-                    "id": product_id,
-                    "asin": product["external_id"],
-                    "title": product["title"],
-                    "score": score,
-                })
-            except Exception as exc:
-                conn.rollback()
-                print(f"[amazon/sync] error insertando {product.get('external_id')}: {exc}")
+        except Exception as exc:
+            conn.rollback()
+            errors.append(f"Mercado Libre: {exc}")
 
-        if not imported:
-            raise HTTPException(status_code=502, detail="Amazon devolvió datos, pero no se pudo guardar ningún producto.")
-        conn.commit()
-        return {"source": "amazon", "imported": len(imported), "published": len(imported), "products": imported}
+        if not amazon_imported and not meli_imported:
+            raise HTTPException(status_code=502, detail={
+                "message": "No se pudo importar ningún producto real.",
+                "errors": errors[:10],
+            })
+        return {
+            "amazon": {"imported": len(amazon_imported), "published": len(amazon_imported), "products": amazon_imported},
+            "mercadolibre": {"imported": len(meli_imported), "published": len(meli_imported), "products": meli_imported},
+            "total_published": len(amazon_imported) + len(meli_imported),
+            "errors": errors[:10],
+        }
     finally:
         conn.close()
+
+
+@core_router.post("/amazon/sync")
+def sync_amazon_store(limit: int = Query(15, ge=1, le=15)):
+    """Importa productos reales de Amazon y los publica."""
+    result = sync_store_catalog()
+    return result["amazon"]
 
 
 @core_router.get("/pipeline/summary")
