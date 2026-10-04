@@ -1,14 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import tailwindcss from "@tailwindcss/vite";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   root: ".",
-  plugins: [react(), tailwindcss()],
-  base: "/headphones/",
+  plugins: [react()],
+  base: command === "serve" ? "/" : "/headphones/",
   build: {
     outDir: "../frontend/headphones",
     emptyOutDir: true,
     assetsDir: "assets",
   },
-});
+}));
