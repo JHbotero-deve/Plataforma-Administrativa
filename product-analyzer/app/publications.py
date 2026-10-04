@@ -130,8 +130,8 @@ def publish_card(payload: PublicationPayload):
                     payload.image_url or product["image_url"], payload.product_url or product["product_url"],
                     payload.sale_price if payload.sale_price is not None else product["current_price"],
                     payload.cost_price if payload.cost_price is not None else product["current_price"],
-                    (payload.sale_price if payload.sale_price is not None else product["current_price"]) -
-                    (payload.cost_price if payload.cost_price is not None else product["current_price"]),
+                    ((payload.sale_price if payload.sale_price is not None else product["current_price"]) or 0) -
+                    ((payload.cost_price if payload.cost_price is not None else product["current_price"]) or 0),
                     (((payload.sale_price if payload.sale_price is not None else product["current_price"]) -
                       (payload.cost_price if payload.cost_price is not None else product["current_price"])) /
                      (payload.sale_price if payload.sale_price is not None else product["current_price"])) * 100
