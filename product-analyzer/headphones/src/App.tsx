@@ -90,95 +90,6 @@ const GRAD_PRESETS = [
 
 const mkId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-const DEFAULT_PRODUCTS: Product[] = [
-  {
-    id: "air-street", name: "Air Street Pro X", brand: "UrbanKicks",
-    description: "Entresuela de espuma reactiva con tracción multidireccional. Diseñadas para conquistar cualquier superficie urbana.",
-    features: ["Entresuela reactiva", "Tracción multidireccional", "Tejido transpirable", "Memory Foam"],
-    basePrice: 149.99, originalPrice: 189.99, rating: 4.8, reviews: 2341, badge: "Más vendido",
-    categoryId: "zapatos",
-    variants: [
-      { id: "v1", name: "Rojo Fuego",    image: "https://images.unsplash.com/photo-1731132198530-e4b2dc51d511?q=80&w=800&auto=format&fit=crop", gradient: "from-red-500 to-orange-600",  glow: "#ef4444" },
-      { id: "v2", name: "Blanco Clásico",image: "https://images.unsplash.com/photo-1623788975845-7d3e0adbae7c?q=80&w=800&auto=format&fit=crop", gradient: "from-slate-200 to-white",    glow: "#94a3b8" },
-      { id: "v3", name: "Negro Elite",   image: "https://images.unsplash.com/photo-1789520482092-bf7a66ef8281?q=80&w=800&auto=format&fit=crop", gradient: "from-gray-700 to-black",     glow: "#6b7280" },
-    ],
-    amazon: "https://www.amazon.com/s?k=urban+street+sneakers+pro",
-    ml: "https://listado.mercadolibre.com.mx/zapatillas-urbanas",
-    published: true,
-  },
-  {
-    id: "running-elite", name: "Running Elite 3.0", brand: "SpeedForce",
-    description: "Placa de carbono y amortiguación avanzada para corredores serios. Ultra-ligero, máximo rendimiento.",
-    features: ["Placa de carbono", "Amortiguación avanzada", "Ultra-ligero 220g", "Ajuste preciso"],
-    basePrice: 199.99, originalPrice: 249.99, rating: 4.9, reviews: 1876, badge: "Nuevo",
-    categoryId: "zapatos",
-    variants: [
-      { id: "v1", name: "Verde Neón",     image: "https://images.unsplash.com/photo-1672920800748-a5fb6dfd0c2b?q=80&w=800&auto=format&fit=crop", gradient: "from-green-400 to-emerald-600", glow: "#10b981" },
-      { id: "v2", name: "Azul Velocidad", image: "https://images.unsplash.com/photo-1789520482092-bf7a66ef8281?q=80&w=800&auto=format&fit=crop", gradient: "from-blue-500 to-cyan-600",    glow: "#3b82f6" },
-    ],
-    amazon: "https://www.amazon.com/s?k=carbon+plate+running+shoes",
-    ml: "https://listado.mercadolibre.com.mx/zapatos-running-carbono",
-    published: true,
-  },
-  {
-    id: "urban-tee", name: "Urban Essential Tee", brand: "StreetCo",
-    description: "100% algodón orgánico peinado. El corte perfecto que combina con todo. La camiseta definitiva.",
-    features: ["Algodón orgánico 100%", "Corte unisex premium", "Sin encogimiento", "Tallas XS–3XL"],
-    basePrice: 34.99, originalPrice: 49.99, rating: 4.7, reviews: 5678, badge: "Lo Más Elegido",
-    categoryId: "camisetas",
-    variants: [
-      { id: "v1", name: "Negro Premium", image: "https://images.unsplash.com/photo-1611066773627-40bacce458dc?q=80&w=800&auto=format&fit=crop", gradient: "from-gray-900 to-black",      glow: "#374151" },
-      { id: "v2", name: "Blanco Nieve",  image: "https://images.unsplash.com/photo-1777901513094-f8b4ca262d57?q=80&w=800&auto=format&fit=crop", gradient: "from-white to-gray-100",     glow: "#d1d5db" },
-      { id: "v3", name: "Azul Índigo",   image: "https://images.unsplash.com/photo-1758214872848-7e904fc074fe?q=80&w=800&auto=format&fit=crop", gradient: "from-blue-500 to-indigo-700",glow: "#6366f1" },
-    ],
-    amazon: "https://www.amazon.com/s?k=organic+cotton+premium+t-shirt",
-    ml: "https://listado.mercadolibre.com.mx/camisetas-algodon-organico",
-    published: true,
-  },
-  {
-    id: "oversized-graphic", name: "Art Print Oversized", brand: "StreetCo",
-    description: "Gráficos de edición limitada en tela premium 240gsm. Expresa tu identidad con cada look.",
-    features: ["Tela premium 240gsm", "Estampado alta temperatura", "Corte oversized", "Edición limitada"],
-    basePrice: 49.99, originalPrice: 69.99, rating: 4.6, reviews: 3210,
-    categoryId: "camisetas",
-    variants: [
-      { id: "v1", name: "Carbón", image: "https://images.unsplash.com/photo-1778759335272-2aea6c337a63?q=80&w=800&auto=format&fit=crop", gradient: "from-zinc-700 to-neutral-900",    glow: "#52525b" },
-      { id: "v2", name: "Crema",  image: "https://images.unsplash.com/photo-1777901513094-f8b4ca262d57?q=80&w=800&auto=format&fit=crop", gradient: "from-amber-100 to-stone-200",    glow: "#d97706" },
-    ],
-    amazon: "https://www.amazon.com/s?k=oversized+graphic+tshirt",
-    ml: "https://listado.mercadolibre.com.mx/camiseta-oversize-grafica",
-    published: true,
-  },
-  {
-    id: "headphones-pro", name: "SoundMax Pro 5", brand: "AudioTech",
-    description: "Cancelación activa de ruido híbrida de última generación. 40h de batería. Sonido inmersivo.",
-    features: ["ANC Híbrido avanzado", "40h de batería", "Driver 40mm Hi-Fi", "Bluetooth 5.3"],
-    basePrice: 299.99, originalPrice: 399.99, rating: 4.9, reviews: 8921, badge: "Elección Editorial",
-    categoryId: "electronicos",
-    variants: [
-      { id: "v1", name: "Grafito Pro",  image: "https://images.unsplash.com/photo-1605170876472-db58e15c430e?q=80&w=800&auto=format&fit=crop", gradient: "from-gray-600 to-gray-900",  glow: "#6b7280" },
-      { id: "v2", name: "Rojo Gaming",  image: "https://images.unsplash.com/photo-1761005653885-b3d8b04f47c5?q=80&w=800&auto=format&fit=crop", gradient: "from-red-600 to-rose-800",   glow: "#dc2626" },
-    ],
-    amazon: "https://www.amazon.com/s?k=noise+cancelling+wireless+headphones",
-    ml: "https://listado.mercadolibre.com.mx/audifonos-cancelacion-ruido-premium",
-    published: true,
-  },
-  {
-    id: "laptop-ultra", name: "UltraBook Pro 16", brand: "TechEdge",
-    description: "Pantalla OLED 4K 120Hz, 32GB RAM, SSD 1TB. El laptop que redefine tu productividad.",
-    features: ["OLED 4K 120Hz", "32GB RAM DDR5", "SSD NVMe 1TB", "Batería 20h"],
-    basePrice: 1299.99, originalPrice: 1599.99, rating: 4.8, reviews: 1456, badge: "Premium",
-    categoryId: "electronicos",
-    variants: [
-      { id: "v1", name: "Gris Espacial", image: "https://images.unsplash.com/photo-1572509018340-1fc13b5df491?q=80&w=800&auto=format&fit=crop", gradient: "from-gray-500 to-slate-700", glow: "#64748b" },
-      { id: "v2", name: "Plata Ártico",  image: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop", gradient: "from-slate-200 to-gray-400", glow: "#94a3b8" },
-    ],
-    amazon: "https://www.amazon.com/s?k=ultrabook+oled+4k+laptop",
-    ml: "https://listado.mercadolibre.com.mx/laptop-ultrabook-oled",
-    published: true,
-  },
-];
-
 function newEmptyForm() {
   return {
     name: "", brand: "", description: "",
@@ -195,11 +106,11 @@ function newEmptyForm() {
 export default function App() {
   // Showcase state
   const [products, setProducts] = useState<Product[]>(() => {
-    try { const s = localStorage.getItem("sp-products"); return s ? JSON.parse(s) : DEFAULT_PRODUCTS; }
-    catch { return DEFAULT_PRODUCTS; }
+    try { const s = localStorage.getItem("sp-products"); return s ? JSON.parse(s) : []; }
+    catch { return []; }
   });
-  const [activeCatId, setActiveCatId] = useState("zapatos");
-  const [activeProdId, setActiveProdId] = useState("air-street");
+  const [activeCatId, setActiveCatId] = useState("otros");
+  const [activeProdId, setActiveProdId] = useState("");
   const [activeVarIdx, setActiveVarIdx] = useState(0);
   const [bgTheme, setBgTheme] = useState(() => {
     try { return localStorage.getItem("sp-bg") || "black"; } catch { return "black"; }
@@ -374,7 +285,7 @@ export default function App() {
             >
               <span className="text-7xl mb-4">📌</span>
               <p className="text-white text-2xl font-black">Suelta para publicar aquí</p>
-              <p className="text-white/60 mt-2 text-sm">El producto aparecerá en el showcase</p>
+              <p className="text-white/60 mt-2 text-sm">El producto aparecerá en la tienda</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -576,7 +487,7 @@ export default function App() {
                         whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }}
                         className="flex items-center gap-2 bg-gradient-to-r from-amber-400 to-orange-500 text-black font-black px-5 py-3 rounded-2xl hover:shadow-xl hover:shadow-orange-500/30 transition-all text-sm"
                       >
-                        Ver en <strong>amazon</strong> <ExternalLink size={13} />
+                        Ver en <strong>Amazon</strong> <ExternalLink size={13} />
                       </motion.a>
                     )}
                     {activeProd.ml && (
@@ -767,7 +678,7 @@ export default function App() {
                     <input
                       value={form.name}
                       onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                      placeholder="Ej: Air Street Pro X"
+                      placeholder="Nombre del producto"
                       className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                     />
                   </div>
@@ -777,7 +688,7 @@ export default function App() {
                       <input
                         value={form.brand}
                         onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}
-                        placeholder="Ej: Nike"
+                        placeholder="Marca"
                         className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                       />
                     </div>
@@ -801,7 +712,7 @@ export default function App() {
                     <textarea
                       value={form.description}
                       onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                      placeholder="Describe el producto..."
+                      placeholder="Descripción del producto"
                       rows={2}
                       className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none resize-none transition-all"
                     />
@@ -813,7 +724,7 @@ export default function App() {
                     <input
                       value={form.badge}
                       onChange={e => setForm(f => ({ ...f, badge: e.target.value }))}
-                      placeholder="Ej: Más vendido, Nuevo, Premium"
+                      placeholder="Etiqueta"
                       className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                     />
                   </div>
@@ -825,7 +736,7 @@ export default function App() {
                       <input
                         type="number" value={form.basePrice}
                         onChange={e => setForm(f => ({ ...f, basePrice: e.target.value }))}
-                        placeholder="149.99"
+                        placeholder="Precio de venta"
                         className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                       />
                     </div>
@@ -834,7 +745,7 @@ export default function App() {
                       <input
                         type="number" value={form.originalPrice}
                         onChange={e => setForm(f => ({ ...f, originalPrice: e.target.value }))}
-                        placeholder="189.99"
+                        placeholder="Precio original"
                         className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                       />
                     </div>
@@ -904,7 +815,7 @@ export default function App() {
                         <input
                           value={v.name}
                           onChange={e => setForm(f => ({ ...f, variants: f.variants.map((x, j) => j === vi ? { ...x, name: e.target.value } : x) }))}
-                          placeholder="Nombre del color (Ej: Rojo Fuego)"
+                          placeholder="Nombre del color"
                           className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:border-white/30 outline-none"
                         />
                         {/* Image: upload or URL */}
@@ -955,7 +866,7 @@ export default function App() {
                       <input
                         value={form.amazon}
                         onChange={e => setForm(f => ({ ...f, amazon: e.target.value }))}
-                        placeholder="https://amazon.com/..."
+                        placeholder="Enlace del producto en Amazon"
                         className="flex-1 bg-white/5 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                       />
                     </div>
@@ -964,7 +875,7 @@ export default function App() {
                       <input
                         value={form.ml}
                         onChange={e => setForm(f => ({ ...f, ml: e.target.value }))}
-                        placeholder="https://mercadolibre.com/..."
+                        placeholder="Enlace del producto en Mercado Libre"
                         className="flex-1 bg-white/5 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                       />
                     </div>
@@ -973,7 +884,7 @@ export default function App() {
                       <input
                         value={form.wompi}
                         onChange={e => setForm(f => ({ ...f, wompi: e.target.value }))}
-                        placeholder="https://wompi.com/p/..."
+                        placeholder="Enlace de pago de Wompi"
                         className="flex-1 bg-white/5 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                       />
                     </div>
