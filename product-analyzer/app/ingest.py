@@ -104,75 +104,75 @@ def _sale_price(item_id):
 
 
 def _public_search(query, limit=20):
-    """Fallback real-data search from Mercado Libre's public storefront."""
-    url = "https://listado.mercadolibre.com.co/" + quote_plus(query).replace("+", "-")
+    """Fallback real-data search using Mercado Libre's public web index."""
+    search_url = "https://www.bing.com/search"
     response = requests.get(
-        url,
+        search_url,
+        params={"q": f'site:mercadolibre.com.co "{query}"', "count": min(limit, 20)},
         headers={
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140 Safari/537.36",
             "Accept-Language": "es-CO,es;q=0.9,en;q=0.7",
-            "Accept": "text/html,application/xhtml+xml",
         },
         timeout=25,
-        allow_redirects=True,
     )
     response.raise_for_status()
     html = response.text
     products = []
     seen = set()
 
-    for raw in re.findall(r'<script[^>]+type=["\\']application/ld\\+json["\\'][^>]*>(.*?)</script>', html, re.I | re.S):
-        try:
-            data = json.loads(raw.strip())
-        except (TypeError, ValueError):
+    links = re.findall(r'<a[^>]+href=["\\'](https://(?:articulo|www)\\.mercadolibre\\.com\\.co/[^"\\']+)["\\'][^>]*>(.*?)</a>', html, re.I | re.S)
+    for permalink, raw_title in links:
+        match = re.search(r"(MCO-\\d+)", permalink)
+        if not match:
             continue
-        stack = data if isinstance(data, list) else [data]
-        while stack:
-            node = stack.pop()
-            if isinstance(node, dict):
-                if isinstance(node.get("@graph"), list):
-                    stack.extend(node["@graph"])
-                if isinstance(node.get("item"), dict):
-                    stack.append(node["item"])
-                if str(node.get("@type", "")).lower() != "product":
-                    continue
-                name = str(node.get("name") or "").strip()
-                image = node.get("image")
-                if isinstance(image, list):
-                    image = image[0] if image else None
-                offers = node.get("offers") or {}
-                if isinstance(offers, list):
-                    offers = offers[0] if offers else {}
-                price = offers.get("price") if isinstance(offers, dict) else None
-                permalink = (offers.get("url") if isinstance(offers, dict) else None) or node.get("url")
-                match = re.search(r"(MCO-\d+)", str(permalink or ""))
-                if not match or not name or not image or price in (None, ""):
-                    continue
-                item_id = match.group(1)
-                if item_id in seen:
-                    continue
-                try:
-                    amount = float(str(price).replace(".", "").replace(",", "."))
-                except ValueError:
-                    continue
-                seen.add(item_id)
-                products.append({
-                    "id": item_id, "title": name, "thumbnail": str(image),
-                    "permalink": str(permalink), "price": amount, "currency_id": "COP",
-                })
-                if len(products) >= min(max(limit, 1), 20):
-                    return {"results": products, "_source": "public_web"}
+        item_id = match.group(1)
+        if item_id in seen:
+            continue
+        title = re.sub(r"<[^>]+>", " ", raw_title)
+        title = re.sub(r"\\s+", " ", title).strip()
+        if not title:
+            continue
+        try:
+            page = requests.get(
+                permalink,
+                headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140 Safari/537.36", "Accept-Language": "es-CO,es;q=0.9"},
+                timeout=20,
+                allow_redirects=True,
+            )
+            if not page.ok:
+                continue
+            page_html = page.text
+            price_match = re.search(r'"price"\\s*:\\s*"?([0-9.]+)"?', page_html)
+            image_match = re.search(r'<meta[^>]+property=["\\']og:image["\\'][^>]+content=["\\']([^"\\']+)', page_html, re.I)
+            amount = float(price_match.group(1).replace(".", "")) if price_match else None
+            image = image_match.group(1) if image_match else ""
+            if not amount or amount <= 0:
+                continue
+        except (requests.RequestException, ValueError):
+            continue
+        seen.add(item_id)
+        products.append({
+            "id": item_id,
+            "title": title[:500],
+            "thumbnail": image,
+            "permalink": permalink,
+            "price": amount,
+            "currency_id": "COP",
+        })
+        if len(products) >= min(max(limit, 1), 20):
+            break
 
+    print(f"[Mercado Libre] fallback web real '{query}': {len(products)} productos")
     return {"results": products, "_source": "public_web"}
 
 
 def fetch_mercadolibre(query, limit=20):
     try:
         data = _get(MELI_SEARCH, {"q": query, "limit": min(limit, 50)}, include_auth=True)
-    except RuntimeError as exc:
-        if "403" not in str(exc):
+    except (RuntimeError, requests.RequestException) as exc:
+        if isinstance(exc, RuntimeError) and "403" not in str(exc):
             raise
-        print(f"[Mercado Libre] OAuth rechazado para '{query}'; usando búsqueda pública real como respaldo.")
+        print(f"[Mercado Libre] API no disponible para '{query}'; usando búsqueda web real como respaldo: {exc}")
         data = _public_search(query, limit)
     products = []
 
