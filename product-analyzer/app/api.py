@@ -122,7 +122,7 @@ def _publish_external_product(conn, product_id, product, platform_label):
 
 @core_router.post("/store/sync")
 def sync_store_catalog():
-    """Importa 15 Amazon + 5 Mercado Libre reales y los publica en la tienda."""
+    """Importa 20 Amazon + 5 Mercado Libre reales y los publica en la tienda."""
     conn = get_connection()
     amazon_imported = []
     meli_imported = []
@@ -137,13 +137,13 @@ def sync_store_catalog():
             """)
             existing = {(str(row["platform"]).lower(), str(row["external_id"]).upper()) for row in cur.fetchall()}
 
-        # Amazon: hasta 15 productos reales nuevos.
+        # Amazon: hasta 20 productos reales nuevos y válidos.
         try:
             amazon_products = fetch_amazon_products(
                 {external_id for platform, external_id in existing if platform == "amazon"},
-                15,
+                20,
             )
-            for category, product in amazon_products[:15]:
+            for category, product in amazon_products[:20]:
                 try:
                     product_id = upsert_product(conn, "amazon", category, product)
                     with conn.cursor() as cur:
@@ -219,7 +219,7 @@ def sync_store_catalog():
 
 
 @core_router.post("/amazon/sync")
-def sync_amazon_store(limit: int = Query(15, ge=1, le=15)):
+def sync_amazon_store(limit: int = Query(20, ge=1, le=20)):
     """Importa productos reales de Amazon y los publica."""
     result = sync_store_catalog()
     return result["amazon"]
