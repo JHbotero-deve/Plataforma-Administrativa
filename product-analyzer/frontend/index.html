@@ -17,6 +17,15 @@
 .store-stage{height:520px;display:grid;place-items:center;position:relative;perspective:1100px}
 .store-stage:after{content:"";position:absolute;bottom:72px;width:300px;height:48px;border-radius:50%;background:#000;filter:blur(18px)}
 .store-headphones{width:350px;height:300px;position:relative;transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,-18deg));transform-style:preserve-3d;transition:transform .12s ease}
+.store-brand-stage{perspective:1100px}
+.store-brand-orbit{width:340px;height:340px;position:relative;display:grid;place-items:center;transform:rotateX(12deg) rotateY(-14deg)}
+.store-brand-mark{width:150px;height:150px;border-radius:42px;background:#b6f23a;color:#090d08;display:grid;place-items:center;font:800 92px/1 "Space Grotesk";box-shadow:0 35px 70px rgba(0,0,0,.45),0 0 80px rgba(182,242,58,.08);position:relative;z-index:3}
+.store-brand-ring{position:absolute;border:1px solid rgba(182,242,58,.28);border-radius:50%;transform-style:preserve-3d}
+.store-brand-ring.ring-one{width:290px;height:290px;transform:rotateX(68deg) rotateZ(18deg)}
+.store-brand-ring.ring-two{width:230px;height:230px;border-color:rgba(255,255,255,.12);transform:rotateY(68deg) rotateZ(-24deg)}
+.store-brand-label{position:absolute;bottom:0;right:-4px;padding:10px 12px;border:1px solid rgba(255,255,255,.12);background:rgba(10,10,10,.72);border-radius:8px;font-size:9px;color:#aaa;z-index:4}
+.store-brand-label b{display:block;color:#fff;font:800 12px "Space Grotesk";letter-spacing:.08em}
+.store-brand-label span{display:block;margin-top:2px;font-size:8px;letter-spacing:.12em}
 .store-band{position:absolute;left:60px;top:8px;width:230px;height:190px;border:28px solid #252525;border-bottom-color:transparent;border-radius:50% 50% 43% 43%;box-shadow:0 0 0 2px #464646,0 30px 45px rgba(0,0,0,.55)}
 .store-cup{position:absolute;top:132px;width:98px;height:118px;border-radius:45px 45px 34px 34px;background:linear-gradient(145deg,#454545,#111);border:2px solid #676767;box-shadow:inset 12px 0 22px rgba(255,255,255,.1),inset -15px -10px 22px rgba(0,0,0,.7),0 22px 28px rgba(0,0,0,.5);transform:translateZ(42px)}
 .store-cup:after{content:"";position:absolute;inset:19px 17px;border-radius:50%;background:radial-gradient(circle,#080808 0 38%,#303030 40% 58%,#111 60%)}
@@ -65,9 +74,13 @@
       <p class="store-copy">La experiencia visual inspirada en Figma Make queda integrada al Central existente: catálogo real, precios, imágenes, scoring y Studio siguen viniendo de la API.</p>
       <div class="actions"><button class="btn primary" onclick="document.getElementById('productos').scrollIntoView({behavior:'smooth'})">Explorar productos</button><button class="btn ghost" onclick="document.getElementById('studio').scrollIntoView({behavior:'smooth'})">Ver experiencia 3D</button></div>
     </div>
-    <div class="store-stage" id="storeHeroStage">
-      <div class="store-tag"><b>3D STUDIO</b>Interacción en tiempo real</div>
-      <div class="store-headphones" id="storeHeroHp"><div class="store-band"></div><div class="store-arm left"></div><div class="store-arm right"></div><div class="store-cup store-left"></div><div class="store-cup store-right"></div></div>
+    <div class="store-stage store-brand-stage" id="storeHeroStage" aria-label="Central Commerce OS">
+      <div class="store-brand-orbit">
+        <div class="store-brand-mark">C</div>
+        <div class="store-brand-ring ring-one"></div>
+        <div class="store-brand-ring ring-two"></div>
+        <div class="store-brand-label"><b>CENTRAL</b><span>COMMERCE OS</span></div>
+      </div>
     </div>
   </div>
 </section>
