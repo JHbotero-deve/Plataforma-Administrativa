@@ -215,25 +215,119 @@ def _amazon_image_from_html(url: str) -> str | None:
         return None
 
 
-def search_products(keywords: str, limit: int = 10) -> list[dict[str, Any]]:
-    data = _request(
-        "searchItems",
-        {
-            "keywords": keywords,
-            "searchIndex": "All",
-            "itemCount": min(max(limit, 1), 10),
-            "sortBy": "Relevance",
-            "resources": [
-                "images.primary.large",
-                "images.primary.medium",
-                "images.primary.small",
-                "itemInfo.title",
-                "offersV2.listings.price",
-            ],
-        },
-    )
+def _search_amazon_html(keywords: str, limit: int = 10) -> list[dict[str, Any]]:
+    """Fallback real: obtiene candidatos directamente de resultados públicos de Amazon."""
+    try:
+        response = requests.get(
+            "https://www.amazon.com/s",
+            params={"k": keywords},
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/140.0 Safari/537.36"
+                ),
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+            timeout=25,
+            allow_redirects=True,
+        )
+        response.raise_for_status()
+        html = response.text
+        blocks = re.findall(
+            r'<div[^>]+data-asin=["\']([A-Z0-9]{10})["\'][^>]*'
+            r'data-component-type=["\']s-search-result["\'][^>]*>.*?</div>\\s*</div>',
+            html,
+            re.IGNORECASE | re.DOTALL,
+        )
+        results = []
+        seen = set()
 
-    return ((data.get("searchResult") or {}).get("items") or [])
+        for asin in blocks:
+            if asin in seen:
+                continue
+            seen.add(asin)
+            marker = f'data-asin="{asin}"'
+            start = html.find(marker)
+            if start < 0:
+                marker = f"data-asin='{asin}'"
+                start = html.find(marker)
+            if start < 0:
+                continue
+            chunk = html[start:start + 45000]
+
+            title_match = re.search(
+                r'<span[^>]+class=["\'][^"\']*a-text-normal[^"\']*["\'][^>]*>(.*?)</span>',
+                chunk, re.IGNORECASE | re.DOTALL)
+            title = re.sub(r"<[^>]+>", " ", title_match.group(1)) if title_match else ""
+            title = re.sub(r"\\s+", " ", title).strip()
+
+            image = None
+            dynamic = re.search(r'data-a-dynamic-image=["\']([^"\']+)["\']', chunk, re.IGNORECASE)
+            if dynamic:
+                raw = dynamic.group(1).replace("&quot;", '"')
+                m = re.search(r'"(https?://[^"]+)"', raw)
+                image = m.group(1) if m else None
+            if not image:
+                m = re.search(r'<img[^>]+src=["\'](https?://[^"\']+)["\']', chunk, re.IGNORECASE)
+                image = m.group(1) if m else None
+
+            price_match = re.search(
+                r'<span[^>]+class=["\'][^"\']*a-price-whole[^"\']*["\'][^>]*>([0-9,]+)</span>'
+                r'(?:.*?<span[^>]+class=["\'][^"\']*a-price-fraction[^"\']*["\'][^>]*>([0-9]+)</span>)?',
+                chunk, re.IGNORECASE | re.DOTALL)
+            if not price_match:
+                continue
+
+            try:
+                amount = float(price_match.group(1).replace(",", "") + "." + (price_match.group(2) or "00"))
+            except ValueError:
+                continue
+
+            if not title or not image or amount <= 0:
+                continue
+
+            results.append({
+                "asin": asin,
+                "detailPageURL": f"https://www.amazon.com/dp/{asin}",
+                "itemInfo": {"title": {"displayValue": title}},
+                "offersV2": {"listings": [{"price": {"amount": amount, "currency": "USD"}}]},
+                "images": {"primary": {"large": {"url": image}}},
+            })
+            if len(results) >= min(max(limit, 1), 20):
+                break
+
+        return results
+    except requests.RequestException as exc:
+        print(f"[amazon] fallback búsqueda HTML error: {exc}")
+        return []
+
+
+def search_products(keywords: str, limit: int = 10) -> list[dict[str, Any]]:
+    try:
+        data = _request(
+            "searchItems",
+            {
+                "keywords": keywords,
+                "searchIndex": "All",
+                "itemCount": min(max(limit, 1), 10),
+                "sortBy": "Relevance",
+                "resources": [
+                    "images.primary.large",
+                    "images.primary.medium",
+                    "images.primary.small",
+                    "itemInfo.title",
+                    "offersV2.listings.price",
+                ],
+            },
+        )
+        items = ((data.get("searchResult") or {}).get("items") or [])
+        if items:
+            return items
+    except Exception as exc:
+        print(f"[amazon] Creators API no disponible para '{keywords}': {exc}")
+
+    return _search_amazon_html(keywords, limit)
 
 
 def _map_item(
