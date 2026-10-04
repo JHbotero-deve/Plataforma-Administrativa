@@ -1,4 +1,4 @@
-"""Integración Wompi Colombia para Web Checkout y webhooks."""
+
 
 import hashlib
 import hmac
@@ -121,6 +121,169 @@ def create_product_checkout(req: ProductCheckout):
     if req.customer_phone: params += [("customer-data:phone-number",req.customer_phone),("customer-data:phone-number-prefix","+57")]
     if redirect: params.append(("redirect-url",redirect))
     return {"order_id":order["id"],"payment_id":payment["id"],"product_id":req.product_id,"reference":reference,"amount_in_cents":cents,"currency":currency,"checkout_url":f"{_checkout_base_url()}?{urlencode(params)}"}
+
+
+@router.post("/checkout/cart")
+async def create_cart_checkout(request: Request):
+    """Checkout de carrito: crea UN pedido con varios ítems y devuelve la URL de Wompi."""
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="JSON inválido")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Cuerpo inválido")
+
+    # --- Cliente (acepta campos planos o anidados en "customer") ---
+    customer = body.get("customer") if isinstance(body.get("customer"), dict) else {}
+    name = str(body.get("customer_name") or customer.get("name") or body.get("name") or "").strip()
+    email = str(body.get("customer_email") or customer.get("email") or body.get("email") or "").strip().lower()
+    phone = body.get("customer_phone") or customer.get("phone") or body.get("phone")
+    phone = str(phone).strip() if phone else None
+    if not name or "@" not in email:
+        raise HTTPException(status_code=400, detail="Nombre y correo válidos son obligatorios")
+
+    # --- Ítems del carrito (acepta "items" o "cart"; product_id / productId / id) ---
+    raw_items = body.get("items") or body.get("cart") or []
+    if not isinstance(raw_items, list) or not raw_items:
+        raise HTTPException(status_code=400, detail="El carrito está vacío")
+    if len(raw_items) > 30:
+        raise HTTPException(status_code=400, detail="Demasiados ítems en el carrito")
+
+    wanted: dict[int, dict] = {}
+    for it in raw_items:
+        if not isinstance(it, dict):
+            raise HTTPException(status_code=400, detail="Ítem de carrito inválido")
+        try:
+            pid = int(it.get("product_id") or it.get("productId") or it.get("id"))
+            qty = int(it.get("quantity") or it.get("qty") or 1)
+            pub_raw = it.get("publication_id") or it.get("publicationId")
+            pub = int(pub_raw) if pub_raw else None
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Ítem de carrito inválido")
+        if qty < 1 or qty > 100:
+            raise HTTPException(status_code=400, detail="Cantidad inválida")
+        entry = wanted.setdefault(pid, {"qty": 0, "publication_id": pub})
+        entry["qty"] += qty
+        if entry["qty"] > 100:
+            raise HTTPException(status_code=400, detail="Cantidad inválida")
+
+    # --- Configuración Wompi ---
+    public_key = _required("WOMPI_PUBLIC_KEY")
+    currency = os.getenv("WOMPI_CURRENCY", "COP").strip().upper()
+    environment = os.getenv("WOMPI_ENVIRONMENT", "prod").strip().lower()
+    if currency != "COP":
+        raise HTTPException(status_code=500, detail="Wompi Colombia requiere moneda COP")
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT p.id, p.title, p.image_url, p.product_url, p.current_price, p.stock,
+                          pc.id AS publication_id, pc.sale_price, pc.cost_price,
+                          pl.name AS platform_name
+                   FROM products p
+                   LEFT JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
+                   LEFT JOIN platforms pl ON pl.id=p.platform_id
+                   WHERE p.id = ANY(%s) AND p.is_active=TRUE""",
+                (list(wanted.keys()),),
+            )
+            rows = {r["id"]: r for r in cur.fetchall()}
+
+            # --- Validar y calcular cada línea con precios del servidor ---
+            lines = []
+            for pid, entry in wanted.items():
+                p = rows.get(pid)
+                if not p:
+                    raise HTTPException(status_code=404, detail=f"Producto {pid} no encontrado")
+                if entry["publication_id"] and p["publication_id"] != entry["publication_id"]:
+                    raise HTTPException(status_code=409, detail="La publicación no corresponde al producto solicitado")
+                qty = entry["qty"]
+                if p["stock"] is not None and qty > p["stock"]:
+                    raise HTTPException(status_code=409, detail=f"Stock insuficiente: {p['title']}")
+                sale = float(p["sale_price"] or p["current_price"] or 0)
+                cost = float(p["cost_price"] if p["cost_price"] is not None else p["current_price"] or 0)
+                if sale <= 0:
+                    raise HTTPException(status_code=400, detail=f"Producto sin precio de venta: {p['title']}")
+                lines.append({
+                    "product_id": pid, "publication_id": p["publication_id"],
+                    "title": p["title"], "qty": qty, "sale": sale, "cost": cost,
+                })
+
+            total = sum(l["sale"] * l["qty"] for l in lines)
+            cost_total = sum(l["cost"] * l["qty"] for l in lines)
+            total_qty = sum(l["qty"] for l in lines)
+            profit = total - cost_total
+            cents = _amount_to_cents(total)
+            reference = f"ORD-{secrets.token_hex(10).upper()}"
+            signature = _integrity_signature(reference, cents, currency)
+
+            first = lines[0]
+            first_row = rows[first["product_id"]]
+            title_snapshot = first["title"] if len(lines) == 1 else f"{first['title']} y {len(lines) - 1} más"
+
+            # --- Pedido (cabecera) ---
+            cur.execute(
+                """INSERT INTO store_orders
+                   (reference, product_id, publication_id, customer_name, customer_email, customer_phone,
+                    quantity, unit_price, cost_unit_price, total_amount, estimated_profit, currency,
+                    status, payment_status, source,
+                    product_title_snapshot, product_image_snapshot, product_url_snapshot, platform_snapshot)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'PENDING','PENDING','TIENDA',%s,%s,%s,%s)
+                   RETURNING id, reference""",
+                (reference, first["product_id"], first["publication_id"], name, email, phone,
+                 total_qty, total / total_qty, cost_total / total_qty, total, profit, currency,
+                 title_snapshot, first_row["image_url"], first_row["product_url"], first_row["platform_name"]),
+            )
+            order = cur.fetchone()
+
+            # --- Pedido (ítems) ---
+            for l in lines:
+                cur.execute(
+                    """INSERT INTO store_order_items
+                       (order_id, product_id, publication_id, product_title, quantity,
+                        unit_price, cost_unit_price, line_total, estimated_profit)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (order["id"], l["product_id"], l["publication_id"], l["title"], l["qty"],
+                     l["sale"], l["cost"], l["sale"] * l["qty"], (l["sale"] - l["cost"]) * l["qty"]),
+                )
+
+            # --- Transacción de pago ---
+            cur.execute(
+                """INSERT INTO payment_transactions
+                   (reference, provider, product_id, order_id, customer_email,
+                    amount_in_cents, currency, status, environment)
+                   VALUES (%s,'wompi',%s,%s,%s,%s,%s,'PENDING',%s) RETURNING id, reference""",
+                (reference, first["product_id"], order["id"], email, cents, currency, environment),
+            )
+            payment = cur.fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+
+    redirect = body.get("redirect_url") or os.getenv("WOMPI_REDIRECT_URL", "").strip() or None
+    params = [
+        ("public-key", public_key),
+        ("currency", currency),
+        ("amount-in-cents", str(cents)),
+        ("reference", reference),
+        ("signature:integrity", signature),
+        ("customer-data:email", email),
+        ("customer-data:full-name", name),
+    ]
+    if phone:
+        params += [("customer-data:phone-number", phone), ("customer-data:phone-number-prefix", "+57")]
+    if redirect:
+        params.append(("redirect-url", redirect))
+
+    return {
+        "order_id": order["id"],
+        "payment_id": payment["id"],
+        "reference": reference,
+        "items": len(lines),
+        "amount_in_cents": cents,
+        "currency": currency,
+        "checkout_url": f"{_checkout_base_url()}?{urlencode(params)}",
+    }
 
 
 class SubscriptionCheckout(BaseModel):
