@@ -16,74 +16,51 @@ _TOKEN: str | None = None
 _TOKEN_EXPIRES_AT = 0.0
 
 
-def _token_endpoints() -> list[str]:
-    configured = CREDENTIAL_VERSION[:3]
-    endpoints = {
-        "3.1": "https://api.amazon.com/auth/o2/token",
-        "3.2": "https://api.amazon.co.uk/auth/o2/token",
-        "3.3": "https://api.amazon.co.jp/auth/o2/token",
-    }
-    preferred = endpoints.get(configured, endpoints["3.1"])
-    return [preferred] + [url for url in endpoints.values() if url != preferred]
-
-
 def _access_token() -> str:
-    global _TOKEN, _TOKEN_EXPIRES_AT
+    global _TOKEN, _TOKEN_EXPIRES_AT, _TOKEN_VERSION
 
     if _TOKEN and time.time() < _TOKEN_EXPIRES_AT - 120:
         return _TOKEN
 
     if not CREDENTIAL_ID or not CREDENTIAL_SECRET or not PARTNER_TAG:
-        raise RuntimeError(
-            "Faltan AMAZON_CREDENTIAL_ID, AMAZON_CREDENTIAL_SECRET o AMAZON_PARTNER_TAG"
-        )
+        raise RuntimeError("Faltan AMAZON_CREDENTIAL_ID, AMAZON_CREDENTIAL_SECRET o AMAZON_PARTNER_TAG")
 
-    last_error = "sin respuesta"
-
-    for endpoint in _token_endpoints():
+    candidates = [CREDENTIAL_VERSION] if CREDENTIAL_VERSION in {"2.1","2.2","2.3","3.1","3.2","3.3"} else ["3.1","2.1"]
+    configs = {
+        "3.1": ("https://api.amazon.com/auth/o2/token", "creatorsapi::default", False),
+        "3.2": ("https://api.amazon.co.uk/auth/o2/token", "creatorsapi::default", False),
+        "3.3": ("https://api.amazon.co.jp/auth/o2/token", "creatorsapi::default", False),
+        "2.1": ("https://creatorsapi.auth.us-east-1.amazoncognito.com/oauth2/token", "creatorsapi/default", True),
+        "2.2": ("https://creatorsapi.auth.eu-south-2.amazoncognito.com/oauth2/token", "creatorsapi/default", True),
+        "2.3": ("https://creatorsapi.auth.us-west-2.amazoncognito.com/oauth2/token", "creatorsapi/default", True),
+    }
+    errors = []
+    for version in candidates:
+        endpoint, scope, cognito = configs[version]
         try:
-            response = requests.post(
-                endpoint,
-                headers={"Content-Type": "application/json"},
-                json={
-                    "grant_type": "client_credentials",
-                    "client_id": CREDENTIAL_ID,
-                    "client_secret": CREDENTIAL_SECRET,
-                    "scope": "creatorsapi::default",
-                },
-                timeout=20,
-            )
-
+            if cognito:
+                response = requests.post(endpoint, headers={"Content-Type":"application/x-www-form-urlencoded"}, data={"grant_type":"client_credentials","client_id":CREDENTIAL_ID,"client_secret":CREDENTIAL_SECRET,"scope":scope}, timeout=20)
+            else:
+                response = requests.post(endpoint, headers={"Content-Type":"application/json"}, json={"grant_type":"client_credentials","client_id":CREDENTIAL_ID,"client_secret":CREDENTIAL_SECRET,"scope":scope}, timeout=20)
             if response.ok:
                 data = response.json()
                 token = data.get("access_token")
-
                 if token:
                     _TOKEN = token
-                    _TOKEN_EXPIRES_AT = time.time() + int(
-                        data.get("expires_in", 3600)
-                    )
+                    _TOKEN_VERSION = version
+                    _TOKEN_EXPIRES_AT = time.time() + int(data.get("expires_in",3600))
+                    print("[amazon] Creators API autenticado con credencial " + version + ".")
                     return token
-
-                last_error = "respuesta sin access_token"
-
-            else:
-                try:
-                    detail = response.json()
-                    detail = (
-                        detail.get("error_description")
-                        or detail.get("error")
-                        or str(detail)
-                    )
-                except ValueError:
-                    detail = response.text[:300]
-
-                last_error = f"HTTP {response.status_code}: {detail}"
-
+            try:
+                detail = response.json()
+                detail = detail.get("error_description") or detail.get("error") or str(detail)
+            except ValueError:
+                detail = response.text[:300]
+            errors.append(version + ": HTTP " + str(response.status_code) + ": " + str(detail))
         except requests.RequestException as exc:
-            last_error = str(exc)
+            errors.append(version + ": " + type(exc).__name__ + ": " + str(exc))
+    raise RuntimeError("Amazon OAuth rechazó las credenciales; " + " | ".join(errors))
 
-    raise RuntimeError(f"Amazon OAuth rechazó las credenciales: {last_error}")
 
 
 def _request(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -95,7 +72,10 @@ def _request(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
         return requests.post(
             f"{BASE_URL}/catalog/v1/{operation}",
             headers={
-                "Authorization": f"Bearer {_access_token()}",
+                "Authorization": (
+                    f"Bearer {_access_token()}"
+                    + (f", Version {_TOKEN_VERSION}" if _TOKEN_VERSION.startswith("2.") else "")
+                ),
                 "Content-Type": "application/json",
                 "x-marketplace": MARKETPLACE,
             },
@@ -106,9 +86,10 @@ def _request(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     response = do_request()
 
     if response.status_code == 401:
-        global _TOKEN, _TOKEN_EXPIRES_AT
+        global _TOKEN, _TOKEN_EXPIRES_AT, _TOKEN_VERSION
         _TOKEN = None
         _TOKEN_EXPIRES_AT = 0
+        _TOKEN_VERSION = ""
         response = do_request()
 
     response.raise_for_status()
