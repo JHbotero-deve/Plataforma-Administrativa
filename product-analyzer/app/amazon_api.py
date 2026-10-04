@@ -284,6 +284,57 @@ def _search_amazon_html(keywords: str, limit: int = 10) -> list[dict[str, Any]]:
         return []
 
 
+def _search_amazon_web(keywords: str, limit: int = 10) -> list[dict[str, Any]]:
+    """Fallback real usando el índice web de Bing cuando Amazon bloquea HTML directo."""
+    try:
+        response = requests.get(
+            "https://www.bing.com/search",
+            params={"q": f'site:amazon.com/dp "{keywords}"', "count": min(max(limit * 2, 10), 30)},
+            headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140 Safari/537.36", "Accept-Language": "en-US,en;q=0.9"},
+            timeout=25,
+        )
+        response.raise_for_status()
+        page = response.text
+        products = []
+        seen = set()
+        pattern = re.compile(r"href=[\"'](https?://(?:www\.|us\.)?amazon\.com/(?:[^\"']*?/)?(?:dp|gp/product)/([A-Z0-9]{10})(?:[/?][^\"']*)?)[\"']", re.I)
+        for match in pattern.finditer(page):
+            url, asin = match.group(1), match.group(2).upper()
+            if asin in seen:
+                continue
+            chunk = page[max(0, match.start() - 2500):min(len(page), match.end() + 5000)]
+            title_match = re.search(r"<h2[^>]*>(.*?)</h2>|<h3[^>]*>(.*?)</h3>|<a[^>]*>(.*?)</a>", chunk, re.I | re.S)
+            title = ""
+            if title_match:
+                title = next((x for x in title_match.groups() if x), "")
+            title = re.sub(r"<[^>]+>", " ", title)
+            title = re.sub(r"\s+", " ", title).strip()
+            price_match = re.search(r"\$\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)", chunk)
+            if not price_match or not title or title.lower() in {"amazon.com", "amazon"}:
+                continue
+            try:
+                amount = float(price_match.group(1).replace(",", ""))
+            except ValueError:
+                continue
+            if amount <= 0:
+                continue
+            seen.add(asin)
+            products.append({
+                "asin": asin,
+                "detailPageURL": url,
+                "itemInfo": {"title": {"displayValue": title[:500]}},
+                "offersV2": {"listings": [{"price": {"amount": amount, "currency": "USD"}}]},
+                "images": {"primary": {"large": {"url": f"https://images-na.ssl-images-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg"}}},
+            })
+            if len(products) >= min(max(limit, 1), 20):
+                break
+        print(f"[amazon] fallback Bing real '{keywords}': {len(products)} productos")
+        return products
+    except (requests.RequestException, ValueError) as exc:
+        print(f"[amazon] fallback Bing error: {exc}")
+        return []
+
+
 def search_products(keywords: str, limit: int = 10) -> list[dict[str, Any]]:
     try:
         data = _request(
@@ -308,7 +359,10 @@ def search_products(keywords: str, limit: int = 10) -> list[dict[str, Any]]:
     except Exception as exc:
         print(f"[amazon] Creators API no disponible para '{keywords}': {exc}")
 
-    return _search_amazon_html(keywords, limit)
+    html_results = _search_amazon_html(keywords, limit)
+    if html_results:
+        return html_results
+    return _search_amazon_web(keywords, limit)
 
 
 def _map_item(
