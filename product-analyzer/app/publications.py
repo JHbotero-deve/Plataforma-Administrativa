@@ -160,6 +160,38 @@ def update_publication(publication_id: int, payload: PublicationPayload):
         with conn.cursor() as cur:
             cur.execute(
                 """
+                SELECT pc.product_id, p.title, p.image_url, p.image_gallery, p.product_url,
+                       p.affiliate_url, p.current_price, p.currency, pl.name AS platform,
+                       s.opportunity_score
+                FROM published_cards pc
+                JOIN products p ON p.id = pc.product_id
+                JOIN platforms pl ON pl.id = p.platform_id
+                LEFT JOIN product_scores s ON s.product_id = p.id
+                WHERE pc.id = %s AND p.is_active = TRUE
+                """,
+                (publication_id,),
+            )
+            current = cur.fetchone()
+            if not current:
+                raise HTTPException(status_code=404, detail="Publicación no encontrada")
+
+            if str(current["platform"]).lower() != "personal":
+                # Una publicación externa no puede convertirse en una ficha editada.
+                payload = payload.model_copy(update={
+                    "title": current["title"],
+                    "image_url": current["image_url"] or ((current["image_gallery"] or [None])[0]),
+                    "product_url": current["affiliate_url"] or current["product_url"],
+                    "sale_price": current["current_price"],
+                    "cost_price": current["current_price"],
+                    "price_display": (
+                        f"{current['current_price']:,.0f} {current['currency'] or 'COP'}"
+                        if current["current_price"] is not None else None
+                    ),
+                    "opportunity_score": current["opportunity_score"],
+                })
+
+            cur.execute(
+                """
                 UPDATE published_cards
                 SET title=%s, subtitle=%s, price_display=%s, image_url=%s, product_url=%s,
                     sale_price=%s, cost_price=%s, profit_amount=%s, profit_margin_pct=%s,
