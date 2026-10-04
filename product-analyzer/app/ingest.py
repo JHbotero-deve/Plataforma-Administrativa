@@ -143,7 +143,7 @@ def _public_search(query, limit=20):
                 continue
             page_html = page.text
             price_match = re.search(r'"price"\\s*:\\s*"?([0-9.]+)"?', page_html)
-            image_match = re.search(r'<meta[^>]+property=["\\']og:image["\\'][^>]+content=["\\']([^"\\']+)', page_html, re.I)
+            image_match = re.search(r"<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)", page_html, re.I)
             amount = float(price_match.group(1).replace(".", "")) if price_match else None
             image = image_match.group(1) if image_match else ""
             if not amount or amount <= 0:
