@@ -64,35 +64,13 @@
 <nav class="menu"><div class="label">Principal</div>
 <button class="nav active" data-target="resumen"><i>⌂</i><span>Resumen</span></button><button class="nav" data-target="pedidos"><i>▣</i><span>Pedidos</span><em class="badge">0</em></button><button class="nav" data-target="productos"><i>◈</i><span>Productos</span></button><button class="nav" data-target="clientes"><i>◉</i><span>Clientes</span></button>
 <div class="label" style="margin-top:18px">Gestión</div><button class="nav" data-target="analitica"><i>◒</i><span>Analítica</span></button><button class="nav" data-target="campanas"><i>◭</i><span>Campañas</span></button><button class="nav" data-target="studio"><i>◉</i><span>Estudio 3D</span></button></nav></div>
-<div><div class="promo"><em>Central conectado</em><strong>Gestión comercial</strong><p>Catálogo real, scoring, importación y Wompi preparado.</p></div><div class="profile"><div class="avatar">AD</div><div><b>Administrador</b><small>Central · Operación</small></div></div></div></aside>
+<div><div class="profile"><div class="avatar">AD</div><div><b>Administrador</b><small>Central · Operación</small></div></div></div></aside>
 <main class="main"><header class="top"><div><div class="crumb">Gestión comercial / <b id="crumb">Resumen</b></div><h1 id="pageTitle">Centro de ventas</h1></div><div class="actions"><button class="control">▣ <span id="date">01–30 sep 2026</span></button><button class="btn ghost" id="refresh">↻ Actualizar</button><a class="btn ghost" href="/tienda" target="_blank" rel="noopener noreferrer">Ver tienda pública →</a><button class="btn primary" id="openImport">＋ Importar</button><button class="btn ghost mobile" id="menu">☰</button></div></header>
 <div class="content">
 
-<section class="store-hero" id="local">
-  <div class="store-hero-in">
-    <div>
-      <div class="store-kicker">Producto real · experiencia 3D</div>
-      <h2>Conoce el producto.<br><span>Vive la experiencia.</span></h2>
-      <p class="store-copy">La experiencia visual está integrada al sistema existente: catálogo real, precios, imágenes, puntuación y Estudio provienen de la API.</p>
-      <div class="actions"><button class="btn primary" onclick="document.getElementById('productos').scrollIntoView({behavior:'smooth'})">Explorar productos</button><button class="btn ghost" onclick="document.getElementById('studio').scrollIntoView({behavior:'smooth'})">Ver experiencia 3D</button></div>
-    </div>
-    <div class="store-stage store-brand-stage" id="storeHeroStage" aria-label="Central Commerce OS">
-      <div class="store-brand-orbit">
-        <div class="store-brand-mark">C</div>
-        <div class="store-brand-ring ring-one"></div>
-        <div class="store-brand-ring ring-two"></div>
-        <div class="store-brand-label"><b>CENTRAL</b><span>COMMERCE OS</span></div>
-      </div>
-    </div>
-  </div>
-</section>
 <section class="section" id="publicaciones">
   <div class="head"><div><div class="eyebrow">01 · tienda</div><h2 class="title">Publicaciones de Central</h2><p class="copy">Las tarjetas publicadas rotan automáticamente. La imagen es protagonista.</p></div><div class="pub-controls"><button class="control" id="pubPrev">‹</button><span class="pub-counter" id="pubCounter">0 / 0</span><button class="control" id="pubNext">›</button></div></div>
   <div class="publication-stage" id="publicationStage"><div class="pub-empty">Cargando publicaciones…</div></div>
-</section>
-<section class="store-experience">
-  <div class="store-experience-stage" id="storeFeatureStage"><div class="store-headphones" id="storeFeatureHp"><div class="store-band"></div><div class="store-arm left"></div><div class="store-arm right"></div><div class="store-cup store-left"></div><div class="store-cup store-right"></div></div></div>
-  <div class="store-experience-copy"><div class="eyebrow">Experiencia de producto 3D</div><h3>Gira, descubre y compra.</h3><p>La capa visual no sustituye el Commerce OS. Se apoya en el catálogo real y deja el Studio existente disponible para seleccionar productos y guardar modelos GLB.</p><div class="store-specs"><div class="store-spec"><b>DATOS REALES</b><small>API + PostgreSQL</small></div><div class="store-spec"><b>LISTO PARA 3D</b><small>GLB / procedimental</small></div><div class="store-spec"><b>RESPONSIVE</b><small>Mobile + desktop</small></div></div></div>
 </section>
 <section class="section" id="resumen"><div class="head"><div><div class="eyebrow">01 · resumen</div><h2 class="title">Rendimiento de Central</h2><p class="copy">Datos reales calculados por el backend conectado.</p></div><span class="pill" id="status">Conectando API</span></div><div class="grid4"><div class="metric"><span>Productos activos</span><strong class="lime" id="mProducts">—</strong></div><div class="metric"><span>Oportunidades altas</span><strong id="mHigh">—</strong></div><div class="metric"><span>Mercado Libre</span><strong id="mML">—</strong></div><div class="metric"><span>Amazon</span><strong id="mAmazon">—</strong></div></div><div class="grid4" style="margin-top:12px"><div class="metric"><span>Ventas cobradas</span><strong id="mSales">—</strong></div><div class="metric"><span>Ganancia estimada</span><strong class="lime" id="mProfit">—</strong></div><div class="metric"><span>Margen</span><strong id="mMargin">—</strong></div><div class="metric"><span>Unidades vendidas</span><strong id="mUnits">—</strong></div></div></section>
 <section class="section" id="productos"><div class="head"><div><div class="eyebrow">02 · catálogo</div><h2 class="title">Oportunidades activas</h2><p class="copy">Productos reales ordenados por señal.</p></div><div class="filters"><select class="filter" id="platform"><option value="">Todas las fuentes</option><option value="mercadolibre">Mercado Libre</option><option value="amazon">Amazon</option><option value="tiktok">TikTok</option></select><select class="filter" id="category"><option value="">Todas las categorías</option><option value="ropa">Ropa</option><option value="calzado">Calzado</option><option value="accesorios">Accesorios</option></select><select class="filter" id="score"><option value="0">Todos</option><option value="75">Score ≥ 75</option><option value="50">Score ≥ 50</option></select></div></div>
