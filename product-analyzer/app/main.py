@@ -161,7 +161,7 @@ def run_pipeline():
 
 
 def publish_top_opportunities(limit=15):
-    """Publish the best real active catalog products without requiring a score row."""
+    """Publish exactly the best active Amazon products without requiring a score row."""
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -170,11 +170,23 @@ def publish_top_opportunities(limit=15):
                        p.currency, COALESCE(s.opportunity_score, 0) AS opportunity_score
                 FROM products p
                 LEFT JOIN product_scores s ON s.product_id = p.id
-                WHERE p.is_active = TRUE
+                JOIN platforms pl ON pl.id = p.platform_id
+                WHERE p.is_active = TRUE AND pl.name = 'amazon'
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
             """, (limit,))
             products = cur.fetchall()
+
+            # La tienda automática del worker queda dedicada a Amazon.
+            cur.execute("""
+                UPDATE published_cards pc
+                SET is_published = FALSE, updated_at = NOW()
+                FROM products p
+                JOIN platforms pl ON pl.id = p.platform_id
+                WHERE pc.product_id = p.id
+                  AND pl.name <> 'amazon'
+                  AND pc.is_published = TRUE
+            """)
 
             for p in products:
                 price = p["current_price"]
@@ -201,7 +213,7 @@ def publish_top_opportunities(limit=15):
                 ))
 
         conn.commit()
-        print(f"== Tienda: {len(products)} productos reales publicados ==")
+        print(f"== Tienda: {len(products)} productos Amazon reales publicados ==")
     finally:
         conn.close()
 
