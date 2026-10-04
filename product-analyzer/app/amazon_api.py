@@ -443,55 +443,6 @@ def _map_fallback_item(
     }
 
 
-AMAZON_WEB_SEED = [
-    ("Electronica", "HUANUO FlowLift Dual Monitor Stand 13-32 inch", "B07T5SY43L", 54.62),
-    ("Electronica", "HUANUO FlowLift Pro Monitor Arm 13-32 inch", "B0GK7FVTR4", 25.64),
-    ("Electronica", "VIVO Dual Monitor Desk Mount STAND-V002", "B009S750LA", 34.99),
-    ("Electronica", "ErGear Dual Monitor Arm 13-32 inch", "B0FPXFYG17", 34.99),
-    ("Electronica", "WALI Dual Monitor Stand 13-32 inch GSMP002N", "B0DGPT759H", 29.99),
-    ("Electronica", "WALI Single Monitor Mount 13-34 inch GSMP001N", "B0DGPZR6P1", 18.99),
-    ("Electronica", "ErGear Single Monitor Arm 13-34 inch", "B0FQM6QB48", 18.99),
-    ("Electronica", "HUANUO FlowLift Single Monitor Mount 13-32 inch", "B07T3KCQ94", 35.99),
-    ("Electronica", "HUANUO FlowLift Pro Dual Monitor Mount 13-32 inch", "B0GK6DT5SF", 59.99),
-    ("Electronica", "Anker USB A to USB C Cable 2-Pack 6ft", "B07DC5PPFV", 9.99),
-    ("Electronica", "Anker USB A to USB C Cable 2-Pack 3ft", "B07DD5YHMH", 8.99),
-    ("Electronica", "Anker USB C to USB C Cable 60W 2-Pack 6ft", "B088NRLMPV", 9.99),
-    ("Electronica", "Logitech M185 Wireless Mouse Swift Grey", "B004YAVF8I", 13.99),
-    ("Electronica", "Logitech G305 Lightspeed Wireless Gaming Mouse", "B07CMS5Q6P", 29.99),
-    ("Electronica", "Amazon Basics 3-Button USB Wired Mouse", "B005EJH6RW", 7.99),
-]
-
-def _seed_amazon_products(existing_ids: set[str], limit: int) -> list[tuple[str, dict[str, Any]]]:
-    results = []
-    seen = set(existing_ids)
-    for category, title, asin, price in AMAZON_WEB_SEED:
-        if asin in seen:
-            continue
-        seen.add(asin)
-        results.append((category, {
-            "platform": "amazon",
-            "external_id": asin,
-            "title": title,
-            "image_url": f"https://images-na.ssl-images-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg",
-            "gallery_urls": [f"https://images-na.ssl-images-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg"],
-            "product_url": f"https://www.amazon.com/dp/{asin}",
-            "price": price,
-            "currency": "USD",
-            "rating": None,
-            "reviews_count": 0,
-            "sales_estimate": None,
-            "source_metadata": {
-                "import_method": "amazon_web_seed",
-                "metadata_source": "amazon_web_index",
-                "marketplace": MARKETPLACE,
-                "catalog_seed": "verified-amazon-products-2026",
-            },
-        }))
-        if len(results) >= limit:
-            break
-    return results
-
-
 def fetch_amazon_products(
     existing_ids: set[str],
     limit: int = 15,
@@ -542,9 +493,4 @@ def fetch_amazon_products(
                 f"[amazon] error buscando '{keywords}': {exc}"
             )
 
-    if len(results) < limit:
-        seeded = _seed_amazon_products(existing_ids, limit - len(results))
-        results.extend(seeded)
-        if seeded:
-            print(f"[amazon] fallback seed real: {len(seeded)} productos")
     return results
