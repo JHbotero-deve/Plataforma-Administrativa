@@ -163,22 +163,25 @@ def run_pipeline():
 
 
 def publish_top_opportunities(limit=15):
-    """Materialize the first storefront batch from real catalog opportunities."""
+    """Publish the best real active catalog products without requiring a score row."""
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT p.id, p.title, p.current_price, p.image_url, p.product_url,
-                       p.currency, s.opportunity_score
+                       p.currency, COALESCE(s.opportunity_score, 0) AS opportunity_score
                 FROM products p
-                JOIN product_scores s ON s.product_id = p.id
+                LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
-                  AND (p.image_url IS NOT NULL OR jsonb_array_length(COALESCE(p.image_gallery, '[]'::jsonb)) > 0)
-                ORDER BY s.opportunity_score DESC, p.updated_at DESC
+                ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
             """, (limit,))
             products = cur.fetchall()
+
             for p in products:
+                price = p["current_price"]
+                currency = p["currency"] or "COP"
+                price_display = f"{price:,.0f} {currency}" if price is not None else "Consultar"
                 cur.execute("""
                     INSERT INTO published_cards (
                         product_id, title, subtitle, price_display, image_url, product_url,
@@ -186,19 +189,21 @@ def publish_top_opportunities(limit=15):
                         opportunity_score, footer, accent, is_published, published_at, updated_at
                     ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,TRUE,NOW(),NOW())
                     ON CONFLICT (product_id) DO UPDATE SET
-                        title=EXCLUDED.title, price_display=EXCLUDED.price_display,
+                        title=EXCLUDED.title, subtitle=EXCLUDED.subtitle,
+                        price_display=EXCLUDED.price_display,
                         image_url=EXCLUDED.image_url, product_url=EXCLUDED.product_url,
                         sale_price=EXCLUDED.sale_price, cost_price=EXCLUDED.cost_price,
-                        opportunity_score=EXCLUDED.opportunity_score, is_published=TRUE,
-                        published_at=NOW(), updated_at=NOW()
+                        opportunity_score=EXCLUDED.opportunity_score,
+                        is_published=TRUE, published_at=NOW(), updated_at=NOW()
                 """, (
-                    p['id'], p['title'], 'Oportunidad seleccionada por Central',
-                    f"{p['current_price']:,.0f} {p['currency']}", p['image_url'], p['product_url'],
-                    p['current_price'], p['current_price'], 0, 0,
-                    p['opportunity_score'], 'Disponible en Central', '#b6f23a'
+                    p["id"], p["title"], "Producto real seleccionado por Central",
+                    price_display, p["image_url"], p["product_url"],
+                    price, price, 0, 0,
+                    p["opportunity_score"], "Disponible en Central", "#b6f23a"
                 ))
+
         conn.commit()
-        print(f"== Tienda: {len(products)} oportunidades reales publicadas ==")
+        print(f"== Tienda: {len(products)} productos reales publicados ==")
     finally:
         conn.close()
 
