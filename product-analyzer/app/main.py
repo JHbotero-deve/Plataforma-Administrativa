@@ -144,10 +144,9 @@ def run_pipeline():
     finally:
         conn.close()
 
-    try:
-        publish_top_opportunities(15)
-    except Exception as exc:
-        print(f"[storefront] no se pudieron materializar publicaciones: {exc}")
+    # La publicación de tarjetas es manual y única: Studio -> Publicar en Central.
+    # El worker solo ingesta, actualiza y puntúa productos; no crea tarjetas automáticamente.
+    print("[storefront] publicación automática desactivada; Studio es el único publicador.")
 
     if creator_configured():
         try:
