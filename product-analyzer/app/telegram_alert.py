@@ -161,9 +161,45 @@ def _search_products(term, limit=8):
                 """,
                 (f"%{term}%", limit),
             )
-            return cur.fetchall()
+            rows = cur.fetchall()
+            if rows:
+                return rows
     finally:
         conn.close()
+
+    try:
+        from amazon_api import search_products, _map_item, _map_fallback_item
+        items = search_products(term, limit)
+        live_results = []
+        tag = os.getenv("AMAZON_PARTNER_TAG", "").strip()
+        for item in items:
+            prod = _map_item(item, "general") or _map_fallback_item(item, "general")
+            if prod:
+                price = prod.get("price")
+                curr = prod.get("currency") or "USD"
+                url = prod.get("product_url")
+                if tag and url:
+                    url = url + ("&" if "?" in url else "?") + f"tag={tag}"
+                live_results.append({
+                    "title": prod.get("title"),
+                    "current_price": price,
+                    "currency": curr,
+                    "product_url": url,
+                    "image_url": prod.get("image_url"),
+                    "rating": prod.get("rating"),
+                    "reviews_count": prod.get("reviews_count", 0),
+                    "sales_estimate": None,
+                    "platform": "amazon",
+                    "category": "general",
+                    "price_score": 75.0,
+                    "demand_score": 75.0,
+                    "trend_score": 50.0,
+                    "opportunity_score": 80.0,
+                })
+        return live_results
+    except Exception as exc:
+        print(f"[telegram-bot] live amazon search error: {exc}")
+        return []
 
 
 def _add_url(argument):
