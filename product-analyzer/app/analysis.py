@@ -61,7 +61,6 @@ def score_product(conn, product_id: int, category_avg_price: float):
 
     with conn.cursor() as cur:
         cur.execute(
-            """
             INSERT INTO product_scores (product_id, price_score, demand_score,
                 trend_score, opportunity_score, calculated_at)
             VALUES (%s, %s, %s, %s, %s, NOW())
@@ -70,8 +69,8 @@ def score_product(conn, product_id: int, category_avg_price: float):
                 demand_score = EXCLUDED.demand_score,
                 trend_score = EXCLUDED.trend_score,
                 opportunity_score = EXCLUDED.opportunity_score,
-                calculated_at = NOW();
-            """,
+                calculated_at = NOW();,
+            
             (product_id, price_score, demand_score, trend_score, opportunity_score),
         )
     conn.commit()
