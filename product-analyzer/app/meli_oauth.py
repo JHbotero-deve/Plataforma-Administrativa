@@ -62,10 +62,10 @@ def start_oauth():
         with conn.cursor() as cur:
             cur.execute("DELETE FROM meli_oauth_state WHERE expires_at < NOW()")
             cur.execute(
-                """
+                
                 INSERT INTO meli_oauth_state(state, code_verifier, expires_at)
-                VALUES (%s, %s, %s)
-                """,
+                VALUES (%s, %s, %s),,
+               
                 (state, verifier, datetime.now(timezone.utc) + timedelta(minutes=10)),
             )
         conn.commit()
@@ -157,7 +157,7 @@ def oauth_callback(
     try:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                
                 INSERT INTO meli_oauth_tokens
                     (id, user_id, access_token_encrypted, refresh_token_encrypted, expires_at, scope, updated_at)
                 VALUES (1, %s, %s, %s, %s, %s, NOW())
@@ -167,8 +167,8 @@ def oauth_callback(
                     refresh_token_encrypted=EXCLUDED.refresh_token_encrypted,
                     expires_at=EXCLUDED.expires_at,
                     scope=EXCLUDED.scope,
-                    updated_at=NOW()
-                """,
+                    updated_at=NOW(),
+          
                 (
                     payload.get("user_id"),
                     cipher.encrypt(access_token.encode()).decode(),
@@ -241,7 +241,7 @@ def save_meli_tokens(access_token: str, refresh_token: str, expires_in: int = 0)
     try:
         with conn.cursor() as cur:
             cur.execute(
-                """
+  
                 INSERT INTO meli_oauth_tokens
                     (id, access_token_encrypted, refresh_token_encrypted, expires_at, updated_at)
                 VALUES (1, %s, %s, %s, NOW())
@@ -249,8 +249,8 @@ def save_meli_tokens(access_token: str, refresh_token: str, expires_in: int = 0)
                     access_token_encrypted=EXCLUDED.access_token_encrypted,
                     refresh_token_encrypted=EXCLUDED.refresh_token_encrypted,
                     expires_at=EXCLUDED.expires_at,
-                    updated_at=NOW()
-                """,
+                    updated_at=NOW(),
+            
                 (
                     cipher.encrypt(access_token.encode()).decode(),
                     cipher.encrypt(refresh_token.encode()).decode(),
