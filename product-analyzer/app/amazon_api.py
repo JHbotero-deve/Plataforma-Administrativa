@@ -149,12 +149,11 @@ def _offer(item: dict[str, Any]) -> tuple[float | None, str | None]:
 
 
 def _amazon_image_from_html(url: str) -> str | None:
-    """
+
     Fallback para páginas Amazon cuando Creators API no está disponible.
 
     Busca primero og:image y luego imágenes conocidas dentro del HTML.
     No genera imágenes ni inventa URLs.
-    """
     try:
         response = requests.get(
             url,
@@ -198,8 +197,8 @@ def _amazon_image_from_html(url: str) -> str | None:
         return None
 
 
-def _search_amazon_html(keywords: str, limit: int = 10) -> list[dict[str, Any]]:
-    """Fallback real: obtiene candidatos directamente de resultados públicos de Amazon."""
+def _search_amazon_html(keywords: str, limit: int = 40) -> list[dict[str, Any]]:
+    Fallback real: obtiene candidatos directamente de resultados públicos de Amazon.
     try:
         response = requests.get(
             "https://www.amazon.com/s",
@@ -287,7 +286,7 @@ def _search_amazon_html(keywords: str, limit: int = 10) -> list[dict[str, Any]]:
 
 
 def _search_amazon_web(keywords: str, limit: int = 10) -> list[dict[str, Any]]:
-    """Fallback real usando el índice web de Bing cuando Amazon bloquea HTML directo."""
+   Fallback real usando el índice web de Bing cuando Amazon bloquea HTML directo.
     try:
         response = requests.get(
             "https://www.bing.com/search",
