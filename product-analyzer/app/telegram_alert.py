@@ -1,3 +1,4 @@
+from aliexpress_api import search_aliexpress
 import html
 import os
 import time
@@ -167,10 +168,10 @@ def _search_products(term, limit=8):
     finally:
         conn.close()
 
+    live_results = []
     try:
         from amazon_api import search_products, _map_item, _map_fallback_item
-        items = search_products(term, limit)
-        live_results = []
+        items = search_products(term, limit // 2 + 1)
         tag = os.getenv("AMAZON_PARTNER_TAG", "").strip()
         for item in items:
             prod = _map_item(item, "general") or _map_fallback_item(item, "general")
@@ -196,10 +197,36 @@ def _search_products(term, limit=8):
                     "trend_score": 50.0,
                     "opportunity_score": 80.0,
                 })
-        return live_results
     except Exception as exc:
         print(f"[telegram-bot] live amazon search error: {exc}")
-        return []
+
+    try:
+        ae_items = search_aliexpress(term, limit // 2 + 1)
+        ae_tag = os.getenv("ALIEXPRESS_AFFILIATE_TAG", "").strip()
+        for item in ae_items:
+            url = item.get("product_url")
+            if ae_tag and url:
+                url = url + ("&" if "?" in url else "?") + f"aff_fcid={ae_tag}"
+            live_results.append({
+                "title": item.get("title"),
+                "current_price": item.get("price"),
+                "currency": "USD",
+                "product_url": url,
+                "image_url": item.get("image_url"),
+                "rating": None,
+                "reviews_count": 0,
+                "sales_estimate": None,
+                "platform": "aliexpress",
+                "category": "general",
+                "price_score": 75.0,
+                "demand_score": 70.0,
+                "trend_score": 50.0,
+                "opportunity_score": 78.0,
+            })
+    except Exception as exc:
+        print(f"[telegram-bot] live aliexpress search error: {exc}")
+
+    return live_results
 
 
 def _add_url(argument):
