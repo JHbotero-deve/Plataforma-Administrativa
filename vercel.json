@@ -2,6 +2,10 @@
   "outputDirectory": "product-analyzer/frontend",
   "rewrites": [
     {
+      "source": "/api/v1/:path*",
+      "destination": "https://gracious-renewal-production-9f45.up.railway.app/api/v1/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://gracious-renewal-production-9f45.up.railway.app/api/v1/:path*"
     },
@@ -11,15 +15,7 @@
     },
     {
       "source": "/",
-      "destination": "/tienda.html"
-    },
-    {
-      "source": "/tienda",
-      "destination": "/tienda.html"
-    },
-    {
-      "source": "/producto/:slug",
-      "destination": "/producto.html?slug=:slug"
+      "destination": "/index.html"
     },
     {
       "source": "/robots.txt",
@@ -28,10 +24,6 @@
     {
       "source": "/sitemap.xml",
       "destination": "https://gracious-renewal-production-9f45.up.railway.app/api/v1/public/sitemap.xml"
-    },
-    {
-      "source": "/((?!api/|admin(?:/|$)|tienda(?:/|$)).*)",
-      "destination": "/tienda.html"
     }
   ],
   "headers": [
@@ -78,6 +70,28 @@
           "value": "max-age=63072000"
         }
       ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/tienda",
+      "destination": "https://central-7ykr.vercel.app/tienda",
+      "permanent": false
+    },
+    {
+      "source": "/catalogo",
+      "destination": "https://central-7ykr.vercel.app/catalogo",
+      "permanent": false
+    },
+    {
+      "source": "/tarjetas",
+      "destination": "https://central-7ykr.vercel.app/tarjetas",
+      "permanent": false
+    },
+    {
+      "source": "/producto/:slug",
+      "destination": "https://central-7ykr.vercel.app/producto/:slug",
+      "permanent": false
     }
   ]
 }
