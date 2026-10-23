@@ -60,6 +60,19 @@ jobs:
           assert 'fetch("/api/v1/auth/login"' in html, "Login must use same-origin versioned API"
           print("Admin routes, login, CSS and API proxy validated")
           PY
+      - name: Validate admin login JavaScript
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path("product-analyzer/frontend/admin-login.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script(?:\s[^>]*)?>([\s\S]*?)</script>", html)
+          if not scripts:
+              raise SystemExit("Admin login script not found")
+          Path("/tmp/central-login.js").write_text("\n".join(scripts), encoding="utf-8")
+          PY
+          node --check /tmp/central-login.js
       - name: Validate backend Python
         shell: bash
         run: |
