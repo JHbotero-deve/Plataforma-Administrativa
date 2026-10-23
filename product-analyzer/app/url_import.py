@@ -9,6 +9,22 @@ AMAZON_HOST_RE = re.compile(r"(^|\.)amazon\.[a-z.]+$", re.I)
 ASIN_RE = re.compile(r"(?:/dp/|/gp/product/)([A-Z0-9]{10})(?:[/?]|$)", re.I)
 
 
+def _is_allowed_import_host(host: str) -> bool:
+    host = (host or "").lower().strip(".")
+    if not host:
+        return False
+    if AMAZON_HOST_RE.search(host):
+        return True
+    return (
+        host == "mercadolibre.com"
+        or host.endswith(".mercadolibre.com")
+        or host.startswith("mercadolibre.")
+        or host == "mercadolivre.com.br"
+        or host.endswith(".mercadolivre.com.br")
+        or host.startswith("mercadolivre.")
+    )
+
+
 def detect_platform(url: str) -> str:
     host = (urlparse(url).hostname or "").lower()
     if AMAZON_HOST_RE.search(host):
@@ -194,6 +210,8 @@ def import_url(
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.netloc:
         raise ValueError("La URL debe comenzar con http:// o https://.")
+    if not _is_allowed_import_host(parsed.hostname or ""):
+        raise ValueError("La URL no pertenece a un dominio permitido para importación.")
 
     platform = detect_platform(url)
     metadata = _metadata(url)
