@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Central · Acceso administrativo</title>
+<style>
+:root{color-scheme:light;--bg:#f6f1e8;--panel:#fffdf8;--line:#ded6c8;--text:#20241f;--muted:#6f746d;--accent:#4f7a2a}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--bg);color:var(--text);font:15px/1.5 Inter,system-ui,sans-serif}
+main{width:min(100%,440px);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px;box-shadow:0 12px 35px #20241f12}
+h1{margin:0 0 8px;font-size:26px}p{color:var(--muted)}label{display:block;margin:16px 0 6px;font-weight:600;font-size:13px}input{width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:white;font:inherit;color:inherit}button{width:100%;margin-top:20px;padding:12px;border:0;border-radius:8px;background:var(--accent);color:white;font:600 15px inherit;cursor:pointer}button:disabled{opacity:.6;cursor:wait}#message{min-height:24px;font-size:13px}a{color:var(--accent)}.brand{font-weight:800;letter-spacing:.08em;margin-bottom:24px}.brand span{color:var(--accent)}
+</style>
+</head>
+<body><main>
+<div class="brand">CENTRAL <span>·</span> ADMIN</div>
+<h1>Iniciar sesión</h1>
+<p>Accede con las credenciales administrativas configuradas para Central. No introduzcas claves de Railway ni tokens de infraestructura.</p>
+<form id="login">
+<label for="email">Correo administrativo</label><input id="email" name="email" type="email" autocomplete="username" required maxlength="254">
+<label for="password">Contraseña</label><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="256">
+<button id="submit" type="submit">Entrar al panel</button>
+<p id="message" role="status" aria-live="polite"></p>
+</form>
+<p><a href="/">Volver al panel</a></p>
+</main>
+<script>
+"use strict";
+const form=document.querySelector("#login"),button=document.querySelector("#submit"),message=document.querySelector("#message");
+form.addEventListener("submit",async event=>{
+ event.preventDefault();button.disabled=true;message.textContent="Validando credenciales…";
+ try{
+  const response=await fetch("/api/v1/auth/login",{method:"POST",credentials:"include",cache:"no-store",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({email:form.email.value.trim(),password:form.password.value})});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.detail||"No fue posible iniciar sesión.");
+  message.textContent="Sesión iniciada. Abriendo panel…";window.location.replace("/");
+ }catch(error){message.textContent=error.message||"Error de conexión. Intenta de nuevo."}
+ finally{button.disabled=false}
+});
+</script>
+</body></html>
