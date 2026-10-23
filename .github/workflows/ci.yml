@@ -40,6 +40,26 @@ jobs:
           npm --prefix product-analyzer/headphones run build
           test -f product-analyzer/frontend/headphones/index.html
 
+      - name: Validate admin routes and API proxy
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          cfg = json.loads(Path("vercel.json").read_text(encoding="utf-8"))
+          frontend = Path("product-analyzer/frontend")
+          assert (frontend / "index.html").is_file(), "Admin panel missing"
+          assert (frontend / "central.css").is_file(), "Shared admin stylesheet missing"
+          assert (frontend / "admin-login.html").is_file(), "Admin login missing"
+          rewrites = cfg.get("rewrites", [])
+          api_v1 = next((r for r in rewrites if r.get("source") == "/api/v1/:path*"), None)
+          assert api_v1 and api_v1["destination"].endswith("/api/v1/:path*"), "Versioned API proxy must not duplicate /v1"
+          assert any(r.get("source") == "/" and r.get("destination") == "/index.html" for r in rewrites), "Root must serve admin panel"
+          assert any(r.get("source") == "/tienda" and "central-7ykr.vercel.app/tienda" in r.get("destination", "") for r in cfg.get("redirects", [])), "Store must remain on Central"
+          html = (frontend / "admin-login.html").read_text(encoding="utf-8")
+          assert 'fetch("/api/v1/auth/login"' in html, "Login must use same-origin versioned API"
+          print("Admin routes, login, CSS and API proxy validated")
+          PY
       - name: Validate backend Python
         shell: bash
         run: |
