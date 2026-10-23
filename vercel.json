@@ -75,7 +75,7 @@
   "redirects": [
     {
       "source": "/tienda",
-      "destination": "https://central-7ykr.vercel.app/tienda",
+      "destination": "tienda.html",
       "permanent": false
     },
     {

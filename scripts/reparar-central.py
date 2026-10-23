@@ -51,7 +51,7 @@ def publish_products(conn):
             currency = str(p["currency"] or "COP").upper()
             price = float(p["current_price"])
             price_display = f"{currency} {price:,.0f}"
-            cur.execute("""
+            cur.execute(
                 INSERT INTO published_cards(
                     product_id,title,subtitle,price_display,image_url,product_url,
                     sale_price,cost_price,profit_amount,profit_margin_pct,
@@ -67,7 +67,7 @@ def publish_products(conn):
                     opportunity_score=EXCLUDED.opportunity_score,
                     is_published=TRUE,
                     updated_at=NOW()
-            """,(
+        ,(
                 p["id"],p["title"],"Producto verificado por Central",price_display,
                 p["image_url"],p["product_url"],price,price,p["opportunity_score"],
                 "Disponible en Central","#b6f23a"
@@ -81,12 +81,9 @@ def refresh_amazon_metadata(conn):
 
     updated = 0
     with conn.cursor() as cur:
-        cur.execute("""
-            SELECT p.id,p.product_url,p.image_url,p.image_gallery
-            FROM products p
-            JOIN platforms pl ON pl.id=p.platform_id
-            WHERE pl.name='amazon' AND p.is_active=TRUE
-        """)
+        cur.execute(
+            "SELECT p.id,p.product_url,p.image_url,p.image_gallery FROM products p JOIN platforms pl ON pl.id=p.platform_id WHERE pl.name='amazon' AND p.is_active=TRUE"
+        )
         rows = cur.fetchall()
     for row in rows:
         try:
@@ -99,8 +96,8 @@ def refresh_amazon_metadata(conn):
             if not image and not gallery and price is None and not title:
                 continue
             with conn.cursor() as cur:
-                cur.execute("""
-                    UPDATE products
+                cur.execute(
+                    "UPDATE products
                     SET title=COALESCE(%s,title),
                         image_url=COALESCE(%s,image_url),
                         image_gallery=CASE WHEN %s::jsonb <> '[]'::jsonb THEN %s::jsonb ELSE image_gallery END,
@@ -109,8 +106,8 @@ def refresh_amazon_metadata(conn):
                         source_metadata=COALESCE(source_metadata,'{}'::jsonb) || %s::jsonb,
                         catalog_expires_at=NOW()+INTERVAL '48 hours',
                         updated_at=NOW()
-                    WHERE id=%s
-                """,(
+                    WHERE id=%s",
+                (
                     title,image,json.dumps(gallery),json.dumps(gallery),price,currency,
                     json.dumps({"metadata_refresh":"amazon_product_page"}),row["id"]
                 ))
@@ -157,20 +154,20 @@ def score_catalog(conn):
     from analysis import score_product
 
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(
             SELECT c.name AS category,p.currency,AVG(p.current_price) AS avg_price
             FROM products p
             JOIN categories c ON c.id=p.category_id
             WHERE p.is_active=TRUE AND p.current_price IS NOT NULL
             GROUP BY c.name,p.currency
-        """)
+        )
         averages={(r["category"],r["currency"]):float(r["avg_price"] or 0) for r in cur.fetchall()}
-        cur.execute("""
+        cur.execute(
             SELECT p.id,c.name AS category,p.currency
             FROM products p
             LEFT JOIN categories c ON c.id=p.category_id
             WHERE p.is_active=TRUE AND p.current_price IS NOT NULL
-        """)
+        )
         rows=cur.fetchall()
     for row in rows:
         try:
