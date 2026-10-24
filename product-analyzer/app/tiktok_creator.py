@@ -93,18 +93,31 @@ def _money(value):
         return None, currency
 
 
-def _first_image(item: dict):
+def _image_gallery(item: dict) -> list[str]:
+    """Normaliza todas las imágenes que TikTok Shop incluya en el producto."""
     addition = item.get("addition") or {}
     images = (
         addition.get("customized_main_images")
         or item.get("images")
         or item.get("main_images")
+        or item.get("image_list")
         or []
     )
-    if images:
-        first = images[0]
-        return first.get("url") if isinstance(first, dict) else first
-    return None
+    urls = []
+    for image in images:
+        if isinstance(image, dict):
+            url_list = image.get("url_list") or []
+            value = image.get("url") or image.get("uri") or (url_list[0] if url_list else None)
+        else:
+            value = image
+        if isinstance(value, str) and value.strip() and value.strip() not in urls:
+            urls.append(value.strip())
+    return urls
+
+
+def _first_image(item: dict):
+    gallery = _image_gallery(item)
+    return gallery[0] if gallery else None
 
 
 def _normalize(item: dict) -> dict | None:
@@ -153,6 +166,7 @@ def _normalize(item: dict) -> dict | None:
         "price": amount,
         "currency": currency,
         "image_url": _first_image(item),
+        "gallery_urls": _image_gallery(item),
         "product_url": product_url,
         "rating": None,
         "reviews_count": 0,

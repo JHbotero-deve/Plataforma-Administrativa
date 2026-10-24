@@ -24,11 +24,16 @@ def _required(name: str) -> str:
     return value
 
 
+MIN_CHECKOUT_COP = 1000
+
+
 def _amount_to_cents(amount: Any) -> int:
     cents = int(round(float(amount) * 100))
-    if cents <= 0:
+    if cents < MIN_CHECKOUT_COP * 100:
         raise HTTPException(
-            status_code=400, detail="El monto debe ser mayor que cero")
+            status_code=400,
+            detail=f"El valor mínimo de compra es ${MIN_CHECKOUT_COP:,.0f} COP",
+        )
     return cents
 
 
@@ -79,44 +84,62 @@ class ProductCheckout(BaseModel):
 
 @router.post("/checkout/product")
 def create_product_checkout(req: ProductCheckout):
-    if req.quantity<1 or req.quantity>100: raise HTTPException(status_code=400,detail="Cantidad inválida")
+    if req.quantity < 1 or req.quantity > 100:
+        raise HTTPException(status_code=400, detail="Cantidad inválida")
     public_key=_required("WOMPI_PUBLIC_KEY")
-    currency=os.getenv("WOMPI_CURRENCY","COP").strip().upper()
+    currency="COP"
     environment=os.getenv("WOMPI_ENVIRONMENT","prod").strip().lower()
-    if currency!="COP": raise HTTPException(status_code=500,detail="Wompi Colombia requiere moneda COP")
+    if currency != "COP":
+        raise HTTPException(status_code=500, detail="Wompi Colombia requiere moneda COP")
     conn=get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(SELECT p.id,p.title,p.image_url,p.product_url,p.current_price,p.currency,p.stock,
-                                  pc.id AS publication_id,pc.sale_price,pc.cost_price
-                           FROM products p LEFT JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
-                           WHERE p.id=%s AND p.is_active=TRUE,(req.product_id,))
+            cur.execute("""SELECT p.id,p.title,p.image_url,p.product_url,p.current_price,p.currency,p.stock,
+                                  pc.id AS publication_id,pc.sale_price,pc.cost_price,
+                                  pl.name AS platform_name
+                           FROM products p
+                           JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
+                           JOIN platforms pl ON pl.id=p.platform_id
+                           WHERE p.id=%s AND p.is_active=TRUE AND p.is_blocked=FALSE
+                             AND p.current_price>0
+                             AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at>NOW())
+                           FOR UPDATE OF p""",(req.product_id,))
             product=cur.fetchone()
-            if not product: raise HTTPException(status_code=404,detail="Producto no encontrado")
+            if not product: raise HTTPException(status_code=404,detail="Producto publicado no encontrado")
+            if str(product.get("platform_name") or "").lower() != "personal": raise HTTPException(status_code=409,detail="Este producto se compra en su plataforma de origen")
             if req.publication_id and product["publication_id"]!=req.publication_id: raise HTTPException(status_code=409,detail="La publicación no corresponde al producto solicitado")
-            if product["stock"] is not None and req.quantity>product["stock"]: raise HTTPException(status_code=409,detail="Stock insuficiente")
+            cur.execute("""SELECT COALESCE(SUM(quantity), 0) AS reserved
+                           FROM store_stock_reservations
+                           WHERE product_id=%s AND status='ACTIVE' AND expires_at > NOW()""",(req.product_id,))
+            reserved = int((cur.fetchone() or {}).get("reserved") or 0)
+            if product["stock"] is not None and req.quantity + reserved > product["stock"]:
+                raise HTTPException(status_code=409,detail="Stock insuficiente")
             sale=float(product["sale_price"] or product["current_price"] or 0)
             cost=float(product["cost_price"] if product["cost_price"] is not None else product["current_price"] or 0)
             if sale<=0: raise HTTPException(status_code=400,detail="Producto sin precio de venta")
             total=sale*req.quantity; cents=_amount_to_cents(total); reference=f"ORD-{secrets.token_hex(10).upper()}"; signature=_integrity_signature(reference,cents,currency)
-            cur.execute(INSERT INTO store_orders
+            cur.execute("""INSERT INTO store_orders
                 (reference,product_id,publication_id,customer_name,customer_email,customer_phone,quantity,unit_price,cost_unit_price,total_amount,estimated_profit,currency,status,payment_status,source,product_title_snapshot,product_image_snapshot,product_url_snapshot,platform_snapshot)
                 SELECT %s,p.id,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'PENDING','PENDING','TIENDA',p.title,p.image_url,p.product_url,pl.name
-                FROM products p JOIN platforms pl ON pl.id=p.platform_id WHERE p.id=%s RETURNING id,reference,
+                FROM products p JOIN platforms pl ON pl.id=p.platform_id WHERE p.id=%s RETURNING id,reference""",
                 (reference,product["publication_id"],req.customer_name.strip(),req.customer_email.strip().lower(),req.customer_phone,req.quantity,sale,cost,total,(sale-cost)*req.quantity,currency,req.product_id))
             order=cur.fetchone()
-            cur.execute(INSERT INTO store_order_items(order_id,product_id,publication_id,product_title,quantity,unit_price,cost_unit_price,line_total,estimated_profit)
+            cur.execute("""INSERT INTO store_order_items(order_id,product_id,publication_id,product_title,quantity,unit_price,cost_unit_price,line_total,estimated_profit)
                            SELECT %s,p.id,%s,p.title,%s,%s,%s,%s,%s
-                           FROM products p WHERE p.id=%s,
+                           FROM products p WHERE p.id=%s""",
                         (order["id"],product["publication_id"],req.quantity,sale,cost,total,(sale-cost)*req.quantity,req.product_id))
-            cur.execute(NSERT INTO payment_transactions
+            cur.execute("""INSERT INTO payment_transactions
                 (reference,provider,product_id,order_id,customer_email,amount_in_cents,currency,status,environment)
-                VALUES (%s,'wompi',%s,%s,%s,%s,%s,'PENDING',%s) RETURNING id,reference,
+                VALUES (%s,'wompi',%s,%s,%s,%s,%s,'PENDING',%s) RETURNING id,reference""",
                 (reference,req.product_id,order["id"],req.customer_email.strip().lower(),cents,currency,environment))
             payment=cur.fetchone()
+            cur.execute("""INSERT INTO store_stock_reservations
+                           (order_id,product_id,quantity,status,expires_at)
+                           VALUES (%s,%s,%s,'ACTIVE',NOW()+INTERVAL '30 minutes')""",
+                        (order["id"],req.product_id,req.quantity))
         conn.commit()
     finally: conn.close()
-    redirect=req.redirect_url or os.getenv("WOMPI_REDIRECT_URL","").strip() or None
+    redirect=os.getenv("WOMPI_REDIRECT_URL","").strip() or None
     params=[("public-key",public_key),("currency",currency),("amount-in-cents",str(cents)),("reference",reference),("signature:integrity",signature),("customer-data:email",req.customer_email.strip().lower()),("customer-data:full-name",req.customer_name.strip())]
     if req.customer_phone: params += [("customer-data:phone-number",req.customer_phone),("customer-data:phone-number-prefix","+57")]
     if redirect: params.append(("redirect-url",redirect))
@@ -125,7 +148,7 @@ def create_product_checkout(req: ProductCheckout):
 
 @router.post("/checkout/cart")
 async def create_cart_checkout(request: Request):
-    Checkout de carrito: crea UN pedido con varios ítems y devuelve la URL de Wompi.
+    """Checkout de carrito: crea UN pedido con varios ítems y devuelve la URL de Wompi."""
     try:
         body = await request.json()
     except Exception:
@@ -139,6 +162,13 @@ async def create_cart_checkout(request: Request):
     email = str(body.get("customer_email") or customer.get("email") or body.get("email") or "").strip().lower()
     phone = body.get("customer_phone") or customer.get("phone") or body.get("phone")
     phone = str(phone).strip() if phone else None
+    address_line = str(body.get("address_line") or customer.get("address_line") or "").strip()
+    city = str(body.get("city") or customer.get("city") or "").strip()
+    department = str(body.get("department") or customer.get("department") or "").strip()
+    if not address_line or not city or not department:
+        raise HTTPException(status_code=400, detail="Dirección, ciudad y departamento son obligatorios")
+    if not phone:
+        raise HTTPException(status_code=400, detail="El teléfono es obligatorio para la dirección de envío")
     if not name or "@" not in email:
         raise HTTPException(status_code=400, detail="Nombre y correo válidos son obligatorios")
 
@@ -178,27 +208,35 @@ async def create_cart_checkout(request: Request):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                SELECT p.id, p.title, p.image_url, p.product_url, p.current_price, p.stock,
+                """SELECT p.id, p.title, p.image_url, p.product_url, p.current_price, p.stock,
                           pc.id AS publication_id, pc.sale_price, pc.cost_price,
                           pl.name AS platform_name
                    FROM products p
-                   LEFT JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
+                   JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
                    LEFT JOIN platforms pl ON pl.id=p.platform_id
-                   WHERE p.id = ANY(%s) AND p.is_active=TRUE,
+                   WHERE p.id = ANY(%s) AND p.is_active=TRUE AND p.is_blocked=FALSE
+                     AND p.current_price>0
+                     AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at>NOW())
+                   FOR UPDATE OF p""",
                 (list(wanted.keys()),),
             )
             rows = {r["id"]: r for r in cur.fetchall()}
-
-            # --- Validar y calcular cada línea con precios del servidor ---
             lines = []
             for pid, entry in wanted.items():
                 p = rows.get(pid)
                 if not p:
                     raise HTTPException(status_code=404, detail=f"Producto {pid} no encontrado")
+                if str(p.get("platform_name") or "").lower() != "personal":
+                    raise HTTPException(status_code=409, detail="Producto " + str(p["title"]) + " se compra en su plataforma de origen")
                 if entry["publication_id"] and p["publication_id"] != entry["publication_id"]:
                     raise HTTPException(status_code=409, detail="La publicación no corresponde al producto solicitado")
                 qty = entry["qty"]
-                if p["stock"] is not None and qty > p["stock"]:
+                cur.execute("""SELECT COALESCE(SUM(quantity), 0) AS reserved
+                               FROM store_stock_reservations
+                               WHERE product_id=%s AND status='ACTIVE' AND expires_at > NOW()""",
+                            (pid,))
+                reserved = int((cur.fetchone() or {}).get("reserved") or 0)
+                if p["stock"] is not None and qty + reserved > p["stock"]:
                     raise HTTPException(status_code=409, detail=f"Stock insuficiente: {p['title']}")
                 sale = float(p["sale_price"] or p["current_price"] or 0)
                 cost = float(p["cost_price"] if p["cost_price"] is not None else p["current_price"] or 0)
@@ -220,47 +258,47 @@ async def create_cart_checkout(request: Request):
             first = lines[0]
             first_row = rows[first["product_id"]]
             title_snapshot = first["title"] if len(lines) == 1 else f"{first['title']} y {len(lines) - 1} más"
-
-            # --- Pedido (cabecera) ---
             cur.execute(
-               INSERT INTO store_orders
+                """INSERT INTO store_orders
                    (reference, product_id, publication_id, customer_name, customer_email, customer_phone,
                     quantity, unit_price, cost_unit_price, total_amount, estimated_profit, currency,
                     status, payment_status, source,
-                    product_title_snapshot, product_image_snapshot, product_url_snapshot, platform_snapshot)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'PENDING','PENDING','TIENDA',%s,%s,%s,%s)
-                   RETURNING id, reference,
+                    product_title_snapshot, product_image_snapshot, product_url_snapshot, platform_snapshot,
+                   address_line, city, department)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'PENDING','PENDING','TIENDA',%s,%s,%s,%s,%s,%s,%s)
+                   RETURNING id, reference""",
                 (reference, first["product_id"], first["publication_id"], name, email, phone,
                  total_qty, total / total_qty, cost_total / total_qty, total, profit, currency,
-                 title_snapshot, first_row["image_url"], first_row["product_url"], first_row["platform_name"]),
+                 title_snapshot, first_row["image_url"], first_row["product_url"], first_row["platform_name"], address_line, city, department),
             )
             order = cur.fetchone()
-
-            # --- Pedido (ítems) ---
             for l in lines:
                 cur.execute(
-                   INSERT INTO store_order_items
+                    """INSERT INTO store_order_items
                        (order_id, product_id, publication_id, product_title, quantity,
                         unit_price, cost_unit_price, line_total, estimated_profit)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s),
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (order["id"], l["product_id"], l["publication_id"], l["title"], l["qty"],
                      l["sale"], l["cost"], l["sale"] * l["qty"], (l["sale"] - l["cost"]) * l["qty"]),
                 )
-
-            # --- Transacción de pago ---
             cur.execute(
-                INSERT INTO payment_transactions
+                """INSERT INTO payment_transactions
                    (reference, provider, product_id, order_id, customer_email,
                     amount_in_cents, currency, status, environment)
-                   VALUES (%s,'wompi',%s,%s,%s,%s,%s,'PENDING',%s) RETURNING id, reference,
+                   VALUES (%s,'wompi',%s,%s,%s,%s,%s,'PENDING',%s) RETURNING id, reference""",
                 (reference, first["product_id"], order["id"], email, cents, currency, environment),
             )
             payment = cur.fetchone()
+            for line in lines:
+                cur.execute("""INSERT INTO store_stock_reservations
+                               (order_id,product_id,quantity,status,expires_at)
+                               VALUES (%s,%s,%s,'ACTIVE',NOW()+INTERVAL '30 minutes')""",
+                            (order["id"],line["product_id"],line["qty"]))
         conn.commit()
     finally:
         conn.close()
 
-    redirect = body.get("redirect_url") or os.getenv("WOMPI_REDIRECT_URL", "").strip() or None
+    redirect = os.getenv("WOMPI_REDIRECT_URL", "").strip() or None
     params = [
         ("public-key", public_key),
         ("currency", currency),
@@ -269,6 +307,11 @@ async def create_cart_checkout(request: Request):
         ("signature:integrity", signature),
         ("customer-data:email", email),
         ("customer-data:full-name", name),
+        ("shipping-address:address-line-1", address_line),
+        ("shipping-address:country", "CO"),
+        ("shipping-address:city", city),
+        ("shipping-address:region", department),
+        ("shipping-address:phone-number", phone),
     ]
     if phone:
         params += [("customer-data:phone-number", phone), ("customer-data:phone-number-prefix", "+57")]
@@ -318,14 +361,13 @@ def create_subscription_checkout(req: SubscriptionCheckout):
             reference = f"SUB-{secrets.token_hex(12).upper()}"
             signature = _integrity_signature(
                 reference, amount_in_cents, currency)
-            redirect_url = req.redirect_url or os.getenv(
-                "WOMPI_REDIRECT_URL", "").strip() or None
+            redirect_url = os.getenv("WOMPI_REDIRECT_URL", "").strip() or None
 
             cur.execute(
-                INSERT INTO payment_transactions
+                """INSERT INTO payment_transactions
                     (reference, provider, plan_id, customer_email, amount_in_cents, currency, status, environment)
                     VALUES (%s, 'wompi', %s, %s, %s, %s, 'PENDING', %s)
-                    RETURNING id, reference,
+                    RETURNING id, reference""",
                 (reference, plan["id"], req.customer_email.strip(
                 ).lower(), amount_in_cents, currency, environment),
             )
@@ -359,10 +401,10 @@ def get_payment(reference: str):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                SELECT id, reference, transaction_id, provider, customer_email,
+                """SELECT id, reference, transaction_id, provider,
                         amount_in_cents, currency, status, payment_method_type,
                         status_message, environment, created_at, updated_at, paid_at
-                    FROM payment_transactions WHERE reference = %s,
+                    FROM payment_transactions WHERE reference = %s""",
                 (reference,),
             )
             payment = cur.fetchone()
@@ -398,178 +440,95 @@ async def wompi_events(
         raise HTTPException(
             status_code=400, detail="Evento de transacción incompleto")
 
-    conn = get_conn = connection()
-try:
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO payment_events (
-                provider,
-                event_type,
-                transaction_id,
-                checksum,
-                payload
-            )
-            VALUES ('wompi', %s, %s, %s, %s)
-            ON CONFLICT (
-                provider,
-                event_type,
-                transaction_id,
-                checksum
-            ) DO NOTHING
-            RETURNING id
-            """,
-            (event["event"], transaction_id, supplied, Json(event)),
-        )
-        event_inserted = cur.fetchone()
-
-        # Procesar solamente eventos nuevos.
-        if not event_inserted:
-            conn.commit()
-            return {
-                "received": True,
-                "processed": False,
-                "duplicate": True,
-            }
-
-        cur.execute(
-            """
-            UPDATE payment_transactions
-            SET transaction_id = %s,
-                status = %s,
-                payment_method_type = %s,
-                status_message = %s,
-                event_checksum = %s,
-                raw_event = %s,
-                updated_at = NOW(),
-                paid_at = CASE
-                    WHEN %s = 'APPROVED' AND paid_at IS NULL
-                    THEN NOW()
-                    ELSE paid_at
-                END
-            WHERE reference = %s
-            RETURNING id, plan_id, order_id, customer_email
-            """,
-            (
-                transaction_id,
-                status,
-                transaction.get("payment_method_type"),
-                transaction.get("status_message"),
-                supplied,
-                Json(event),
-                status,
-                reference,
-            ),
-        )
-        payment = cur.fetchone()
-
-        if payment and payment.get("order_id") and status == "APPROVED":
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
             cur.execute(
-                """
-                UPDATE store_orders
-                SET status = 'PAID',
-                    payment_status = 'PAID',
-                    paid_at = NOW(),
-                    updated_at = NOW()
-                WHERE id = %s
-                  AND payment_status <> 'PAID'
-                RETURNING id
-                """,
-                (payment["order_id"],),
+                """INSERT INTO payment_events
+                (provider, event_type, transaction_id, checksum, payload)
+                VALUES ('wompi', %s, %s, %s, %s)
+                ON CONFLICT (provider, event_type, transaction_id, checksum) DO NOTHING""",
+                (event["event"], transaction_id, supplied, Json(event)),
             )
-            order = cur.fetchone()
+            cur.execute(
+                """UPDATE payment_transactions
+                    SET transaction_id=%s, status=%s, payment_method_type=%s,
+                    status_message=%s, event_checksum=%s, raw_event=%s,
+                    updated_at=NOW(),
+                    paid_at=CASE WHEN %s='APPROVED' AND paid_at IS NULL THEN NOW() ELSE paid_at END
+                    WHERE reference=%s
+                    RETURNING id, plan_id, order_id, customer_email""",
+                (
+                    transaction_id, status, transaction.get(
+                        "payment_method_type"),
+                    transaction.get("status_message"), supplied, Json(
+                        event), status, reference,
+                ),
+            )
+            payment = cur.fetchone()
 
-            # Descontar inventario y crear factura una sola vez.
-            if order:
-                cur.execute(
-                    """
-                    UPDATE products p
-                    SET stock = CASE
-                        WHEN p.stock IS NULL THEN NULL
-                        ELSE GREATEST(p.stock - oi.quantity, 0)
-                    END
-                    FROM store_order_items oi
-                    WHERE oi.order_id = %s
-                      AND oi.product_id = p.id
-                    """,
-                    (order["id"],),
-                )
+            if payment and payment.get("order_id") and status == "APPROVED":
+                cur.execute("""UPDATE store_orders SET status='PAID',payment_status='PAID',paid_at=NOW(),updated_at=NOW()
+                               WHERE id=%s AND payment_status<>'PAID' RETURNING id""",(payment["order_id"],))
+                order=cur.fetchone()
+                if order:
+                    cur.execute("""SELECT id,product_id,quantity
+                                   FROM store_stock_reservations
+                                   WHERE order_id=%s AND status IN ('ACTIVE','EXPIRED')
+                                   ORDER BY id FOR UPDATE""",(order["id"],))
+                    reservations=cur.fetchall()
+                    for reservation in reservations:
+                        cur.execute("""UPDATE products
+                                       SET stock=CASE WHEN stock IS NULL THEN NULL ELSE stock-%s END,
+                                           updated_at=NOW()
+                                       WHERE id=%s AND (stock IS NULL OR stock >= %s)
+                                       RETURNING id""",
+                                    (reservation["quantity"],reservation["product_id"],reservation["quantity"]))
+                        if cur.fetchone():
+                            cur.execute("""UPDATE store_stock_reservations
+                                           SET status='CONSUMED',released_at=NOW()
+                                           WHERE id=%s""",(reservation["id"],))
+                        else:
+                            cur.execute("""UPDATE store_stock_reservations
+                                           SET status='STOCK_ERROR',released_at=NOW()
+                                           WHERE id=%s""",(reservation["id"],))
+                            cur.execute("""UPDATE store_orders
+                                           SET status='PAID_STOCK_REVIEW',
+                                               notes=LEFT(COALESCE(notes,'') || ' | Pago aprobado sin stock disponible para completar la reserva.',1000),
+                                               updated_at=NOW()
+                                           WHERE id=%s""",(order["id"],))
+                    cur.execute("""INSERT INTO store_invoices(order_id,invoice_number,total_amount,currency,status)
+                                   SELECT id,'FAC-'||to_char(NOW(),'YYYYMMDDHH24MISS')||'-'||id,total_amount,currency,'ISSUED'
+                                   FROM store_orders WHERE id=%s
+                                   ON CONFLICT(order_id) DO NOTHING""",(order["id"],))
+            elif payment and payment.get("order_id") and status in {"DECLINED","VOIDED","ERROR"}:
+                cur.execute("""UPDATE store_orders SET status=%s,payment_status=%s,updated_at=NOW() WHERE id=%s AND payment_status='PENDING'""",(status,status,payment["order_id"],))
+                cur.execute("""UPDATE store_stock_reservations
+                               SET status='RELEASED',released_at=NOW()
+                               WHERE order_id=%s AND status='ACTIVE'""",(payment["order_id"],))
 
+            if payment and status == "APPROVED" and payment["plan_id"]:
                 cur.execute(
-                    """
-                    INSERT INTO store_invoices (
-                        order_id,
-                        invoice_number,
-                        total_amount,
-                        currency,
-                        status
+                    "SELECT id FROM users WHERE LOWER(email)=LOWER(%s)", (payment["customer_email"],))
+                user = cur.fetchone()
+                if user:
+                    cur.execute(
+                        """INSERT INTO subscriptions (user_id, plan_id, renews_at)
+                            VALUES (%s, %s, NOW()+INTERVAL '30 days')
+                            ON CONFLICT (user_id) DO UPDATE SET
+                            plan_id=EXCLUDED.plan_id, status='active',
+                            started_at=NOW(), renews_at=NOW()+INTERVAL '30 days'""",
+                        (user["id"], payment["plan_id"]),
                     )
-                    SELECT id,
-                           'FAC-' || to_char(NOW(), 'YYYYMMDDHH24MISS')
-                               || '-' || id,
-                           total_amount,
-                           currency,
-                           'ISSUED'
-                    FROM store_orders
-                    WHERE id = %s
-                    ON CONFLICT (order_id) DO NOTHING
-                    """,
-                    (order["id"],),
-                )
+        conn.commit()
+    finally:
+        conn.close()
 
-        elif (
-            payment
-            and payment.get("order_id")
-            and status in {"DECLINED", "VOIDED", "ERROR"}
-        ):
-            cur.execute(
-                """
-                UPDATE store_orders
-                SET status = %s,
-                    payment_status = %s,
-                    updated_at = NOW()
-                WHERE id = %s
-                  AND payment_status = 'PENDING'
-                """,
-                (status, status, payment["order_id"]),
-            )
+    if payment and payment.get("order_id") and status == "APPROVED":
+        try:
+            from commerce import dispatch_lead
+            dispatch_lead(payment["order_id"])
+        except Exception as exc:
+            print(f"[commerce] lead delivery deferred: {type(exc).__name__}")
 
-        if payment and status == "APPROVED" and payment["plan_id"]:
-            cur.execute(
-                """
-                SELECT id
-                FROM users
-                WHERE LOWER(email) = LOWER(%s)
-                """,
-                (payment["customer_email"],),
-            )
-            user = cur.fetchone()
-
-            if user:
-                cur.execute(
-                    """
-                    INSERT INTO subscriptions (
-                        user_id,
-                        plan_id,
-                        renews_at
-                    )
-                    VALUES (%s, %s, NOW() + INTERVAL '30 days')
-                    ON CONFLICT (user_id) DO UPDATE
-                    SET plan_id = EXCLUDED.plan_id,
-                        status = 'active',
-                        started_at = NOW(),
-                        renews_at = NOW() + INTERVAL '30 days'
-                    """,
-                    (user["id"], payment["plan_id"]),
-                )
-
-    conn.commit()
-
-finally:
-    conn.close()
-
-return {
-    "received": True,
-    "processed": payment is not None,
-    "status": status,
-}
+    return {"received": True, "processed": payment is not None, "status": status}

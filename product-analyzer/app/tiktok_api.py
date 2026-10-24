@@ -12,12 +12,12 @@ def creator_status():
     try:
         with conn.cursor() as cur:
             cur.execute(
-            
+                """
                 SELECT open_id, granted_scopes, user_type,
                        last_sync_at, last_error, updated_at
                 FROM tiktok_creator_state
                 WHERE id = 1
-                
+                """
             )
             state = cur.fetchone()
         return {
@@ -55,8 +55,9 @@ def creator_products(limit: int = Query(100, ge=1, le=500)):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.id, p.title, p.current_price, p.currency,
-                       p.image_url, p.product_url, p.updated_at,
+                SELECT p.id, p.title, p.current_price, p.previous_price, p.currency,
+                       p.image_url, p.image_gallery, p.source_metadata,
+                       p.product_url, p.updated_at,
                        t.tiktok_product_id, t.showcase_status,
                        t.affiliate_url, t.commission_rate,
                        t.estimated_commission, t.video_url,

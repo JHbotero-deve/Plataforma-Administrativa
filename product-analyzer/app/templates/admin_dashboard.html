@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Central Admin - Product Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs" defer></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-6" x-data="adminPanel()">
+    <div class="max-w-7xl mx-auto">
+        <header class="flex justify-between items-center mb-8 border-b border-gray-800 pb-4">
+            <h1 class="text-3xl font-bold text-cyan-400">⚡ Central Administrativa Multiplataforma</h1>
+            <div class="flex gap-4">
+                <input type="text" x-model="search" placeholder="Buscar por ID o Título..." class="bg-gray-800 border border-gray-700 px-4 py-2 rounded-lg text-sm focus:outline-none focus:border-cyan-500">
+                <button @click="fetchProducts()" class="bg-cyan-600 hover:bg-cyan-500 px-4 py-2 rounded-lg text-sm font-semibold transition">🔄 Sincronizar</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <template x-for="prod in filteredProducts" :key="prod.external_id">
+                <div class="bg-gray-800 border border-gray-700 rounded-xl p-5 flex flex-col justify-between shadow-lg hover:border-cyan-500 transition">
+                    <div>
+                        <div class="flex justify-between items-start mb-3">
+                            <span class="text-xs uppercase px-2.5 py-1 rounded-full font-bold" 
+                                  :class="{'bg-orange-500/20 text-orange-400': prod.platform=='amazon', 'bg-yellow-500/20 text-yellow-400': prod.platform=='mercadolibre', 'bg-red-500/20 text-red-400': prod.platform=='aliexpress'}" 
+                                  x-text="prod.platform"></span>
+                            <span class="text-xs font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded" x-text="'-' + prod.discount_percentage + '%'"></span>
+                        </div>
+                        <img :src="prod.image_url" alt="Producto" class="w-full h-40 object-cover rounded-lg mb-4 bg-gray-900">
+                        <h3 class="font-bold text-base mb-2 line-clamp-2" x-text="prod.title"></h3>
+                        <div class="flex items-center gap-3 mb-4">
+                            <span class="text-lg font-extrabold text-cyan-400" x-text="'$' + prod.price"></span>
+                            <span class="text-sm text-gray-400 line-through" x-text="'$' + prod.original_price"></span>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 pt-4 border-t border-gray-700">
+                        <button @click="publishTelegram(prod)" class="flex-1 bg-blue-600 hover:bg-blue-500 text-xs py-2 rounded-lg font-semibold transition text-center">📤 Publicar</button>
+                        <button @click="deleteProduct(prod.external_id)" class="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white text-xs px-3 py-2 rounded-lg transition">🗑️</button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <script>
+        function adminPanel() {
+            return {
+                products: [],
+                search: '',
+                get filteredProducts() {
+                    return this.products.filter(p => p.title.toLowerCase().includes(this.search.toLowerCase()) || p.external_id.includes(this.search));
+                },
+                async fetchProducts() {
+                    let res = await fetch('/admin/products');
+                    this.products = await res.json();
+                },
+                async deleteProduct(id) {
+                    if(confirm('¿Eliminar esta tarjeta permanentemente?')) {
+                        await fetch(`/admin/products/${id}`, {method: 'DELETE'});
+                        this.fetchProducts();
+                    }
+                },
+                async publishTelegram(prod) {
+                    let res = await fetch(`/admin/publish/${prod.external_id}`, {method: 'POST'});
+                    let data = await res.json();
+                    alert(data.message || 'Producto publicado correctamente.');
+                },
+                init() { this.fetchProducts(); }
+            }
+        }
+    </script>
+</body>
+</html>
