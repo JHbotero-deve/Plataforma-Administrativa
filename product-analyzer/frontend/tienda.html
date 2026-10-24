@@ -167,7 +167,7 @@ function renderCart(){
   $("cartTotal").textContent=money(cart.reduce((n,x)=>n+Number(x.price)*Number(x.quantity),0),"COP");
 }
 async function load(){
-  const endpoints=[API+"/publications?limit=100","https://gracious-renewal-production-9f45.up.railway.app/api/v1/publications?limit=100"];
+  const endpoints=[API+"/publications?limit=100","https://gracious-renewal-production-76df.up.railway.app/api/v1/publications?limit=100"];
   for(const endpoint of endpoints)try{
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),7000);
     const r=await fetch(endpoint,{cache:"no-store",signal:controller.signal});clearTimeout(timer);
