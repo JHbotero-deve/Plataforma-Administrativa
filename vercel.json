@@ -3,11 +3,11 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://gracious-renewal-production-9f45.up.railway.app/api/v1/:path*"
+      "destination": "https://gracious-renewal-production-76df.up.railway.app/api/v1/:path*"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://gracious-renewal-production-9f45.up.railway.app/api/v1/:path*"
+      "destination": "https://gracious-renewal-production-76df.up.railway.app/api/v1/:path*"
     },
     {
       "source": "/admin",
@@ -19,11 +19,11 @@
     },
     {
       "source": "/robots.txt",
-      "destination": "https://gracious-renewal-production-9f45.up.railway.app/api/v1/public/robots.txt"
+      "destination": "https://gracious-renewal-production-76df.up.railway.app/api/v1/public/robots.txt"
     },
     {
       "source": "/sitemap.xml",
-      "destination": "https://gracious-renewal-production-9f45.up.railway.app/api/v1/public/sitemap.xml"
+      "destination": "https://gracious-renewal-production-76df.up.railway.app/api/v1/public/sitemap.xml"
     }
   ],
   "headers": [
