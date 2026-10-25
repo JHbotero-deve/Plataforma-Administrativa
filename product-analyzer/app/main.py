@@ -37,14 +37,14 @@ def expire_catalog():
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(
+            cur.execute("""
                 UPDATE products
                 SET is_active = FALSE, updated_at = NOW()
                 WHERE is_active = TRUE
                   AND catalog_expires_at IS NOT NULL
                   AND catalog_expires_at <= NOW()
                 RETURNING id
-         
+            """)
             expired = cur.rowcount
         conn.commit()
         print(f"== Productos vencidos retirados: {expired} ==")
@@ -59,7 +59,7 @@ def ingest_amazon(conn) -> list[int]:
             SELECT p.external_id
             FROM products p
             JOIN platforms pl ON pl.id = p.platform_id
-            WHERE pl.name = 'amazon' AND p.is_active = TRUE)
+            WHERE pl.name = 'amazon' AND p.is_active = TRUE
         """)
         existing_ids = {str(row["external_id"]).upper() for row in cur.fetchall()}
 
@@ -108,24 +108,24 @@ def run_pipeline():
 
         averages = {}
         with conn.cursor() as cur:
-            cur.execute(
+            cur.execute("""
                 SELECT c.name AS category, p.currency, AVG(p.current_price) AS avg_price
                 FROM products p
                 JOIN categories c ON c.id = p.category_id
                 WHERE p.is_active = TRUE AND p.current_price IS NOT NULL
                 GROUP BY c.name, p.currency
-            )
+            """)
             for row in cur.fetchall():
                 averages[(row["category"], row["currency"])] = float(row["avg_price"] or 0)
 
         for product_id in set(product_ids):
             with conn.cursor() as cur:
-                cur.execute(
+                cur.execute("""
                     SELECT c.name AS category, p.currency
                     FROM products p
                     LEFT JOIN categories c ON c.id = p.category_id
                     WHERE p.id = %s
-                , (product_id,))
+                """, (product_id,))
                 row = cur.fetchone()
             if not row:
                 continue
@@ -165,7 +165,7 @@ def publish_top_opportunities(limit=15):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(
+            cur.execute("""
                 SELECT p.id, p.title, p.current_price, p.image_url, p.product_url,
                        p.currency, COALESCE(s.opportunity_score, 0) AS opportunity_score
                 FROM products p
@@ -173,26 +173,26 @@ def publish_top_opportunities(limit=15):
                 JOIN platforms pl ON pl.id = p.platform_id
                 WHERE p.is_active = TRUE AND pl.name = 'amazon'
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
-                LIMIT %s,
-             (limit,))
+                LIMIT %s
+            """, (limit,))
             products = cur.fetchall()
 
             # La tienda automática del worker queda dedicada a Amazon.
-            cur.execute(
+            cur.execute("""
                 UPDATE published_cards pc
                 SET is_published = FALSE, updated_at = NOW()
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 WHERE pc.product_id = p.id
                   AND pl.name <> 'amazon'
-                  AND pc.is_published = TRUE)
-            
+                  AND pc.is_published = TRUE
+            """)
 
             for p in products:
                 price = p["current_price"]
                 currency = p["currency"] or "COP"
                 price_display = f"{price:,.0f} {currency}" if price is not None else "Consultar"
-                cur.execute(
+                cur.execute("""
                     INSERT INTO published_cards (
                         product_id, title, subtitle, price_display, image_url, product_url,
                         sale_price, cost_price, profit_amount, profit_margin_pct,
@@ -204,8 +204,8 @@ def publish_top_opportunities(limit=15):
                         image_url=EXCLUDED.image_url, product_url=EXCLUDED.product_url,
                         sale_price=EXCLUDED.sale_price, cost_price=EXCLUDED.cost_price,
                         opportunity_score=EXCLUDED.opportunity_score,
-                        is_published=TRUE, published_at=NOW(), updated_at=NOW(),
-             (
+                        is_published=TRUE, published_at=NOW(), updated_at=NOW()
+                """, (
                     p["id"], p["title"], "Producto real seleccionado por Central",
                     price_display, p["image_url"], p["product_url"],
                     price, price, 0, 0,
