@@ -16,8 +16,18 @@ ALLOWED_PLATFORMS = {"mercadolibre", "amazon"}
 ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios"}
 
 
+def _env(name, default=""):
+    value = os.getenv(name)
+    if value is not None:
+        return value
+    for key, candidate in os.environ.items():
+        if key.strip() == name:
+            return candidate
+    return default
+
+
 def _token():
-    return os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_TOKEN")
+    return _env("TELEGRAM_BOT_TOKEN") or _env("BOT_TOKEN") or _env("TELEGRAM_TOKEN")
 
 
 def _allowed_chat(chat_id):
@@ -144,7 +154,7 @@ def _top_products(limit=25):
     try:
         from amazon_api import search_products, _map_item, _map_fallback_item
         items = search_products("deals discounts promotion", limit // 2 + 1)
-        tag = os.getenv("AMAZON_PARTNER_TAG", "").strip()
+        tag = _env("AMAZON_PARTNER_TAG", "").strip()
         for item in items:
             prod = _map_item(item, "general") or _map_fallback_item(item, "general")
             if prod:
@@ -530,15 +540,15 @@ def run_bot():
         print("[telegram-bot] Bot deshabilitado: falta TELEGRAM_CHAT_ID.")
         return
 
-    try:
-        lock_conn = _acquire_polling_lock()
-    except Exception as exc:
-        print(f"[telegram-bot] Bot deshabilitado: no se pudo obtener el bloqueo de polling ({type(exc).__name__}).")
-        return
-
-    if lock_conn is None:
-        print("[telegram-bot] Otra instancia ya posee el consumidor de Telegram; esta instancia se detiene.")
-        return
+    lock_conn = None
+    while lock_conn is None:
+        try:
+            lock_conn = _acquire_polling_lock()
+        except Exception as exc:
+            print(f"[telegram-bot] No se pudo obtener el bloqueo de polling ({type(exc).__name__}); se reintentará.")
+        if lock_conn is None:
+            print("[telegram-bot] Bloqueo de polling ocupado; se reintentará sin detener el servicio.")
+            time.sleep(max(POLL_INTERVAL, 10))
 
     try:
         _clear_webhook(token)
