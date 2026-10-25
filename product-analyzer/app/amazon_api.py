@@ -219,7 +219,7 @@ def _search_amazon_html(keywords: str, limit: int = 10) -> list[dict[str, Any]]:
         html = response.text
         blocks = re.findall(
             r'<div[^>]+data-asin=["\']([A-Z0-9]{10})["\'][^>]*'
-            r'data-component-type=["\']s-search-result["\'][^>]*>.*?</div>\\s*</div>',
+            r'data-component-type=["\']s-search-result["\'][^>]*>.*?</div>\s*</div>',
             html,
             re.IGNORECASE | re.DOTALL,
         )
@@ -243,7 +243,7 @@ def _search_amazon_html(keywords: str, limit: int = 10) -> list[dict[str, Any]]:
                 r'<span[^>]+class=["\'][^"\']*a-text-normal[^"\']*["\'][^>]*>(.*?)</span>',
                 chunk, re.IGNORECASE | re.DOTALL)
             title = re.sub(r"<[^>]+>", " ", title_match.group(1)) if title_match else ""
-            title = re.sub(r"\\s+", " ", title).strip()
+            title = re.sub(r"\s+", " ", title).strip()
 
             image = None
             dynamic = re.search(r'data-a-dynamic-image=["\']([^"\']+)["\']', chunk, re.IGNORECASE)

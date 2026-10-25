@@ -120,16 +120,16 @@ def _public_search(query, limit=20):
     products = []
     seen = set()
 
-    links = re.findall(r"<a[^>]+href=[\"'](https://(?:articulo|www)\\.mercadolibre\\.com\\.co/[^\"']+)[\"'][^>]*>(.*?)</a>", html, re.I | re.S)
+    links = re.findall(r"<a[^>]+href=[\"'](https://(?:articulo|www)\.mercadolibre\.com\.co/[^\"']+)[\"'][^>]*>(.*?)</a>", html, re.I | re.S)
     for permalink, raw_title in links:
-        match = re.search(r"(MCO-\\d+)", permalink)
+        match = re.search(r"(MCO-\d+)", permalink)
         if not match:
             continue
         item_id = match.group(1)
         if item_id in seen:
             continue
         title = re.sub(r"<[^>]+>", " ", raw_title)
-        title = re.sub(r"\\s+", " ", title).strip()
+        title = re.sub(r"\s+", " ", title).strip()
         if not title:
             continue
         try:
@@ -142,7 +142,7 @@ def _public_search(query, limit=20):
             if not page.ok:
                 continue
             page_html = page.text
-            price_match = re.search(r'"price"\\s*:\\s*"?([0-9.]+)"?', page_html)
+            price_match = re.search(r'"price"\s*:\s*"?([0-9.]+)"?', page_html)
             image_match = re.search(r"<meta[^>]+property=[\"']og:image[\"'][^>]+content=[\"']([^\"']+)", page_html, re.I)
             amount = float(price_match.group(1).replace(".", "")) if price_match else None
             image = image_match.group(1) if image_match else ""
