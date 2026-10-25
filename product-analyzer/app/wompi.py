@@ -120,8 +120,7 @@ def create_product_checkout(req: ProductCheckout):
     params=[("public-key",public_key),("currency",currency),("amount-in-cents",str(cents)),("reference",reference),("signature:integrity",signature),("customer-data:email",req.customer_email.strip().lower()),("customer-data:full-name",req.customer_name.strip())]
     if req.customer_phone: params += [("customer-data:phone-number",req.customer_phone),("customer-data:phone-number-prefix","+57")]
     if redirect: params.append(("redirect-url",redirect))
-    return {"order_id":order["id"],"payment_id":payment["id"],"product_id":req.product_id,"reference":reference,"amount_in_cents":cents,"currency":currency,"checkout_url":f"{_checkout_base_url()}?{urlencode(params)}"}
-
+    return {"order_id":order["id"],"payment_id":payment["id"],"product_id":req.product_id,"reference":reference,"amount_in_cents":cents,"currency":currency,"checkout_url":f"{_checkout_base_url()}?{urlencode(params)}"
 
 @router.post("/checkout/cart")
 async def create_cart_checkout(request: Request):
@@ -401,13 +400,18 @@ async def wompi_events(
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(
+        cur.execute(
                 """INSERT INTO payment_events
                 (provider, event_type, transaction_id, checksum, payload)
                 VALUES ('wompi', %s, %s, %s, %s)
-                ON CONFLICT (provider, event_type, transaction_id, checksum) DO NOTHING""",
+                ON CONFLICT (provider, event_type, transaction_id, checksum) DO NOTHING
+                RETURNING id""",
                 (event["event"], transaction_id, supplied, Json(event)),
-            )
+        )
+            event_inserted = cur.fetchone()
+            if not event_inserted:
+                conn.commit()
+                return {"received": True, "processed": False, "duplicate": True}
             cur.execute(
                 """UPDATE payment_transactions
                     SET transaction_id=%s, status=%s, payment_method_type=%s,
