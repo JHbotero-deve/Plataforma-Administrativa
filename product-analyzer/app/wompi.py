@@ -56,7 +56,7 @@ def _event_checksum(event: dict[str, Any]) -> str:
             status_code=400, detail="Evento Wompi sin firma completa")
     try:
         values = "".join(str(_get_path(event.get("data", {}), prop))
-                    for prop in properties)
+                         for prop in properties)
     except KeyError as exc:
         raise HTTPException(
             status_code=400, detail=f"Propiedad de firma ausente: {exc.args[0]}")
@@ -79,48 +79,73 @@ class ProductCheckout(BaseModel):
 
 @router.post("/checkout/product")
 def create_product_checkout(req: ProductCheckout):
-    if req.quantity<1 or req.quantity>100: raise HTTPException(status_code=400,detail="Cantidad inválida")
-    public_key=_required("WOMPI_PUBLIC_KEY")
-    currency=os.getenv("WOMPI_CURRENCY","COP").strip().upper()
-    environment=os.getenv("WOMPI_ENVIRONMENT","prod").strip().lower()
-    if currency!="COP": raise HTTPException(status_code=500,detail="Wompi Colombia requiere moneda COP")
-    conn=get_connection()
+    if req.quantity < 1 or req.quantity > 100:
+        raise HTTPException(
+            status_code=400, detail="Cantidad inválida")
+    public_key = _required("WOMPI_PUBLIC_KEY")
+    currency = os.getenv("WOMPI_CURRENCY", "COP").strip().upper()
+    environment = os.getenv("WOMPI_ENVIRONMENT", "prod").strip().lower()
+    if currency != "COP":
+        raise HTTPException(
+            status_code=500, detail="Wompi Colombia requiere moneda COP")
+    conn = get_connection()
     try:
         with conn.cursor() as cur:
             cur.execute("""SELECT p.id,p.title,p.image_url,p.product_url,p.current_price,p.currency,p.stock,
                                   pc.id AS publication_id,pc.sale_price,pc.cost_price
                            FROM products p LEFT JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
-                           WHERE p.id=%s AND p.is_active=TRUE""",(req.product_id,))
-            product=cur.fetchone()
-            if not product: raise HTTPException(status_code=404,detail="Producto no encontrado")
-            if req.publication_id and product["publication_id"]!=req.publication_id: raise HTTPException(status_code=409,detail="La publicación no corresponde al producto solicitado")
-            if product["stock"] is not None and req.quantity>product["stock"]: raise HTTPException(status_code=409,detail="Stock insuficiente")
-            sale=float(product["sale_price"] or product["current_price"] or 0)
-            cost=float(product["cost_price"] if product["cost_price"] is not None else product["current_price"] or 0)
-            if sale<=0: raise HTTPException(status_code=400,detail="Producto sin precio de venta")
-            total=sale*req.quantity; cents=_amount_to_cents(total); reference=f"ORD-{secrets.token_hex(10).upper()}"; signature=_integrity_signature(reference,cents,currency)
+                           WHERE p.id=%s AND p.is_active=TRUE""", (req.product_id,))
+            product = cur.fetchone()
+            if not product:
+                raise HTTPException(
+                    status_code=404, detail="Producto no encontrado")
+            if req.publication_id and product["publication_id"] != req.publication_id:
+                raise HTTPException(
+                    status_code=409, detail="La publicación no corresponde al producto solicitado")
+            if product["stock"] is not None and req.quantity > product["stock"]:
+                raise HTTPException(
+                    status_code=409, detail="Stock insuficiente")
+            sale = float(product["sale_price"]
+                         or product["current_price"] or 0)
+            cost = float(product["cost_price"] if product["cost_price"]
+                         is not None else product["current_price"] or 0)
+            if sale <= 0:
+                raise HTTPException(
+                    status_code=400, detail="Producto sin precio de venta")
+            total = sale*req.quantity
+            cents = _amount_to_cents(
+                total)
+            reference = f"ORD-{secrets.token_hex(10).upper()}"; signature = _integrity_signature(
+                reference, cents, currency)
             cur.execute("""INSERT INTO store_orders
                 (reference,product_id,publication_id,customer_name,customer_email,customer_phone,quantity,unit_price,cost_unit_price,total_amount,estimated_profit,currency,status,payment_status,source,product_title_snapshot,product_image_snapshot,product_url_snapshot,platform_snapshot)
                 SELECT %s,p.id,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'PENDING','PENDING','TIENDA',p.title,p.image_url,p.product_url,pl.name
                 FROM products p JOIN platforms pl ON pl.id=p.platform_id WHERE p.id=%s RETURNING id,reference""",
-                (reference,product["publication_id"],req.customer_name.strip(),req.customer_email.strip().lower(),req.customer_phone,req.quantity,sale,cost,total,(sale-cost)*req.quantity,currency,req.product_id))
-            order=cur.fetchone()
+                        (reference, product["publication_id"], req.customer_name.strip(), req.customer_email.strip().lower(), req.customer_phone, req.quantity, sale, cost, total, (sale-cost)*req.quantity, currency, req.product_id))
+            order = cur.fetchone()
             cur.execute("""INSERT INTO store_order_items(order_id,product_id,publication_id,product_title,quantity,unit_price,cost_unit_price,line_total,estimated_profit)
                            SELECT %s,p.id,%s,p.title,%s,%s,%s,%s,%s
                            FROM products p WHERE p.id=%s""",
-                        (order["id"],product["publication_id"],req.quantity,sale,cost,total,(sale-cost)*req.quantity,req.product_id))
+                        (order["id"], product["publication_id"], req.quantity, sale, cost, total, (sale-cost)*req.quantity, req.product_id))
             cur.execute("""INSERT INTO payment_transactions
                 (reference,provider,product_id,order_id,customer_email,amount_in_cents,currency,status,environment)
                 VALUES (%s,'wompi',%s,%s,%s,%s,%s,'PENDING',%s) RETURNING id,reference""",
-                (reference,req.product_id,order["id"],req.customer_email.strip().lower(),cents,currency,environment))
-            payment=cur.fetchone()
+                        (reference, req.product_id, order["id"], req.customer_email.strip().lower(), cents, currency, environment))
+            payment = cur.fetchone()
         conn.commit()
-    finally: conn.close()
-    redirect=req.redirect_url or os.getenv("WOMPI_REDIRECT_URL","").strip() or None
-    params=[("public-key",public_key),("currency",currency),("amount-in-cents",str(cents)),("reference",reference),("signature:integrity",signature),("customer-data:email",req.customer_email.strip().lower()),("customer-data:full-name",req.customer_name.strip())]
-    if req.customer_phone: params += [("customer-data:phone-number",req.customer_phone),("customer-data:phone-number-prefix","+57")]
-    if redirect: params.append(("redirect-url",redirect))
-    return {"order_id":order["id"],"payment_id":payment["id"],"product_id":req.product_id,"reference":reference,"amount_in_cents":cents,"currency":currency,"checkout_url":f"{_checkout_base_url()}?{urlencode(params)}"
+    finally:
+        conn.close()
+    redirect = req.redirect_url or os.getenv(
+        "WOMPI_REDIRECT_URL", "").strip() or None
+    params = [("public-key", public_key), ("currency", currency), ("amount-in-cents", str(cents)), ("reference", reference), ("signature:integrity",
+                                                                                                                              signature), ("customer-data:email", req.customer_email.strip().lower()), ("customer-data:full-name", req.customer_name.strip())]
+    if req.customer_phone:
+        params += [("customer-data:phone-number",
+                    req.customer_phone), ("customer-data:phone-number-prefix", "+57")]
+    if redirect:
+        params.append(("redirect-url", redirect))
+    return {"order_id": order["id"], "payment_id": payment["id"], "product_id": req.product_id, "reference": reference, "amount_in_cents": cents, "currency": currency, "checkout_url": f"{_checkout_base_url()}?{urlencode(params)}"}
+
 
 @router.post("/checkout/cart")
 async def create_cart_checkout(request: Request):
@@ -133,32 +158,41 @@ async def create_cart_checkout(request: Request):
         raise HTTPException(status_code=400, detail="Cuerpo inválido")
 
     # --- Cliente (acepta campos planos o anidados en "customer") ---
-    customer = body.get("customer") if isinstance(body.get("customer"), dict) else {}
-    name = str(body.get("customer_name") or customer.get("name") or body.get("name") or "").strip()
-    email = str(body.get("customer_email") or customer.get("email") or body.get("email") or "").strip().lower()
-    phone = body.get("customer_phone") or customer.get("phone") or body.get("phone")
+    customer = body.get("customer") if isinstance(
+        body.get("customer"), dict) else {}
+    name = str(body.get("customer_name") or customer.get(
+        "name") or body.get("name") or "").strip()
+    email = str(body.get("customer_email") or customer.get(
+        "email") or body.get("email") or "").strip().lower()
+    phone = body.get("customer_phone") or customer.get(
+        "phone") or body.get("phone")
     phone = str(phone).strip() if phone else None
     if not name or "@" not in email:
-        raise HTTPException(status_code=400, detail="Nombre y correo válidos son obligatorios")
+        raise HTTPException(
+            status_code=400, detail="Nombre y correo válidos son obligatorios")
 
     # --- Ítems del carrito (acepta "items" o "cart"; product_id / productId / id) ---
     raw_items = body.get("items") or body.get("cart") or []
     if not isinstance(raw_items, list) or not raw_items:
         raise HTTPException(status_code=400, detail="El carrito está vacío")
     if len(raw_items) > 30:
-        raise HTTPException(status_code=400, detail="Demasiados ítems en el carrito")
+        raise HTTPException(
+            status_code=400, detail="Demasiados ítems en el carrito")
 
     wanted: dict[int, dict] = {}
     for it in raw_items:
         if not isinstance(it, dict):
-            raise HTTPException(status_code=400, detail="Ítem de carrito inválido")
+            raise HTTPException(
+                status_code=400, detail="Ítem de carrito inválido")
         try:
-            pid = int(it.get("product_id") or it.get("productId") or it.get("id"))
+            pid = int(it.get("product_id") or it.get(
+                "productId") or it.get("id"))
             qty = int(it.get("quantity") or it.get("qty") or 1)
             pub_raw = it.get("publication_id") or it.get("publicationId")
             pub = int(pub_raw) if pub_raw else None
         except (TypeError, ValueError):
-            raise HTTPException(status_code=400, detail="Ítem de carrito inválido")
+            raise HTTPException(
+                status_code=400, detail="Ítem de carrito inválido")
         if qty < 1 or qty > 100:
             raise HTTPException(status_code=400, detail="Cantidad inválida")
         entry = wanted.setdefault(pid, {"qty": 0, "publication_id": pub})
@@ -171,7 +205,8 @@ async def create_cart_checkout(request: Request):
     currency = os.getenv("WOMPI_CURRENCY", "COP").strip().upper()
     environment = os.getenv("WOMPI_ENVIRONMENT", "prod").strip().lower()
     if currency != "COP":
-        raise HTTPException(status_code=500, detail="Wompi Colombia requiere moneda COP")
+        raise HTTPException(
+            status_code=500, detail="Wompi Colombia requiere moneda COP")
 
     conn = get_connection()
     try:
@@ -193,16 +228,21 @@ async def create_cart_checkout(request: Request):
             for pid, entry in wanted.items():
                 p = rows.get(pid)
                 if not p:
-                    raise HTTPException(status_code=404, detail=f"Producto {pid} no encontrado")
+                    raise HTTPException(
+                        status_code=404, detail=f"Producto {pid} no encontrado")
                 if entry["publication_id"] and p["publication_id"] != entry["publication_id"]:
-                    raise HTTPException(status_code=409, detail="La publicación no corresponde al producto solicitado")
+                    raise HTTPException(
+                        status_code=409, detail="La publicación no corresponde al producto solicitado")
                 qty = entry["qty"]
                 if p["stock"] is not None and qty > p["stock"]:
-                    raise HTTPException(status_code=409, detail=f"Stock insuficiente: {p['title']}")
+                    raise HTTPException(
+                        status_code=409, detail=f"Stock insuficiente: {p['title']}")
                 sale = float(p["sale_price"] or p["current_price"] or 0)
-                cost = float(p["cost_price"] if p["cost_price"] is not None else p["current_price"] or 0)
+                cost = float(p["cost_price"] if p["cost_price"]
+                             is not None else p["current_price"] or 0)
                 if sale <= 0:
-                    raise HTTPException(status_code=400, detail=f"Producto sin precio de venta: {p['title']}")
+                    raise HTTPException(
+                        status_code=400, detail=f"Producto sin precio de venta: {p['title']}")
                 lines.append({
                     "product_id": pid, "publication_id": p["publication_id"],
                     "title": p["title"], "qty": qty, "sale": sale, "cost": cost,
@@ -218,7 +258,8 @@ async def create_cart_checkout(request: Request):
 
             first = lines[0]
             first_row = rows[first["product_id"]]
-            title_snapshot = first["title"] if len(lines) == 1 else f"{first['title']} y {len(lines) - 1} más"
+            title_snapshot = first["title"] if len(
+                lines) == 1 else f"{first['title']} y {len(lines) - 1} más"
 
             # --- Pedido (cabecera) ---
             cur.execute(
@@ -252,14 +293,16 @@ async def create_cart_checkout(request: Request):
                    (reference, provider, product_id, order_id, customer_email,
                     amount_in_cents, currency, status, environment)
                    VALUES (%s,'wompi',%s,%s,%s,%s,%s,'PENDING',%s) RETURNING id, reference""",
-                (reference, first["product_id"], order["id"], email, cents, currency, environment),
+                (reference, first["product_id"], order["id"],
+                 email, cents, currency, environment),
             )
             payment = cur.fetchone()
         conn.commit()
     finally:
         conn.close()
 
-    redirect = body.get("redirect_url") or os.getenv("WOMPI_REDIRECT_URL", "").strip() or None
+    redirect = body.get("redirect_url") or os.getenv(
+        "WOMPI_REDIRECT_URL", "").strip() or None
     params = [
         ("public-key", public_key),
         ("currency", currency),
@@ -270,7 +313,8 @@ async def create_cart_checkout(request: Request):
         ("customer-data:full-name", name),
     ]
     if phone:
-        params += [("customer-data:phone-number", phone), ("customer-data:phone-number-prefix", "+57")]
+        params += [("customer-data:phone-number", phone),
+                   ("customer-data:phone-number-prefix", "+57")]
     if redirect:
         params.append(("redirect-url", redirect))
 
@@ -322,7 +366,8 @@ def create_subscription_checkout(req: SubscriptionCheckout):
 
             cur.execute(
                 """INSERT INTO payment_transactions
-                    (reference, provider, plan_id, customer_email, amount_in_cents, currency, status, environment)
+                    (reference, provider, plan_id, customer_email,
+                     amount_in_cents, currency, status, environment)
                     VALUES (%s, 'wompi', %s, %s, %s, %s, 'PENDING', %s)
                     RETURNING id, reference""",
                 (reference, plan["id"], req.customer_email.strip(
@@ -396,18 +441,17 @@ async def wompi_events(
     if not reference or not transaction_id or not status:
         raise HTTPException(
             status_code=400, detail="Evento de transacción incompleto")
-
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-        cur.execute(
+            cur.execute(
                 """INSERT INTO payment_events
                 (provider, event_type, transaction_id, checksum, payload)
                 VALUES ('wompi', %s, %s, %s, %s)
                 ON CONFLICT (provider, event_type, transaction_id, checksum) DO NOTHING
                 RETURNING id""",
                 (event["event"], transaction_id, supplied, Json(event)),
-        )
+            )
             event_inserted = cur.fetchone()
             if not event_inserted:
                 conn.commit()
@@ -431,18 +475,19 @@ async def wompi_events(
 
             if payment and payment.get("order_id") and status == "APPROVED":
                 cur.execute("""UPDATE store_orders SET status='PAID',payment_status='PAID',paid_at=NOW(),updated_at=NOW()
-                               WHERE id=%s AND payment_status<>'PAID' RETURNING id,product_id,quantity""",(payment["order_id"],))
-                order=cur.fetchone()
+                               WHERE id=%s AND payment_status<>'PAID' RETURNING id,product_id,quantity""", (payment["order_id"],))
+                order = cur.fetchone()
                 if order:
                     cur.execute("""UPDATE products p SET stock=CASE WHEN p.stock IS NULL THEN NULL ELSE GREATEST(p.stock-oi.quantity,0) END
                                    FROM store_order_items oi
-                                   WHERE oi.order_id=%s AND oi.product_id=p.id""",(order["id"],))
+                                   WHERE oi.order_id=%s AND oi.product_id=p.id""", (order["id"],))
                     cur.execute("""INSERT INTO store_invoices(order_id,invoice_number,total_amount,currency,status)
                                    SELECT id,'FAC-'||to_char(NOW(),'YYYYMMDDHH24MISS')||'-'||id,total_amount,currency,'ISSUED'
                                    FROM store_orders WHERE id=%s
-                                   ON CONFLICT(order_id) DO NOTHING""",(order["id"],))
-            elif payment and payment.get("order_id") and status in {"DECLINED","VOIDED","ERROR"}:
-                cur.execute("""UPDATE store_orders SET status=%s,payment_status=%s,updated_at=NOW() WHERE id=%s AND payment_status='PENDING'""",(status,status,payment["order_id"]))
+                                   ON CONFLICT(order_id) DO NOTHING""", (order["id"],))
+            elif payment and payment.get("order_id") and status in {"DECLINED", "VOIDED", "ERROR"}:
+                cur.execute("""UPDATE store_orders SET status=%s,payment_status=%s,updated_at=NOW() WHERE id=%s AND payment_status='PENDING'""",
+                            (status, status, payment["order_id"]))
 
             if payment and status == "APPROVED" and payment["plan_id"]:
                 cur.execute(
