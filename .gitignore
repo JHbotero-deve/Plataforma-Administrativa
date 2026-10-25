@@ -1,20 +1,33 @@
-# Python
+﻿# Python / Entornos virtuales
 __pycache__/
 *.pyc
 *.pyo
 .venv/
 venv/
+*.egg-info/
 
-# Entornos / secretos
+# Entornos y Secretos
 .env
 *.env.local
+*.env.*.local
 
-# Docker
+# Archivos de logs y Docker
 *.log
+docker-compose.override.yml
 
-# Sistema
+# Archivos del Sistema Operativo
 .DS_Store
 Thumbs.db
 
-# Node (por si el frontend crece)
+# Node.js y paquetes de Frontend
 node_modules/
+dist/
+build/
+.npm/
+
+# Archivos de IDE (IntelliJ / Android Studio)
+.idea/
+*.iml
+out/
+/shelf/
+/workspace.xml

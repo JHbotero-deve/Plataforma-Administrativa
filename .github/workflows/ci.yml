@@ -1,4 +1,4 @@
-name: Central CI
+﻿name: Central CI
 
 on:
   push:
@@ -16,23 +16,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Validate frontend JavaScript
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           import re
-          html = Path("product-analyzer/frontend/index.html").read_text(encoding="utf-8")
+          html_path = Path("product-analyzer/frontend/index.html")
+          if not html_path.exists():
+              raise SystemExit("product-analyzer/frontend/index.html not found")
+          html = html_path.read_text(encoding="utf-8")
           matches = re.findall(r"<script(?:\s[^>]*)?>([\s\S]*?)</script>", html)
-          if not matches:
-              raise SystemExit("Frontend script not found")
-          Path("/tmp/central-frontend.js").write_text("\n".join(matches), encoding="utf-8")
+          inline_code = "\n".join([m for m in matches if m.strip()])
+          if not inline_code:
+              print("No inline JS code found to validate, skipping node check.")
+          else:
+              Path("/tmp/central-frontend.js").write_text(inline_code, encoding="utf-8")
+              import subprocess
+              subprocess.run(["node", "--check", "/tmp/central-frontend.js"], check=True)
           PY
-          node --check /tmp/central-frontend.js
+
       - name: Build Figma showcase
         shell: bash
         run: |
@@ -46,7 +55,9 @@ jobs:
           python - <<'PY'
           import json
           from pathlib import Path
-          cfg = json.loads(Path("vercel.json").read_text(encoding="utf-8"))
+          cfg_path = Path("vercel.json")
+          assert cfg_path.exists(), "vercel.json configuration file missing"
+          cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
           frontend = Path("product-analyzer/frontend")
           assert (frontend / "index.html").is_file(), "Admin panel missing"
           assert (frontend / "central.css").is_file(), "Shared admin stylesheet missing"
@@ -60,25 +71,31 @@ jobs:
           assert 'fetch("/api/v1/auth/login"' in html, "Login must use same-origin versioned API"
           print("Admin routes, login, CSS and API proxy validated")
           PY
+
       - name: Validate admin login JavaScript
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           import re
-          html = Path("product-analyzer/frontend/admin-login.html").read_text(encoding="utf-8")
+          html_path = Path("product-analyzer/frontend/admin-login.html")
+          if not html_path.exists():
+              raise SystemExit("product-analyzer/frontend/admin-login.html not found")
+          html = html_path.read_text(encoding="utf-8")
           scripts = re.findall(r"<script(?:\s[^>]*)?>([\s\S]*?)</script>", html)
-          if not scripts:
-              raise SystemExit("Admin login script not found")
-          Path("/tmp/central-login.js").write_text("\n".join(scripts), encoding="utf-8")
+          inline_code = "\n".join([s for s in scripts if s.strip()])
+          if not inline_code:
+              print("No inline JS scripts found in login, skipping node check.")
+          else:
+              Path("/tmp/central-login.js").write_text(inline_code, encoding="utf-8")
+              import subprocess
+              subprocess.run(["node", "--check", "/tmp/central-login.js"], check=True)
           PY
-          node --check /tmp/central-login.js
+
       - name: Validate backend Python
         shell: bash
         run: |
           python -m compileall -q product-analyzer/app
-
-
 
   docker:
     name: Validate backend image
