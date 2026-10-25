@@ -387,23 +387,29 @@ def _handle(token, chat_id, text):
     if not command.startswith("/"):
         for part in text.split():
             try:
-                if detect_platform(part) != "amazon":
-                    continue
+                platform = detect_platform(part)
             except ValueError:
                 continue
             try:
-                product = import_url(part, "accesorios")
+                conn = get_connection()
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            INSERT INTO link_queue (url, platform, chat_id)
+                            VALUES (%s, %s, %s)
+                            RETURNING id
+                            """,
+                            (part, platform, str(chat_id)),
+                        )
+                        queue_id = cur.fetchone()["id"]
+                    conn.commit()
+                finally:
+                    conn.close()
             except Exception as exc:
-                print(f"[telegram-bot] amazon url error: {exc}")
-                return _send(token, chat_id, "No pude leer ese enlace de Amazon.")
-            return _send_product(token, chat_id, {
-                "title": product["title"],
-                "current_price": product.get("price"),
-                "currency": product.get("currency"),
-                "product_url": product["product_url"],
-                "image_url": product.get("image_url"),
-                "platform": product["platform"],
-            })
+                print(f"[telegram-bot] queue insert error: {type(exc).__name__}: {exc}")
+                return _send(token, chat_id, "No pude poner el enlace en la cola. Intenta de nuevo.")
+            return _send(token, chat_id, f"Enlace recibido. Lo estoy procesando (cola #{queue_id}).")
 
     if command in ("/start", "/help"):
         return _send(token, chat_id, (
