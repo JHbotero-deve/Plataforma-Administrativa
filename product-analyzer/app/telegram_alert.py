@@ -8,7 +8,7 @@ import requests
 
 from analysis import score_product
 from db import get_connection, upsert_product
-from url_import import import_url
+from url_import import detect_platform, import_url
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
@@ -383,6 +383,27 @@ def _model_product(argument):
 def _handle(token, chat_id, text):
     command, _, argument = text.partition(" ")
     command = command.lower().strip()
+
+    if not command.startswith("/"):
+        for part in text.split():
+            try:
+                if detect_platform(part) != "amazon":
+                    continue
+            except ValueError:
+                continue
+            try:
+                product = import_url(part, "accesorios")
+            except Exception as exc:
+                print(f"[telegram-bot] amazon url error: {exc}")
+                return _send(token, chat_id, "No pude leer ese enlace de Amazon.")
+            return _send_product(token, chat_id, {
+                "title": product["title"],
+                "current_price": product.get("price"),
+                "currency": product.get("currency"),
+                "product_url": product["product_url"],
+                "image_url": product.get("image_url"),
+                "platform": product["platform"],
+            })
 
     if command in ("/start", "/help"):
         return _send(token, chat_id, (

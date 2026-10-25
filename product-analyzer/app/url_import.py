@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 import requests
 
-AMAZON_HOST_RE = re.compile(r"(^|\.)amazon\.[a-z.]+$", re.I)
+AMAZON_HOST_RE = re.compile(r"(^|\.)(amazon\.[a-z.]+|amzn\.to|amzn\.com|a\.co)$", re.I)
 ASIN_RE = re.compile(r"(?:/dp/|/gp/product/)([A-Z0-9]{10})(?:[/?]|$)", re.I)
 
 
@@ -118,7 +118,7 @@ def _amazon_web_metadata(asin: str) -> dict:
         result["gallery_urls"] = [result["image_url"]]
         return result
     except (requests.RequestException, ValueError):
-        return []
+        return {}
 
 def _metadata(url: str) -> dict:
     headers = {
@@ -197,6 +197,11 @@ def import_url(
 
     platform = detect_platform(url)
     metadata = _metadata(url)
+    if platform == "amazon" and not _asin(metadata.get("resolved_url") or url):
+        try:
+            metadata["resolved_url"] = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15, allow_redirects=True).url
+        except requests.RequestException:
+            pass
     resolved_url = metadata.get("resolved_url") or url
     external_id = _asin(resolved_url) if platform == "amazon" else None
     if platform == "amazon" and external_id and (not metadata.get("title") or metadata.get("price") is None or not metadata.get("image_url")):
