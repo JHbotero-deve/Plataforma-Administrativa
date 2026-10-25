@@ -36,14 +36,14 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
         seller_id = None
         if seller_data.get("external_id"):
             cur.execute(
-                
+                """
                 INSERT INTO sellers (platform_id, external_id, name, reputation)
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (platform_id, external_id) DO UPDATE SET
                     name = COALESCE(EXCLUDED.name, sellers.name),
                     reputation = COALESCE(EXCLUDED.reputation, sellers.reputation)
-                RETURNING id,
-                
+                RETURNING id
+                """,
                 (
                     platform["id"],
                     str(seller_data["external_id"]),
@@ -54,6 +54,7 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
             seller_id = cur.fetchone()["id"]
 
         cur.execute(
+            """
             INSERT INTO products (
                 platform_id, category_id, seller_id, external_id, title,
                 image_url, image_gallery, product_url, affiliate_url, current_price, currency, rating,
@@ -82,8 +83,8 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
                 catalog_expires_at = NOW() + INTERVAL '48 hours',
                 is_active = TRUE,
                 updated_at = NOW()
-            RETURNING id,
-            
+            RETURNING id
+            """,
             (
                 platform["id"],
                 category["id"] if category else None,

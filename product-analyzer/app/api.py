@@ -101,7 +101,7 @@ def _publish_external_product(conn, product_id, product, platform_label):
     product_url = product.get("product_url") or None
     score = product.get("_score")
     with conn.cursor() as cur:
-        cur.execute(
+        cur.execute("""
             INSERT INTO published_cards (
                 product_id, title, subtitle, price_display, image_url, product_url,
                 sale_price, cost_price, profit_amount, profit_margin_pct,
@@ -112,8 +112,8 @@ def _publish_external_product(conn, product_id, product, platform_label):
                 price_display=EXCLUDED.price_display, image_url=EXCLUDED.image_url,
                 product_url=EXCLUDED.product_url, sale_price=EXCLUDED.sale_price,
                 cost_price=EXCLUDED.cost_price, opportunity_score=EXCLUDED.opportunity_score,
-                is_published=TRUE, published_at=NOW(), updated_at=NOW(),
-         (
+                is_published=TRUE, published_at=NOW(), updated_at=NOW()
+        """, (
             product_id, product["title"], f"{platform_label} · producto original",
             price_display, image_url, product_url,
             price, price, score or 0, f"Oferta {platform_label}", "#b6f23a"
@@ -122,19 +122,19 @@ def _publish_external_product(conn, product_id, product, platform_label):
 
 @core_router.post("/store/sync")
 def sync_store_catalog():
-    Importa productos reales al catálogo; las tarjetas se publican únicamente desde Studio.
+    """Importa productos reales al catálogo; las tarjetas se publican únicamente desde Studio."""
     conn = get_connection()
     amazon_imported = []
     meli_imported = []
     errors = []
     try:
         with conn.cursor() as cur:
-            cur.execute(
+            cur.execute("""
                 SELECT p.external_id, pl.name AS platform
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 WHERE p.is_active = TRUE AND pl.name IN ('amazon', 'mercadolibre')
-            )
+            """)
             existing = {(str(row["platform"]).lower(), str(row["external_id"]).upper()) for row in cur.fetchall()}
 
         # Amazon: hasta 15 productos reales nuevos y válidos.
@@ -147,13 +147,13 @@ def sync_store_catalog():
                 try:
                     product_id = upsert_product(conn, "amazon", category, product)
                     with conn.cursor() as cur:
-                        cur.execute(
+                        cur.execute("""
                             SELECT AVG(p.current_price) AS avg_price
                             FROM products p
                             JOIN categories c ON c.id = p.category_id
                             WHERE p.is_active = TRUE AND c.name = %s
                               AND p.currency = %s AND p.current_price IS NOT NULL
-                        , (category, product.get("currency") or "USD"))
+                        """, (category, product.get("currency") or "USD"))
                         average = cur.fetchone()["avg_price"]
                     product["_score"] = score_product(conn, product_id, float(average or 0))
                     conn.commit()
@@ -181,13 +181,13 @@ def sync_store_catalog():
                             continue
                         product_id = upsert_product(conn, "mercadolibre", "accesorios", product)
                         with conn.cursor() as cur:
-                            cur.execute(
+                            cur.execute("""
                                 SELECT AVG(p.current_price) AS avg_price
                                 FROM products p
                                 JOIN categories c ON c.id = p.category_id
                                 WHERE p.is_active = TRUE AND c.name = %s
-                                  AND p.currency = %s AND p.current_price IS NOT NULL,
-                             ("accesorios", product.get("currency") or "COP"))
+                                  AND p.currency = %s AND p.current_price IS NOT NULL
+                            """, ("accesorios", product.get("currency") or "COP"))
                             average = cur.fetchone()["avg_price"]
                         product["_score"] = score_product(conn, product_id, float(average or 0))
                         conn.commit()
@@ -229,6 +229,7 @@ def pipeline_summary():
     try:
         with conn.cursor() as cur:
             cur.execute(
+                """
                 SELECT pl.name AS platform, COUNT(p.id) AS product_count,
                        MAX(p.updated_at) AS last_update
                 FROM platforms pl
@@ -236,7 +237,7 @@ def pipeline_summary():
                   ON p.platform_id = pl.id AND p.is_active = TRUE
                 GROUP BY pl.name
                 ORDER BY pl.name
-                
+                """
             )
             return cur.fetchall()
     finally:
@@ -252,7 +253,7 @@ def list_products(
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            query = 
+            query = """
                 SELECT p.id, p.title, pl.name AS platform, c.name AS category,
                        p.current_price, p.currency, p.rating, p.reviews_count,
                        p.sales_estimate, p.image_url, p.image_gallery, p.product_url, p.affiliate_url, p.updated_at, p.source_metadata, p.description, p.previous_price, p.stock, p.sku,
@@ -263,7 +264,7 @@ def list_products(
                 LEFT JOIN categories c ON c.id = p.category_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
-        
+            """
             params = []
             if category:
                 query += " AND c.name = %s"
@@ -289,7 +290,7 @@ def public_product(product_id: int):
     conn=get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(SELECT pc.id AS publication_id,pc.product_id,pc.title,pc.subtitle,pc.price_display,
+            cur.execute("""SELECT pc.id AS publication_id,pc.product_id,pc.title,pc.subtitle,pc.price_display,
                 pc.sale_price,pc.opportunity_score,pc.footer,p.description,p.current_price,p.previous_price,p.currency,
                 COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) AS image_url,p.image_gallery,
                 COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) AS product_url,
@@ -297,7 +298,7 @@ def public_product(product_id: int):
                 pl.name AS platform,c.name AS category,p.rating,p.reviews_count,p.updated_at
                 FROM published_cards pc JOIN products p ON p.id=pc.product_id JOIN platforms pl ON pl.id=p.platform_id
                 LEFT JOIN categories c ON c.id=p.category_id
-                WHERE pc.product_id=%s AND pc.is_published=TRUE AND p.is_active=TRUE,(product_id,))
+                WHERE pc.product_id=%s AND pc.is_published=TRUE AND p.is_active=TRUE""",(product_id,))
             row=cur.fetchone()
     finally: conn.close()
     if not row: raise HTTPException(404,"Producto publicado no encontrado")
@@ -315,11 +316,11 @@ def affiliate_click(payload: dict):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(SELECT p.product_url,p.affiliate_url,pl.name AS platform
+            cur.execute("""SELECT p.product_url,p.affiliate_url,pl.name AS platform
                 FROM products p
                 JOIN platforms pl ON pl.id=p.platform_id
                 JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
-                WHERE p.id=%s AND p.is_active=TRUE, (product_id,))
+                WHERE p.id=%s AND p.is_active=TRUE""", (product_id,))
             row = cur.fetchone()
             if not row:
                 raise HTTPException(404, "Producto no encontrado")
@@ -402,14 +403,15 @@ def import_product_from_url(payload: ProductImport):
         if product.get("price") is not None:
             with conn.cursor() as cur:
                 cur.execute(
+                    """
                     SELECT AVG(p.current_price) AS avg_price
                     FROM products p
                     JOIN categories c ON c.id = p.category_id
                     WHERE p.is_active = TRUE
                       AND c.name = %s
                       AND p.currency = %s
-                      AND p.current_price IS NOT NULL,
-                    
+                      AND p.current_price IS NOT NULL
+                    """,
                     (payload.category, product.get("currency") or "USD"),
                 )
                 average = cur.fetchone()["avg_price"]
@@ -417,15 +419,15 @@ def import_product_from_url(payload: ProductImport):
 
         with conn.cursor() as cur:
             cur.execute(
-                
+                """
                 SELECT p.id, p.title, pl.name AS platform, c.name AS category,
                        p.current_price, p.currency, p.image_url, p.product_url,
                        p.updated_at, p.catalog_expires_at, p.model_url, p.model_shape
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
-                WHERE p.id = %s,
-                
+                WHERE p.id = %s
+                """,
                 (product_id,),
             )
             saved = cur.fetchone()
@@ -464,7 +466,7 @@ def create_personal_product(payload: PersonalProduct):
                 cur.execute("INSERT INTO categories(name) VALUES(%s) RETURNING id", (category_name,))
                 category = cur.fetchone()
             sku = (payload.sku or "").strip() or f"PERSONAL-{int(time.time()*1000)}"
-            cur.execute=(
+            cur.execute("""
                 INSERT INTO products (
                     platform_id,category_id,external_id,sku,title,description,image_url,image_gallery,
                     product_url,current_price,previous_price,currency,stock,is_active,
@@ -477,15 +479,15 @@ def create_personal_product(payload: PersonalProduct):
                     previous_price=EXCLUDED.previous_price,currency=EXCLUDED.currency,
                     stock=EXCLUDED.stock,is_active=TRUE,catalog_expires_at=NULL,updated_at=NOW()
                 RETURNING id
-            ,(platform["id"],category["id"],sku,sku,payload.title.strip(),payload.description,
+            """,(platform["id"],category["id"],sku,sku,payload.title.strip(),payload.description,
                  payload.image_url,Json(payload.image_gallery or []),payload.product_url,payload.price,payload.previous_price,
                  payload.currency.upper(),payload.stock))
             product_id=cur.fetchone()["id"]
             cur.execute("INSERT INTO price_history(product_id,price) VALUES(%s,%s)",(product_id,payload.price))
-            cur.execute(SELECT p.id,p.title,pl.name AS platform,c.name AS category,p.current_price,
+            cur.execute("""SELECT p.id,p.title,pl.name AS platform,c.name AS category,p.current_price,
                 p.previous_price,p.currency,p.image_url,p.image_gallery,p.product_url,p.stock,p.sku,p.description,p.updated_at
                 FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id
-                WHERE p.id=%s,(product_id,))
+                WHERE p.id=%s""",(product_id,))
             saved=cur.fetchone()
         conn.commit()
         return {"product":saved}
@@ -509,8 +511,8 @@ def update_product_images(product_id: int, payload: ProductImages):
     conn=get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute(UPDATE products SET image_gallery=%s,image_url=%s,updated_at=NOW()
-                           WHERE id=%s RETURNING id,image_url,image_gallery,updated_at,(Json(clean),clean[0] if clean else None,product_id))
+            cur.execute("""UPDATE products SET image_gallery=%s,image_url=%s,updated_at=NOW()
+                           WHERE id=%s RETURNING id,image_url,image_gallery,updated_at""",(Json(clean),clean[0] if clean else None,product_id))
             result=cur.fetchone()
             if not result: raise HTTPException(status_code=404,detail="Producto no encontrado")
         conn.commit(); return result
@@ -530,12 +532,13 @@ def set_product_model(product_id: int, update: ModelUpdate):
     try:
         with conn.cursor() as cur:
             cur.execute(
+                """
                 UPDATE products
                 SET model_url = COALESCE(%s, model_url),
                     model_shape = COALESCE(%s, model_shape)
                 WHERE id = %s
-                RETURNING id, model_url, model_shape,
-                
+                RETURNING id, model_url, model_shape
+                """,
                 (update.model_url, update.model_shape, product_id),
             )
             result = cur.fetchone()
@@ -556,7 +559,7 @@ def get_product(product_id: int):
     try:
         with conn.cursor() as cur:
             cur.execute(
-        
+                """
                 SELECT p.*, pl.name AS platform, c.name AS category,
                        s.opportunity_score
                 FROM products p
@@ -564,18 +567,19 @@ def get_product(product_id: int):
                 LEFT JOIN categories c ON c.id = p.category_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.id = %s
-                ,
+                """,
                 (product_id,),
             )
             product = cur.fetchone()
             if not product:
                 raise HTTPException(status_code=404, detail="Producto no encontrado")
             cur.execute(
+                """
                 SELECT price, recorded_at
                 FROM price_history
                 WHERE product_id = %s
-                ORDER BY recorded_at ASC,
-                
+                ORDER BY recorded_at ASC
+                """,
                 (product_id,),
             )
             history = cur.fetchall()
@@ -601,7 +605,7 @@ def top_opportunities(limit: int = Query(20, ge=1, le=100)):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                
+                """
                 SELECT p.id, p.title, pl.name AS platform, c.name AS category,
                        p.current_price, p.currency, p.rating, p.reviews_count,
                        p.sales_estimate, s.price_score, s.demand_score,
@@ -614,8 +618,8 @@ def top_opportunities(limit: int = Query(20, ge=1, le=100)):
                 LEFT JOIN categories c ON c.id = p.category_id
                 WHERE p.is_active = TRUE
                 ORDER BY s.opportunity_score DESC
-                LIMIT %s,
-                
+                LIMIT %s
+                """,
                 (limit,),
             )
             return cur.fetchall()

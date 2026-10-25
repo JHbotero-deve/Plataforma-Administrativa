@@ -12,12 +12,12 @@ def creator_status():
     try:
         with conn.cursor() as cur:
             cur.execute(
-            
+                """
                 SELECT open_id, granted_scopes, user_type,
                        last_sync_at, last_error, updated_at
                 FROM tiktok_creator_state
                 WHERE id = 1
-                
+                """
             )
             state = cur.fetchone()
         return {
