@@ -6,11 +6,22 @@ from typing import Any
 import requests
 
 BASE_URL = "https://creatorsapi.amazon"
-MARKETPLACE = os.getenv("AMAZON_MARKETPLACE", "www.amazon.com")
-CREDENTIAL_ID = os.getenv("AMAZON_CREDENTIAL_ID", "").strip()
-CREDENTIAL_SECRET = os.getenv("AMAZON_CREDENTIAL_SECRET", "").strip()
-PARTNER_TAG = os.getenv("AMAZON_PARTNER_TAG", "").strip()
-CREDENTIAL_VERSION = os.getenv("AMAZON_CREDENTIAL_VERSION", "3.1").strip()
+def _env(name: str, default: str = "") -> str:
+    value = os.getenv(name)
+    if value is not None:
+        return value
+    # Railway variable names may accidentally contain leading/trailing spaces.
+    for key, candidate in os.environ.items():
+        if key.strip() == name:
+            return candidate
+    return default
+
+
+MARKETPLACE = _env("AMAZON_MARKETPLACE", "www.amazon.com").strip()
+CREDENTIAL_ID = _env("AMAZON_CREDENTIAL_ID", "").strip()
+CREDENTIAL_SECRET = _env("AMAZON_CREDENTIAL_SECRET", "").strip()
+PARTNER_TAG = _env("AMAZON_PARTNER_TAG", "").strip()
+CREDENTIAL_VERSION = _env("AMAZON_CREDENTIAL_VERSION", "3.1").strip()
 
 _TOKEN: str | None = None
 _TOKEN_EXPIRES_AT = 0.0
