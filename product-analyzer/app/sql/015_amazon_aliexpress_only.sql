@@ -19,6 +19,12 @@ WHERE p.platform_id = pl.id
   AND pl.name = 'mercadolibre'
   AND p.is_active = TRUE;
 
+-- Conservar las claves históricas, pero sacar el nombre de la fuente del catálogo operativo.
+UPDATE platforms
+SET name = 'archived_mercadolibre', base_url = NULL
+WHERE name = 'mercadolibre'
+  AND NOT EXISTS (SELECT 1 FROM platforms WHERE name = 'archived_mercadolibre');
+
 -- Las colas de enlaces son temporales: descartar únicamente enlaces pendientes de la fuente retirada.
 DO $$
 BEGIN
