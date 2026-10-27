@@ -26,4 +26,9 @@ Las credenciales reales viven en las variables de entorno de Railway/Vercel y no
 Amazon se importa por URL sin descargar páginas ni usar scraping. Central conserva el enlace original y agrega el tag afiliado si `AMAZON_PARTNER_TAG` está configurado. Si no hay título, precio o imagen disponibles, se pueden enviar manualmente; no se inventan datos. AliExpress usa `aliexpress.affiliate.link.generate` con `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_APP_SECRET` y `ALIEXPRESS_TRACKING_ID`.
 
 ## Telegram
-El bot mantiene /top, /buscar, /modelar y /estado. También acepta enlaces directos de Amazon y AliExpress, los pone en cola, los procesa y devuelve el producto al chat. El servicio de Telegram en Railway requiere TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID; sin esas variables queda deshabilitado de forma segura.
+El bot mantiene /top, /buscar, /modelar y /estado. También acepta enlaces directos de Amazon y AliExpress, los pone en cola, los procesa y devuelve el producto al chat. En Railway, el servicio de cola debe usar el comando `python link_queue_worker.py` en un servicio separado de `central-telegram` y `central-worker`. El servicio de Telegram requiere `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID`.
+
+
+## CLI por URL
+
+Desde la raíz del repositorio, usa `python scripts/importar-url-central.py --url "URL_DEL_PRODUCTO" --category accesorios`. Puedes añadir `--title`, `--price`, `--currency` y `--image` cuando esos datos no estén disponibles en metadatos públicos. El CLI guarda el producto y lo envía a Telegram si las variables del bot están configuradas.
