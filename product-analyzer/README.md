@@ -4,7 +4,8 @@
 - Frontend estático en Vercel desde `product-analyzer/frontend`.
 - API y worker en Railway desde `product-analyzer/app`.
 - PostgreSQL como persistencia.
-- Amazon y Mercado Libre como fuentes de catálogo según las credenciales y permisos disponibles.
+- Amazon y AliExpress: importación exclusivamente por URL aportada por los CLI autorizados.
+- Los enlaces afiliados de Amazon y AliExpress se generan con sus respectivos datos de afiliación cuando están configurados.
 - Telegram para consulta y alertas.
 - Wompi preparado para pagos.
 
@@ -22,7 +23,12 @@ No existen productos demo, mocks ni valores de respaldo. Si la fuente real falla
 Las credenciales reales viven en las variables de entorno de Railway/Vercel y no se almacenan en Git.
 
 ## Amazon por URL
-La ruta comercial de Amazon permanece activa aunque la API de catálogo no esté habilitada. Se puede registrar un producto mediante su URL original; Central intenta obtener título e imagen pública y conserva el enlace para abrirlo y venderlo. El precio es opcional para el alta por URL. La integración de Amazon API es independiente y no bloquea el worker de Mercado Libre.
+Amazon se importa por URL sin descargar ni raspar sus páginas. Central agrega `AMAZON_PARTNER_TAG` y, si existe, `AMAZON_TRACKING_ID`. Los CLI autorizados pueden enviar título, precio, moneda e imagen junto con la URL. AliExpress genera el enlace afiliado mediante `aliexpress.affiliate.link.generate` usando App Key, App Secret y Tracking ID.
 
 ## Telegram
-El bot mantiene /top, /buscar, /modelar y /estado. También acepta /agregar para registrar una URL de Amazon o Mercado Libre. El servicio de Telegram en Railway requiere TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID; sin esas variables queda deshabilitado de forma segura.
+El bot mantiene /top, /buscar, /modelar y /estado. También acepta URLs de Amazon y AliExpress. El endpoint autenticado `/api/v1/products/import-cli` guarda el producto y envía el enlace afiliado a Telegram. El servicio de Telegram en Railway requiere TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID; sin esas variables queda deshabilitado de forma segura.
+
+
+## CLI autorizados
+
+Usa `python scripts/importar-url-central.py --url "URL_DEL_PRODUCTO" --category accesorios` y añade `--title`, `--price`, `--currency` o `--image` si el CLI origen ya conoce esos datos. Configura `CENTRAL_API_URL` y `CENTRAL_INGEST_API_KEY`; la clave se envía en el encabezado y no debe guardarse en el código del bot.

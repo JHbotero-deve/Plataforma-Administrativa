@@ -330,7 +330,7 @@ def import_product_from_url(payload: ProductImport):
             cur.execute(
                 """
                 SELECT p.id, p.title, pl.name AS platform, c.name AS category,
-                       p.current_price, p.currency, p.image_url, p.product_url,
+                       p.current_price, p.currency, p.image_url, p.product_url, p.affiliate_url,
                        p.updated_at, p.catalog_expires_at, p.model_url, p.model_shape
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
@@ -363,15 +363,17 @@ def import_product_from_cli(
     notified = send_telegram_alert({
         "title": product.get("title"),
         "price": product.get("current_price"),
-        "url": product.get("product_url"),
+        "url": product.get("affiliate_url") or product.get("product_url"),
         "score": score if score is not None else "pendiente",
         "platform": product.get("platform"),
         "category": product.get("category"),
+        "affiliate_link_generated": bool(product.get("affiliate_url")),
     })
     return {
         "product": product,
         "opportunity_score": score,
         "telegram_notified": bool(notified),
+        "affiliate_link_generated": bool(product.get("affiliate_url")),
     }
 
 
