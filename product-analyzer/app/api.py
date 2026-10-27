@@ -3,11 +3,12 @@ Central Product Analyzer REST API.
 """
 
 import os
+import secrets
 import time
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query
+from fastapi import APIRouter, FastAPI, Header, HTTPException, Query
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -15,6 +16,7 @@ from psycopg2.extras import Json
 
 from analysis import score_product
 from db import get_connection, upsert_product
+from notifications import send_telegram_alert
 from monetization import router as monetization_router
 from publications import router as publication_router
 from store_orders import router as store_orders_router
@@ -341,6 +343,36 @@ def import_product_from_url(payload: ProductImport):
         return {"product": saved, "opportunity_score": score}
     finally:
         conn.close()
+
+
+@core_router.post("/products/import-cli")
+def import_product_from_cli(
+    payload: ProductImport,
+    x_central_ingest_key: str = Header(default="", alias="X-Central-Ingest-Key"),
+):
+    """Endpoint autenticado para que los CLI importen datos autorizados y Central avise por Telegram."""
+    expected_key = (os.getenv("CENTRAL_INGEST_API_KEY") or "").strip()
+    if not expected_key:
+        raise HTTPException(status_code=503, detail="La importación CLI no está configurada.")
+    if not x_central_ingest_key or not secrets.compare_digest(x_central_ingest_key, expected_key):
+        raise HTTPException(status_code=401, detail="Credencial de ingesta inválida.")
+
+    result = import_product_from_url(payload)
+    product = result["product"]
+    score = result.get("opportunity_score")
+    notified = send_telegram_alert({
+        "title": product.get("title"),
+        "price": product.get("current_price"),
+        "url": product.get("product_url"),
+        "score": score if score is not None else "pendiente",
+        "platform": product.get("platform"),
+        "category": product.get("category"),
+    })
+    return {
+        "product": product,
+        "opportunity_score": score,
+        "telegram_notified": bool(notified),
+    }
 
 
 class PersonalProduct(BaseModel):
