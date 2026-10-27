@@ -54,8 +54,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 );
 
 -- --------------------------------------------------------
--- Afiliados: clicks y conversiones sobre links a Mercado
--- Libre / Amazon / TikTok, para calcular comisión ganada
+-- Afiliados: clics y conversiones de Amazon, AliExpress y TikTok.
 -- --------------------------------------------------------
 CREATE TABLE IF NOT EXISTS affiliate_clicks (
     id          SERIAL PRIMARY KEY,
