@@ -345,6 +345,8 @@ def _handle(token, chat_id, text):
             f"Plataforma: {html.escape(payload['platform'])}\n{score_text}\n"
             f'<a href="{html.escape(payload.get("affiliate_url") or payload["product_url"], quote=True)}">Abrir producto original</a>'
         )
+        if not payload.get("affiliate_url"):
+            message += "\\nAfiliación pendiente: revisa las credenciales de la tienda."
         if payload.get("image_url"):
             message += f'\nImagen: <a href="{html.escape(payload["image_url"], quote=True)}">ver imagen</a>'
         return _send(token, chat_id, message)
