@@ -12,7 +12,7 @@ from url_import import detect_platform, import_url
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
-ALLOWED_PLATFORMS = {"mercadolibre", "amazon"}
+ALLOWED_PLATFORMS = {"amazon", "aliexpress"}
 ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios"}
 
 
@@ -73,7 +73,7 @@ def _format_product(p):
     price_score = p.get("price_score")
     demand_score = p.get("demand_score")
     trend_score = p.get("trend_score")
-    url = str(p.get("product_url") or "").strip()
+    url = str(p.get("affiliate_url") or p.get("product_url") or "").strip()
 
     lines = [
         f"<b>{title}</b>",
@@ -126,7 +126,7 @@ def _top_products(limit=25):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.title, p.current_price, p.currency, p.product_url, p.image_url,
+                SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -138,76 +138,16 @@ def _top_products(limit=25):
                 LEFT JOIN categories c ON c.id = p.category_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
+                  AND pl.name IN ('amazon', 'aliexpress', 'personal')
                   AND COALESCE(s.opportunity_score, 0) >= 60
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
                 """,
                 (limit,),
             )
-            rows = cur.fetchall()
-            if rows:
-                return rows
+            return cur.fetchall()
     finally:
         conn.close()
-
-    live_results = []
-    try:
-        from amazon_api import search_products, _map_item, _map_fallback_item
-        items = search_products("deals discounts promotion", limit // 2 + 1)
-        tag = _env("AMAZON_PARTNER_TAG", "").strip()
-        for item in items:
-            prod = _map_item(item, "general") or _map_fallback_item(item, "general")
-            if prod:
-                price = prod.get("price")
-                url = prod.get("product_url")
-                if tag and url:
-                    url = url + ("&" if "?" in url else "?") + f"tag={tag}"
-                live_results.append({
-                    "title": prod.get("title"),
-                    "current_price": price,
-                    "currency": prod.get("currency") or "USD",
-                    "product_url": url,
-                    "image_url": prod.get("image_url"),
-                    "rating": 4.8,
-                    "reviews_count": 500,
-                    "sales_estimate": 100,
-                    "platform": "amazon",
-                    "category": "ofertas 40%+",
-                    "price_score": 90.0,
-                    "demand_score": 85.0,
-                    "trend_score": 80.0,
-                    "opportunity_score": 92.0,
-                })
-    except Exception as exc:
-        print(f"[telegram-bot] top amazon error: {exc}")
-
-    try:
-        ae_items = search_aliexpress("hot deals sale promotion 50% off", limit // 2 + 1)
-        ae_tag = os.getenv("ALIEXPRESS_AFFILIATE_TAG", "").strip()
-        for item in ae_items:
-            url = item.get("product_url")
-            if ae_tag and url:
-                url = url + ("&" if "?" in url else "?") + f"aff_fcid={ae_tag}"
-            live_results.append({
-                "title": item.get("title"),
-                "current_price": item.get("price"),
-                "currency": "USD",
-                "product_url": url,
-                "image_url": item.get("image_url"),
-                "rating": 4.7,
-                "reviews_count": 300,
-                "sales_estimate": 80,
-                "platform": "aliexpress",
-                "category": "ofertas 40%+",
-                "price_score": 88.0,
-                "demand_score": 80.0,
-                "trend_score": 75.0,
-                "opportunity_score": 89.0,
-            })
-    except Exception as exc:
-        print(f"[telegram-bot] top aliexpress error: {exc}")
-
-    return live_results[:limit]
 
 
 def _search_products(term, limit=8):
@@ -216,7 +156,7 @@ def _search_products(term, limit=8):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.title, p.current_price, p.currency, p.product_url, p.image_url,
+                SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -228,77 +168,16 @@ def _search_products(term, limit=8):
                 LEFT JOIN categories c ON c.id = p.category_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
+                  AND pl.name IN ('amazon', 'aliexpress', 'personal')
                   AND p.title ILIKE %s
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC
                 LIMIT %s
                 """,
                 (f"%{term}%", limit),
             )
-            rows = cur.fetchall()
-            if rows:
-                return rows
+            return cur.fetchall()
     finally:
         conn.close()
-
-    live_results = []
-    try:
-        from amazon_api import search_products, _map_item, _map_fallback_item
-        items = search_products(term, limit // 2 + 1)
-        tag = os.getenv("AMAZON_PARTNER_TAG", "").strip()
-        for item in items:
-            prod = _map_item(item, "general") or _map_fallback_item(item, "general")
-            if prod:
-                price = prod.get("price")
-                curr = prod.get("currency") or "USD"
-                url = prod.get("product_url")
-                if tag and url:
-                    url = url + ("&" if "?" in url else "?") + f"tag={tag}"
-                live_results.append({
-                    "title": prod.get("title"),
-                    "current_price": price,
-                    "currency": curr,
-                    "product_url": url,
-                    "image_url": prod.get("image_url"),
-                    "rating": prod.get("rating"),
-                    "reviews_count": prod.get("reviews_count", 0),
-                    "sales_estimate": None,
-                    "platform": "amazon",
-                    "category": "general",
-                    "price_score": 75.0,
-                    "demand_score": 75.0,
-                    "trend_score": 50.0,
-                    "opportunity_score": 80.0,
-                })
-    except Exception as exc:
-        print(f"[telegram-bot] live amazon search error: {exc}")
-
-    try:
-        ae_items = search_aliexpress(term, limit // 2 + 1)
-        ae_tag = os.getenv("ALIEXPRESS_AFFILIATE_TAG", "").strip()
-        for item in ae_items:
-            url = item.get("product_url")
-            if ae_tag and url:
-                url = url + ("&" if "?" in url else "?") + f"aff_fcid={ae_tag}"
-            live_results.append({
-                "title": item.get("title"),
-                "current_price": item.get("price"),
-                "currency": "USD",
-                "product_url": url,
-                "image_url": item.get("image_url"),
-                "rating": None,
-                "reviews_count": 0,
-                "sales_estimate": None,
-                "platform": "aliexpress",
-                "category": "general",
-                "price_score": 75.0,
-                "demand_score": 70.0,
-                "trend_score": 50.0,
-                "opportunity_score": 78.0,
-            })
-    except Exception as exc:
-        print(f"[telegram-bot] live aliexpress search error: {exc}")
-
-    return live_results
 
 
 def _add_url(argument):
@@ -360,7 +239,7 @@ def _model_product(argument):
             "external_id": parts[2],
             "title": parts[3],
             "price": float(parts[4]),
-            "currency": "COP" if platform == "mercadolibre" else "USD",
+            "currency": "USD",
             "product_url": parts[5],
             "rating": float(parts[6]) if parts[6] else None,
             "reviews_count": int(parts[7] or 0),
@@ -427,7 +306,7 @@ def _handle(token, chat_id, text):
             "/top — oportunidades con mayor score\n"
             "/buscar producto — buscar en los datos modelados\n"
             "/modelar — registrar y puntuar un producto\n"
-            "/agregar — importar un producto desde Amazon o Mercado Libre por URL\n"
+            "/agregar — importar un producto desde Amazon o AliExpress por URL\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda"
         ))
@@ -465,7 +344,7 @@ def _handle(token, chat_id, text):
         message = (
             f"<b>Producto agregado</b>\n{html.escape(payload['title'])}\n"
             f"Plataforma: {html.escape(payload['platform'])}\n{score_text}\n"
-            f'<a href="{html.escape(payload["product_url"], quote=True)}">Abrir producto original</a>'
+            f'<a href="{html.escape(payload.get("affiliate_url") or payload["product_url"], quote=True)}">Abrir producto original</a>'
         )
         if payload.get("image_url"):
             message += f'\nImagen: <a href="{html.escape(payload["image_url"], quote=True)}">ver imagen</a>'
