@@ -27,7 +27,7 @@ def send_telegram_alert(product_info):
         f"<b>Producto:</b> {title}",
         f"<b>Precio:</b> {price}",
         f"<b>Score:</b> {score}/100",
-        "<b>Plataforma:</b> Mercado Libre",
+        `<b>Plataforma:</b> ${html.escape(String(product_info.get("platform") || "Amazon/AliExpress"))}`,
         f"<b>Categoría:</b> {category}",
     ]
     if url:
