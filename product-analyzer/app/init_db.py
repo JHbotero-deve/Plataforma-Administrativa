@@ -17,7 +17,6 @@ SQL_FILES = [
     "sql/011_store_commerce.sql",
     "sql/012_seo_affiliate_cart_invoice.sql",
     "sql/015_amazon_aliexpress_only.sql",
-    "sql/015_amazon_aliexpress_only.sql",
 ]
 
 
