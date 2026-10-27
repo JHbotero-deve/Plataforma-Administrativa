@@ -33,13 +33,23 @@ def get_connection():
     return psycopg2.connect(_database_url(), cursor_factory=RealDictCursor)
 
 
+def _env_value(name: str, default: str = "") -> str:
+    value = os.getenv(name)
+    if value and value.strip():
+        return value.strip()
+    target = name.strip().replace("\\u00a0", "").casefold()
+    for key, candidate in os.environ.items():
+        if key.strip().replace("\\u00a0", "").casefold() == target and candidate and str(candidate).strip():
+            return str(candidate).strip()
+    return default
+
 def _affiliate_url(product: dict, platform_name: str | None = None) -> str | None:
     url = (product.get("product_url") or "").strip()
     platform = str(platform_name or product.get("platform") or "").strip().lower()
     if not url:
         return None
     if platform == "amazon":
-        tag = (os.getenv("AMAZON_PARTNER_TAG") or os.getenv("AMAZON_ASSOCIATE_TAG") or "").strip()
+        tag = (_env_value("AMAZON_PARTNER_TAG") or _env_value("AMAZON_ASSOCIATE_TAG")).strip()
         if not tag:
             return None
         parts = urlsplit(url)
@@ -49,7 +59,7 @@ def _affiliate_url(product: dict, platform_name: str | None = None) -> str | Non
         if not re.search(r"/(?:dp|gp/product|gp/aw/d)/([A-Z0-9]{10})(?:[/?]|$)", parts.path, re.I):
             return None
         query["tag"] = tag
-        tracking = os.getenv("AMAZON_TRACKING_ID", "").strip()
+        tracking = _env_value("AMAZON_TRACKING_ID")
         if tracking:
             query["ascsubtag"] = tracking
         return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
