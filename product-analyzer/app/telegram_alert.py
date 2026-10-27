@@ -1,4 +1,3 @@
-from aliexpress_api import search_aliexpress
 import html
 import os
 import time
