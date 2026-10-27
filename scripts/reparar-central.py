@@ -3,5 +3,5 @@ import sys
 
 if __name__ == "__main__":
     print("Este reparador antiguo fue retirado para evitar scraping y consultas automáticas a marketplaces.")
-    print("Usa el endpoint autenticado /api/v1/products/import-cli desde tus CLI autorizados.")
+    print("Usa scripts/importar-url-central.py o el endpoint autenticado /api/v1/products/import-cli.")
     sys.exit(2)
