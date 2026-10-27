@@ -51,7 +51,7 @@ def run_pipeline():
     print("== Ciclo completo ==")
 
 def publish_top_opportunities(limit=15):
-    """Publish exactly the best active Amazon products without requiring a score row."""
+    """Publica productos activos de Amazon y AliExpress sin exigir una fila de score."""
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -61,7 +61,7 @@ def publish_top_opportunities(limit=15):
                 FROM products p
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 JOIN platforms pl ON pl.id = p.platform_id
-                WHERE p.is_active = TRUE AND pl.name = 'amazon'
+                WHERE p.is_active = TRUE AND pl.name IN ('amazon', 'aliexpress')
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
             """, (limit,))
@@ -103,7 +103,7 @@ def publish_top_opportunities(limit=15):
                 ))
 
         conn.commit()
-        print(f"== Tienda: {len(products)} productos Amazon reales publicados ==")
+        print(f"== Tienda: {len(products)} productos reales de Amazon/AliExpress publicados ==")
     finally:
         conn.close()
 
