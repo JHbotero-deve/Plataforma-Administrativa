@@ -367,6 +367,7 @@ def import_product_from_cli(
         "score": score if score is not None else "pendiente",
         "platform": product.get("platform"),
         "category": product.get("category"),
+        "affiliate_link_generated": bool(product.get("affiliate_url")),
     })
     return {
         "product": product,
