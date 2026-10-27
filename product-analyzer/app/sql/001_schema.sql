@@ -1,6 +1,6 @@
 -- =========================================================
 -- Esquema base para el analizador de productos (moda)
--- Plataformas: Mercado Libre, Amazon, TikTok Shop
+-- Plataformas: Amazon, AliExpress, TikTok Shop
 -- =========================================================
 
 -- Evitar errores de dependencias con vistas
@@ -8,12 +8,11 @@ DROP VIEW IF EXISTS product_price_comparison;
 
 CREATE TABLE IF NOT EXISTS platforms (
     id          SERIAL PRIMARY KEY,
-    name        VARCHAR(50) UNIQUE NOT NULL,   -- 'mercadolibre', 'amazon', 'tiktok'
+    name        VARCHAR(50) UNIQUE NOT NULL,   -- 'amazon', 'aliexpress', 'tiktok'
     base_url    VARCHAR(255)
 );
 
 INSERT INTO platforms (name, base_url) VALUES
-    ('mercadolibre', 'https://api.mercadolibre.com'),
     ('amazon',       'https://webservices.amazon.com/paapi5'),
     ('tiktok',       'https://open-api.tiktokglobalshop.com')
 ON CONFLICT (name) DO NOTHING;
