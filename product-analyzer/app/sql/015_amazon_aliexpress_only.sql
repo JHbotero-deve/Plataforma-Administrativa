@@ -4,6 +4,24 @@ INSERT INTO platforms (name, base_url)
 VALUES ('aliexpress', 'https://www.aliexpress.com')
 ON CONFLICT (name) DO NOTHING;
 
+-- Retirar también los tres productos de muestra que se sembraban en versiones anteriores.
+UPDATE published_cards pc
+SET is_published = FALSE, updated_at = NOW()
+FROM products p
+JOIN platforms pl ON pl.id = p.platform_id
+WHERE pc.product_id = p.id
+  AND pl.name = 'personal'
+  AND p.external_id LIKE 'CENTRAL-PROP-%'
+  AND pc.is_published = TRUE;
+
+UPDATE products p
+SET is_active = FALSE, updated_at = NOW()
+FROM platforms pl
+WHERE p.platform_id = pl.id
+  AND pl.name = 'personal'
+  AND p.external_id LIKE 'CENTRAL-PROP-%'
+  AND p.is_active = TRUE;
+
 UPDATE published_cards pc
 SET is_published = FALSE, updated_at = NOW()
 FROM products p
