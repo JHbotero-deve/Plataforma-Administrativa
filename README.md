@@ -7,15 +7,15 @@ Central es un radar de oportunidades de productos reales. El sistema ingiere fue
 - Vercel: frontend estático.
 - Railway: API, worker y bot de Telegram.
 - PostgreSQL: persistencia del catálogo, histórico y monetización.
-- Mercado Libre Colombia: ingesta automática.
-- Amazon: importación por URL y lote inicial configurado.
+- Amazon: importación por URL, sin scraping de páginas.
+- AliExpress: importación por URL y generación de enlaces afiliados mediante la API oficial.
 - TikTok Shop Creator: integración preparada para productos del Showcase.
 - Telegram: alertas y bot interactivo.
 - Wompi: checkout y recepción de eventos preparados.
 
 ## Ciclo del catálogo
 
-El worker ejecuta una ingesta al iniciar y después cada 2 horas. Los productos activos caducan a las 48 horas. Cuando un producto vuelve a detectarse, su registro se actualiza y su vigencia se renueva otras 48 horas.
+La ingesta externa es por URL aportada por el usuario; no hay búsquedas automáticas de marketplaces. Los productos activos caducan según la configuración del catálogo.
 
 ## Frontend
 
@@ -25,7 +25,7 @@ Funciones disponibles:
 
 - oportunidades ordenadas por score;
 - catálogo de productos reales;
-- importación de Amazon y Mercado Libre mediante URL;
+- importación por URL de Amazon y AliExpress;
 - imágenes reales cuando la fuente las proporciona;
 - soporte de modelo 3D real dentro de la misma tarjeta cuando `model_url` está configurado;
 - estado de fuentes y vigencia del catálogo.
