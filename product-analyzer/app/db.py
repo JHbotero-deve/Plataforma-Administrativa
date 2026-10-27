@@ -1,15 +1,31 @@
 import os
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
 
-def get_connection():
-    db_url = os.getenv("DATABASE_URL", "").strip()
+def _database_url() -> str:
+    db_url = (os.getenv("DATABASE_URL") or "").strip()
     if not db_url:
         raise RuntimeError("DATABASE_URL es obligatoria; Central usa PostgreSQL de Railway como unica base de datos.")
-    return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
+
+    # psycopg2 expects a PostgreSQL URL, not SQLAlchemy's driver-qualified URL.
+    for prefix in ("postgresql+psycopg://", "postgres+psycopg://"):
+        if db_url.startswith(prefix):
+            db_url = "postgresql://" + db_url[len(prefix):]
+            break
+
+    parsed = urlsplit(db_url)
+    if not parsed.scheme.startswith("postgres") or not parsed.hostname:
+        raise RuntimeError("DATABASE_URL no es una URL PostgreSQL válida. Configura Railway con la referencia ${{Postgres.DATABASE_URL}}.")
+    if parsed.hostname.lower() in {"un_host_publico", "localhost_placeholder"} or ":puerto" in db_url:
+        raise RuntimeError("DATABASE_URL contiene un host/puerto de ejemplo. Configura la referencia ${{Postgres.DATABASE_URL}} en Railway.")
+    return db_url
+
+
+def get_connection():
+    return psycopg2.connect(_database_url(), cursor_factory=RealDictCursor)
 
 
 def _affiliate_url(product: dict) -> str | None:
