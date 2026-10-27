@@ -1,4 +1,5 @@
 import os
+import re
 
 import requests
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
@@ -43,6 +44,10 @@ def _affiliate_url(product: dict, platform_name: str | None = None) -> str | Non
             return None
         parts = urlsplit(url)
         query = dict(parse_qsl(parts.query, keep_blank_values=True))
+        if "tag" in query and query["tag"]:
+            return url
+        if not re.search(r"/(?:dp|gp/product|gp/aw/d)/([A-Z0-9]{10})(?:[/?]|$)", parts.path, re.I):
+            return None
         query["tag"] = tag
         tracking = os.getenv("AMAZON_TRACKING_ID", "").strip()
         if tracking:
