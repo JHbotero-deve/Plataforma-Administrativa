@@ -15,7 +15,6 @@ from psycopg2.extras import Json
 
 from analysis import score_product
 from amazon_api import fetch_amazon_products
-from ingest import fetch_mercadolibre
 from db import get_connection, upsert_product
 from monetization import router as monetization_router
 from publications import router as publication_router
@@ -23,7 +22,6 @@ from store_orders import router as store_orders_router
 from tiktok_api import router as tiktok_creator_router
 from url_import import import_url
 from wompi import router as wompi_router
-from meli_oauth import router as meli_oauth_router, notification_router as meli_notification_router
 
 API_VERSION = "1.3.0"
 
@@ -35,8 +33,6 @@ app = FastAPI(
 
 app.include_router(monetization_router, prefix="/api/v1")
 app.include_router(wompi_router, prefix="/api/v1")
-app.include_router(meli_oauth_router, prefix="/api/v1")
-app.include_router(meli_notification_router, prefix="/api/v1")
 app.include_router(tiktok_creator_router, prefix="/api/v1")
 app.include_router(publication_router, prefix="/api/v1")
 app.include_router(store_orders_router, prefix="/api/v1")
@@ -124,7 +120,6 @@ def sync_store_catalog():
     """Importa productos reales al catálogo; las tarjetas se publican únicamente desde Studio."""
     conn = get_connection()
     amazon_imported = []
-    meli_imported = []
     errors = []
     try:
         with conn.cursor() as cur:
@@ -132,7 +127,7 @@ def sync_store_catalog():
                 SELECT p.external_id, pl.name AS platform
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
-                WHERE p.is_active = TRUE AND pl.name IN ('amazon', 'mercadolibre')
+                WHERE p.is_active = TRUE AND pl.name = 'amazon'
             """)
             existing = {(str(row["platform"]).lower(), str(row["external_id"]).upper()) for row in cur.fetchall()}
 
@@ -164,50 +159,13 @@ def sync_store_catalog():
             conn.rollback()
             errors.append(f"Amazon: {exc}")
 
-        # Mercado Libre: toma los primeros 5 productos reales disponibles.
-        meli_queries = ("soporte celular", "audifonos bluetooth", "smartwatch", "mouse gamer", "lampara led")
-        try:
-            for query in meli_queries:
-                if len(meli_imported) >= 5:
-                    break
-                try:
-                    products = fetch_mercadolibre(query, limit=10)
-                    for product in products:
-                        if len(meli_imported) >= 5:
-                            break
-                        key = ("mercadolibre", str(product.get("external_id") or "").upper())
-                        if not key[1] or key in existing:
-                            continue
-                        product_id = upsert_product(conn, "mercadolibre", "accesorios", product)
-                        with conn.cursor() as cur:
-                            cur.execute("""
-                                SELECT AVG(p.current_price) AS avg_price
-                                FROM products p
-                                JOIN categories c ON c.id = p.category_id
-                                WHERE p.is_active = TRUE AND c.name = %s
-                                  AND p.currency = %s AND p.current_price IS NOT NULL
-                            """, ("accesorios", product.get("currency") or "COP"))
-                            average = cur.fetchone()["avg_price"]
-                        product["_score"] = score_product(conn, product_id, float(average or 0))
-                        conn.commit()
-                        existing.add(key)
-                        meli_imported.append({"id": product_id, "item_id": product["external_id"], "title": product["title"]})
-                except Exception as exc:
-                    conn.rollback()
-                    errors.append(f"Mercado Libre '{query}': {exc}")
-
-        except Exception as exc:
-            conn.rollback()
-            errors.append(f"Mercado Libre: {exc}")
-
-        if not amazon_imported and not meli_imported:
+        if not amazon_imported:
             raise HTTPException(status_code=502, detail={
                 "message": "No se pudo importar ningún producto real.",
                 "errors": errors[:10],
             })
         return {
             "amazon": {"imported": len(amazon_imported), "published": 0, "products": amazon_imported},
-            "mercadolibre": {"imported": len(meli_imported), "published": 0, "products": meli_imported},
             "total_published": 0,
             "errors": errors[:10],
         }
