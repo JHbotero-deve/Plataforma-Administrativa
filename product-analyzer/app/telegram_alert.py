@@ -17,12 +17,12 @@ ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios"}
 
 
 def _env(name, default=""):
-    value = os.getenv(name)
-    if value is not None:
-        return value
+    # Railway puede conservar nombres de variables con espacios invisibles.
+    # Prioriza cualquier valor no vacío cuyo nombre normalizado coincida.
+    target = name.strip()
     for key, candidate in os.environ.items():
-        if key.strip() == name:
-            return candidate
+        if key.strip() == target and candidate is not None and str(candidate).strip():
+            return str(candidate).strip()
     return default
 
 
@@ -31,7 +31,7 @@ def _token():
 
 
 def _allowed_chat(chat_id):
-    configured = os.getenv("TELEGRAM_CHAT_ID") or os.getenv("CHAT_ID")
+    configured = _env("TELEGRAM_CHAT_ID") or _env("CHAT_ID")
     if not configured:
         print("[telegram-bot] Bot bloqueado: TELEGRAM_CHAT_ID no está configurado.")
         return False
@@ -536,7 +536,7 @@ def run_bot():
     if not token:
         print("[telegram-bot] Bot deshabilitado: falta TELEGRAM_BOT_TOKEN.")
         return
-    if not (os.getenv("TELEGRAM_CHAT_ID") or os.getenv("CHAT_ID")):
+    if not (_env("TELEGRAM_CHAT_ID") or _env("CHAT_ID")):
         print("[telegram-bot] Bot deshabilitado: falta TELEGRAM_CHAT_ID.")
         return
 
