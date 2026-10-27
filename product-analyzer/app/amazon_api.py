@@ -7,13 +7,12 @@ import requests
 
 BASE_URL = "https://creatorsapi.amazon"
 def _env(name: str, default: str = "") -> str:
-    value = os.getenv(name)
-    if value is not None:
-        return value
-    # Railway variable names may accidentally contain leading/trailing spaces.
+    # Railway puede conservar nombres con espacios invisibles al copiar variables.
+    # Busca por nombre normalizado y prioriza un valor no vacío.
+    target = name.strip()
     for key, candidate in os.environ.items():
-        if key.strip() == name:
-            return candidate
+        if key.strip() == target and candidate is not None and str(candidate).strip():
+            return str(candidate).strip()
     return default
 
 
