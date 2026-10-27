@@ -185,23 +185,30 @@ def _search_products(term, limit=8):
     return []
 
 def _add_url(argument):
-    parts = [part.strip() for part in argument.split("|")]
-    if len(parts) < 2:
-        return None, "Uso: /agregar con categoría, URL, precio, título e imagen", None
+    raw = (argument or "").strip()
+    if not raw:
+        return None, "Uso: /agregar URL_DE_AMAZON_O_ALIEXPRESS o categoría|url|precio|título|imagen|moneda", None
 
-    category, url = parts[0].lower(), parts[1]
+    parts = [part.strip() for part in raw.split("|")]
+    if parts[0].lower() in ALLOWED_CATEGORIES and len(parts) >= 2:
+        category, url = parts[0].lower(), parts[1]
+        extras = parts[2:]
+    elif parts[0].lower().startswith(("https://", "http://")):
+        category, url, extras = "accesorios", parts[0], parts[1:]
+    else:
+        return None, "Envía una URL válida de Amazon o AliExpress. Ejemplo: /agregar https://.../dp/ASIN", None
+
     if category not in ALLOWED_CATEGORIES:
-        return None, "Categoría no válida.", None
+        return None, "Categoría no válida. Usa ropa, calzado o accesorios.", None
 
     try:
-        price = float(parts[2]) if len(parts) > 2 and parts[2] else None
+        price = float(extras[0].replace(",", ".")) if len(extras) > 0 and extras[0] else None
         product = import_url(
-            url,
-            category,
-            title=parts[3] if len(parts) > 3 and parts[3] else None,
+            url, category,
+            title=extras[1] if len(extras) > 1 and extras[1] else None,
             price=price,
-            image_url=parts[4] if len(parts) > 4 and parts[4] else None,
-            currency=parts[5] if len(parts) > 5 and parts[5] else "USD",
+            image_url=extras[2] if len(extras) > 2 and extras[2] else None,
+            currency=extras[3] if len(extras) > 3 and extras[3] else "USD",
         )
         if product["platform"] not in ALLOWED_PLATFORMS:
             return None, "Plataforma no habilitada para importación.", None
@@ -216,9 +223,8 @@ def _add_url(argument):
                         """
                         SELECT AVG(p.current_price) AS category_avg
                         FROM products p
-                        JOIN categories c ON c.id = p.category_id
-                        WHERE c.name = %s AND p.currency = %s
-                          AND p.current_price IS NOT NULL AND p.is_active = TRUE
+                        WHERE p.category_id = (SELECT id FROM categories WHERE name = %s)
+                          AND p.currency = %s AND p.current_price IS NOT NULL AND p.is_active = TRUE
                         """,
                         (category, product["currency"]),
                     )
@@ -227,9 +233,11 @@ def _add_url(argument):
             return product_id, product, score
         finally:
             conn.close()
+    except (TypeError, ValueError) as exc:
+        return None, str(exc) or "Precio no válido. Usa un número, por ejemplo 29.99.", None
     except Exception as exc:
-        print(f"[telegram-bot] url import error: {exc}")
-        return None, "No fue posible agregar el producto desde la URL.", None
+        print(f"[telegram-bot] url import error: {type(exc).__name__}: {exc}")
+        return None, "No fue posible guardar el producto. Revisa los logs de Central.", None
 
 
 def _model_product(argument):
@@ -274,9 +282,56 @@ def _model_product(argument):
         return None, str(exc)
 
 
+def _model_active_products():
+    """Puntúa en lote productos activos con precio y categoría."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.id, p.current_price,
+                       COALESCE((
+                           SELECT AVG(p2.current_price)
+                           FROM products p2
+                           WHERE p2.category_id = p.category_id
+                             AND p2.currency = p.currency
+                             AND p2.is_active = TRUE
+                             AND p2.current_price IS NOT NULL
+                       ), p.current_price) AS category_avg
+                FROM products p
+                WHERE p.is_active = TRUE
+                  AND p.current_price IS NOT NULL
+                  AND p.current_price > 0
+                  AND p.category_id IS NOT NULL
+                ORDER BY p.updated_at DESC
+                LIMIT 500
+                """
+            )
+            products = cur.fetchall()
+            cur.execute("SELECT COUNT(*) AS total FROM products WHERE is_active = TRUE")
+            active_total = int(cur.fetchone()["total"] or 0)
+        scored = 0
+        errors = 0
+        for product in products:
+            try:
+                score_product(conn, product["id"], float(product["category_avg"] or product["current_price"]))
+                scored += 1
+            except Exception as exc:
+                errors += 1
+                print(f"[telegram-bot] modelado fallido para producto {product['id']}: {type(exc).__name__}")
+        return scored, max(active_total - len(products), 0), errors
+    finally:
+        conn.close()
+
+
 def _handle(token, chat_id, text):
-    command, _, argument = text.partition(" ")
-    command = command.lower().strip()
+    match = re.match(r"^\s*/\s*([a-zA-Z_]+)(?:@\w+)?(?:\s+(.*))?$", text or "")
+    if match:
+        command = "/" + match.group(1).lower()
+        argument = (match.group(2) or "").strip()
+    else:
+        command, _, argument = (text or "").partition(" ")
+        command = command.lower().strip()
 
     if not command.startswith("/"):
         for candidate in text.split():
@@ -303,9 +358,9 @@ def _handle(token, chat_id, text):
         return _send(token, chat_id, (
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
-            "/buscar producto — buscar en los datos modelados\n"
-            "/modelar — registrar y puntuar un producto\n"
-            "/agregar — importar Amazon o AliExpress por URL con datos del CLI\n"
+            "/buscar producto — buscar en todo el catálogo activo\n"
+            "/modelar — puntuar en lote productos activos con precio; admite datos manuales\n"
+            "/agregar URL — importar Amazon o AliExpress; también categoría|url|precio|título|imagen|moneda\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda"
         ))
@@ -316,8 +371,8 @@ def _handle(token, chat_id, text):
             limit = min(max(int(argument.strip()), 1), 100)
         products = _top_products(limit=limit)
         if not products:
-            return _send(token, chat_id, "No hay oportunidades de 40%+ disponibles en este momento.")
-        _send(token, chat_id, f"🔥 <b>Top Oportunidades 40%+ (Mostrando {len(products)})</b>")
+            return _send(token, chat_id, "No hay productos con score de oportunidad ≥60/100. Importa productos con precio y ejecuta /modelar.")
+        _send(token, chat_id, f"🔥 <b>Top oportunidades (score ≥60/100; {len(products)} resultados)</b>")
         for i, product in enumerate(products, 1):
             product["title"] = f"{i}. {product['title']}"
             _send_product(token, chat_id, product)
@@ -329,7 +384,7 @@ def _handle(token, chat_id, text):
             return _send(token, chat_id, "Uso: /buscar zapatillas")
         products = _search_products(term)
         if not products:
-            return _send(token, chat_id, f"No encontré productos modelados para: {html.escape(term)}")
+            return _send(token, chat_id, f"No encontré productos activos cuyo título coincida con: {html.escape(term)}. Prueba otra palabra o importa una URL con /agregar.")
         _send(token, chat_id, f"<b>Resultados: {html.escape(term)}</b>")
         for product in products:
             _send_product(token, chat_id, product)
@@ -339,7 +394,7 @@ def _handle(token, chat_id, text):
         result, payload, score = _add_url(argument.strip())
         if result is None:
             return _send(token, chat_id, f"<b>Error de importación</b>\n{html.escape(str(payload))}")
-        score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score: pendiente (sin precio)"
+        score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score pendiente: proporciona precio con /agregar URL|precio|título|imagen|moneda"
         message = (
             f"<b>Producto agregado</b>\n{html.escape(payload['title'])}\n"
             f"Plataforma: {html.escape(payload['platform'])}\n{score_text}\n"
@@ -352,6 +407,20 @@ def _handle(token, chat_id, text):
         return _send(token, chat_id, message)
 
     if command == "/modelar":
+        if not argument.strip():
+            try:
+                scored, missing_price, errors = _model_active_products()
+                return _send(
+                    token, chat_id,
+                    "<b>Modelado del catálogo</b>\n"
+                    f"Productos puntuados: {scored}\n"
+                    f"Sin precio/categoría: {missing_price}\n"
+                    f"Errores: {errors}\n"
+                    "Usa /agregar URL|precio|título|imagen|moneda para completar datos faltantes."
+                )
+            except Exception as exc:
+                print(f"[telegram-bot] batch modeling error: {type(exc).__name__}: {exc}")
+                return _send(token, chat_id, "No pude modelar el catálogo. Revisa la conexión a PostgreSQL y los logs.")
         result, error = _model_product(argument.strip())
         if result is None:
             return _send(token, chat_id, f"<b>Error de modelado</b>\n{html.escape(str(error))}")
@@ -365,10 +434,10 @@ def _handle(token, chat_id, text):
                 total = cur.fetchone()["total"]
                 cur.execute(
                     """
-                    SELECT COUNT(*) AS modeled
+                    SELECT COUNT(DISTINCT p.id) AS modeled
                     FROM products p
                     JOIN product_scores s ON s.product_id = p.id
-                    WHERE p.is_active = TRUE
+                    WHERE p.is_active = TRUE AND p.current_price IS NOT NULL
                     """
                 )
                 modeled = cur.fetchone()["modeled"]
