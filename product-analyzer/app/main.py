@@ -3,10 +3,8 @@ import time
 
 import schedule
 
-from amazon_api import fetch_amazon_products
 from analysis import score_product
 from db import get_connection, upsert_product
-from ingest import fetch_mercadolibre
 from init_db import init_database
 from notifications import send_telegram_alert
 from seed_catalog import seed_catalog
@@ -28,9 +26,7 @@ SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
 AMAZON_BATCH_SIZE = int(os.getenv("AMAZON_BATCH_SIZE", "15"))
 
 def build_url(title: str, product_url: str | None) -> str:
-    if product_url and product_url != "#":
-        return product_url
-    return f"https://listado.mercadolibre.com.co/{title.replace(' ', '-')}"
+    return product_url or "#"
 
 
 def expire_catalog():
@@ -52,59 +48,14 @@ def expire_catalog():
         conn.close()
 
 
-def ingest_amazon(conn) -> list[int]:
-    ids = []
-    with conn.cursor() as cur:
-        cur.execute("""
-            SELECT p.external_id
-            FROM products p
-            JOIN platforms pl ON pl.id = p.platform_id
-            WHERE pl.name = 'amazon' AND p.is_active = TRUE
-        """)
-        existing_ids = {str(row["external_id"]).upper() for row in cur.fetchall()}
-
-    products = fetch_amazon_products(existing_ids, AMAZON_BATCH_SIZE)
-    if not products:
-        print("[amazon] Creators API sin resultados. Amazon queda como fuente opcional; se conserva el catalogo existente.")
-        return ids
-    print(f"[amazon] lote valido recibido desde Creators API: {len(products)}")
-    for category, product in products:
-        try:
-            product["source_metadata"]["seed_batch"] = f"amazon-renewal-{AMAZON_BATCH_SIZE}"
-            ids.append(upsert_product(conn, "amazon", category, product))
-            print(f"[amazon] {product['external_id']} -> {product['title']} | {product['currency']} {product['price']} | imagen=si")
-        except Exception as exc:
-            conn.rollback()
-            print(f"[amazon] error insertando {product.get('external_id')}: {exc}")
-    return ids
-
-
 def run_pipeline():
     print("== Iniciando ciclo de ingesta y análisis ==")
     expire_catalog()
     conn = get_connection()
     product_ids = []
     try:
-        try:
-            product_ids.extend(ingest_amazon(conn))
-        except Exception as exc:
-            print(f"[amazon] ciclo abortado: {exc}")
-
-        for category, term in SEARCH_CONFIG:
-            try:
-                products = fetch_mercadolibre(term)
-            except Exception as exc:
-                print(f"[mercadolibre] error trayendo '{term}': {exc}")
-                continue
-            if not products:
-                print(f"[mercadolibre] sin resultados reales para '{term}'.")
-                continue
-            for product in products:
-                try:
-                    product_ids.append(upsert_product(conn, "mercadolibre", category, product))
-                except Exception as exc:
-                    conn.rollback()
-                    print(f"[mercadolibre] error insertando producto: {exc}")
+        # Amazon y AliExpress se importan por URL; no se ejecutan búsquedas automáticas.
+        print("[ingesta] modo URL activado: Amazon y AliExpress.")
 
         averages = {}
         with conn.cursor() as cur:
