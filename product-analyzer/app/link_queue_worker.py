@@ -90,7 +90,7 @@ def notify(row, product=None, error=None):
         sent = _send(token, row['chat_id'], f"Falló la importación del enlace (cola #{row['id']}): {error}")
     else:
         sent = _send_product(token, row['chat_id'], {
-            'title': product.get('title'), 'current_price': product.get('price'),
+            'title': product.get('title'), 'current_price': product.get('price', product.get('current_price')),
             'currency': product.get('currency'), 'product_url': product.get('affiliate_url') or product.get('product_url'),
             'image_url': product.get('image_url'), 'platform': product.get('platform'),
             'category': 'accesorios',
