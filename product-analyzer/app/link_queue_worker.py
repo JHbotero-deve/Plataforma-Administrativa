@@ -91,7 +91,7 @@ def notify(row, product=None, error=None):
     else:
         sent = _send_product(token, row['chat_id'], {
             'title': product.get('title'), 'current_price': product.get('price'),
-            'currency': product.get('currency'), 'product_url': product.get('product_url'),
+            'currency': product.get('currency'), 'product_url': product.get('affiliate_url') or product.get('product_url'),
             'image_url': product.get('image_url'), 'platform': product.get('platform'),
             'category': 'accesorios',
         })
