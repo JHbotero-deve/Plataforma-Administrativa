@@ -6,7 +6,6 @@ import schedule
 from db import get_connection
 from init_db import init_database
 from seed_catalog import seed_catalog
-from tiktok_creator import creator_configured, sync_showcase
 
 def expire_catalog():
     conn = get_connection()
@@ -39,16 +38,7 @@ def run_pipeline():
     finally:
         conn.close()
 
-    # El catálogo externo entra únicamente por URL; no hay búsquedas automáticas.
-    if creator_configured():
-        try:
-            result = sync_showcase(limit=200)
-            print(f"[tiktok] productos sincronizados: {result.get('synced', 0)}")
-        except Exception as exc:
-            print(f"[tiktok] error sincronizando Creator: {exc}")
-    else:
-        print("[tiktok] integración no configurada; se conserva el ciclo principal.")
-
+    # No se ejecutan búsquedas de marketplaces: solo importaciones por URL.
     try:
         publish_top_opportunities(limit=50)
     except Exception as exc:
