@@ -3,8 +3,7 @@ import hashlib
 import json
 import re
 import os
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
@@ -39,7 +38,7 @@ def _aliexpress_affiliate_url(source_url: str) -> str | None:
         "app_key": app_key,
         "method": "aliexpress.affiliate.link.generate",
         "sign_method": "md5",
-        "timestamp": datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": datetime.now(timezone.utc).astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S"),
         "format": "json",
         "v": "2.0",
         "promotion_link_type": "0",
@@ -74,7 +73,7 @@ def _aliexpress_affiliate_url(source_url: str) -> str | None:
     return link
 
 def _parse_price(content: str) -> tuple[float | None, str | None]:
-    """Obtiene el precio principal visible del producto Amazon."""
+    """Obtiene precio y moneda a partir de metadatos estructurados de la URL."""
     content = html.unescape(content)
     # AliExpress puede exponer precio y moneda en los datos estructurados de la página.
     generic_price = re.search(r'price[^0-9]{0,20}([0-9]+(?:\.[0-9]+)?)', content, re.I)
