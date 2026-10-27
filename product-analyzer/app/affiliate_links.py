@@ -44,6 +44,8 @@ def generate_aliexpress_affiliate_url(source_url: str) -> str | None:
     payload = response.json()
 
     def find_link(value):
+        if isinstance(value, str) and value.startswith(("https://", "http://")):
+            return value
         if isinstance(value, dict):
             for key, child in value.items():
                 if key in {"promotion_link", "promotionLink"} and isinstance(child, str) and child.startswith(("https://", "http://")):
