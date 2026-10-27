@@ -358,9 +358,9 @@ def _handle(token, chat_id, text):
         return _send(token, chat_id, (
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
-            "/buscar producto — buscar en los datos modelados\n"
-            "/modelar — registrar y puntuar un producto\n"
-            "/agregar — importar Amazon o AliExpress por URL con datos del CLI\n"
+            "/buscar producto — buscar en todo el catálogo activo\n"
+            "/modelar — puntuar en lote productos activos con precio; admite datos manuales\n"
+            "/agregar URL — importar Amazon o AliExpress; también categoría|url|precio|título|imagen|moneda\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda"
         ))
@@ -371,8 +371,8 @@ def _handle(token, chat_id, text):
             limit = min(max(int(argument.strip()), 1), 100)
         products = _top_products(limit=limit)
         if not products:
-            return _send(token, chat_id, "No hay oportunidades de 40%+ disponibles en este momento.")
-        _send(token, chat_id, f"🔥 <b>Top Oportunidades 40%+ (Mostrando {len(products)})</b>")
+            return _send(token, chat_id, "No hay productos con score de oportunidad ≥60/100. Importa productos con precio y ejecuta /modelar.")
+        _send(token, chat_id, f"🔥 <b>Top oportunidades (score ≥60/100; {len(products)} resultados)</b>")
         for i, product in enumerate(products, 1):
             product["title"] = f"{i}. {product['title']}"
             _send_product(token, chat_id, product)
@@ -384,7 +384,7 @@ def _handle(token, chat_id, text):
             return _send(token, chat_id, "Uso: /buscar zapatillas")
         products = _search_products(term)
         if not products:
-            return _send(token, chat_id, f"No encontré productos modelados para: {html.escape(term)}")
+            return _send(token, chat_id, f"No encontré productos activos cuyo título coincida con: {html.escape(term)}. Prueba otra palabra o importa una URL con /agregar.")
         _send(token, chat_id, f"<b>Resultados: {html.escape(term)}</b>")
         for product in products:
             _send_product(token, chat_id, product)
@@ -394,7 +394,7 @@ def _handle(token, chat_id, text):
         result, payload, score = _add_url(argument.strip())
         if result is None:
             return _send(token, chat_id, f"<b>Error de importación</b>\n{html.escape(str(payload))}")
-        score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score: pendiente (sin precio)"
+        score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score pendiente: proporciona precio con /agregar URL|precio|título|imagen|moneda"
         message = (
             f"<b>Producto agregado</b>\n{html.escape(payload['title'])}\n"
             f"Plataforma: {html.escape(payload['platform'])}\n{score_text}\n"
