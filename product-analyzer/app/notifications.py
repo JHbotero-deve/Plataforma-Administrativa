@@ -20,6 +20,7 @@ def send_telegram_alert(product_info):
     price = html.escape(str(product_info.get("price", product_info.get("current_price", "N/D"))))
     score = html.escape(str(product_info.get("score", product_info.get("opportunity_score", "N/D"))))
     category = html.escape(str(product_info.get("category", "N/D")))
+    platform = html.escape(str(product_info.get("platform") or "Central"))
     url = product_info.get("url") or product_info.get("product_url")
 
     lines = [
@@ -27,7 +28,7 @@ def send_telegram_alert(product_info):
         f"<b>Producto:</b> {title}",
         f"<b>Precio:</b> {price}",
         f"<b>Score:</b> {score}/100",
-        "<b>Plataforma:</b> Mercado Libre",
+        f"<b>Plataforma:</b> {platform}",
         f"<b>Categoría:</b> {category}",
     ]
     if url:
