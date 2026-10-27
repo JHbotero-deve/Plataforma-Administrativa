@@ -287,13 +287,13 @@ def _handle(token, chat_id, text):
                 continue
             result, payload, score = _add_url("accesorios|" + candidate)
             if result is None:
-                return _send(token, chat_id, "<b>No pude importar el enlace</b>\\n" + html.escape(str(payload)))
+                return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
             score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score pendiente: envía precio con /agregar"
             message = (
-                "<b>URL recibida e importada</b>\\n"
-                + html.escape(payload["title"]) + "\\n"
-                + "Plataforma: " + html.escape(payload["platform"]) + "\\n"
-                + score_text + "\\n"
+                "<b>URL recibida e importada</b>\n"
+                + html.escape(payload["title"]) + "\n"
+                + "Plataforma: " + html.escape(payload["platform"]) + "\n"
+                + score_text + "\n"
                 + '<a href="' + html.escape(payload["product_url"], quote=True) + '">Abrir producto original</a>'
             )
             return _send(token, chat_id, message)
