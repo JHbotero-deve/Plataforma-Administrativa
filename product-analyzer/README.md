@@ -27,3 +27,8 @@ Amazon se importa por URL sin descargar ni raspar sus páginas. Central agrega `
 
 ## Telegram
 El bot mantiene /top, /buscar, /modelar y /estado. También acepta URLs de Amazon y AliExpress. El endpoint autenticado `/api/v1/products/import-cli` guarda el producto y envía el enlace afiliado a Telegram. El servicio de Telegram en Railway requiere TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID; sin esas variables queda deshabilitado de forma segura.
+
+
+## CLI autorizados
+
+Usa `python scripts/importar-url-central.py --url "URL_DEL_PRODUCTO" --category accesorios` y añade `--title`, `--price`, `--currency` o `--image` si el CLI origen ya conoce esos datos. Configura `CENTRAL_API_URL` y `CENTRAL_INGEST_API_KEY`; la clave se envía en el encabezado y no debe guardarse en el código del bot.
