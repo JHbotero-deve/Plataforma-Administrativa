@@ -44,7 +44,7 @@ interface Product {
   categoryId: string;
   variants: ColorVariant[];
   amazon?: string;
-  ml?: string;
+  aliexpress?: string;
   wompi?: string;
   published: boolean;
 }
@@ -98,7 +98,7 @@ function newEmptyForm() {
     rating: "4.5", reviews: "0",
     badge: "", categoryId: "otros",
     variants: [{ id: mkId(), name: "", image: "", gradient: GRAD_PRESETS[0].value, glow: GRAD_PRESETS[0].glow }] as ColorVariant[],
-    amazon: "", ml: "", wompi: "",
+    amazon: "", aliexpress: "", wompi: "",
   };
 }
 
@@ -190,7 +190,7 @@ export default function App() {
       rating: String(p.rating), reviews: String(p.reviews),
       badge: p.badge ?? "", categoryId: p.categoryId,
       variants: p.variants.map(v => ({ ...v })),
-      amazon: p.amazon ?? "", ml: p.ml ?? "", wompi: p.wompi ?? "",
+      amazon: p.amazon ?? "", aliexpress: p.aliexpress ?? "", wompi: p.wompi ?? "",
     });
     setEditingId(p.id);
     setPanelTab("agregar");
@@ -212,7 +212,7 @@ export default function App() {
       categoryId: form.categoryId,
       variants: form.variants.filter(v => v.name && v.image),
       amazon: form.amazon.trim() || undefined,
-      ml: form.ml.trim() || undefined,
+      aliexpress: form.aliexpress.trim() || undefined,
       wompi: form.wompi.trim() || undefined,
       published: true,
     };
@@ -490,13 +490,13 @@ export default function App() {
                         Ver en <strong>Amazon</strong> <ExternalLink size={13} />
                       </motion.a>
                     )}
-                    {activeProd.ml && (
+                    {activeProd.aliexpress && (
                       <motion.a
-                        href={activeProd.ml} target="_blank" rel="noopener noreferrer"
+                        href={activeProd.aliexpress} target="_blank" rel="noopener noreferrer"
                         whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }}
                         className="flex items-center gap-2 bg-gradient-to-r from-yellow-300 to-yellow-500 text-black font-black px-5 py-3 rounded-2xl hover:shadow-xl hover:shadow-yellow-400/30 transition-all text-sm"
                       >
-                        Ver en <strong>Mercado Libre</strong> <ExternalLink size={13} />
+                        Ver en <strong>AliExpress</strong> <ExternalLink size={13} />
                       </motion.a>
                     )}
                     {activeProd.wompi && (
@@ -871,11 +871,11 @@ export default function App() {
                       />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-yellow-400 text-xs w-20 shrink-0 font-bold">Mercado Libre</span>
+                      <span className="text-yellow-400 text-xs w-20 shrink-0 font-bold">AliExpress</span>
                       <input
-                        value={form.ml}
-                        onChange={e => setForm(f => ({ ...f, ml: e.target.value }))}
-                        placeholder="Enlace del producto en Mercado Libre"
+                        value={form.aliexpress}
+                        onChange={e => setForm(f => ({ ...f, aliexpress: e.target.value }))}
+                        placeholder="Enlace del producto en AliExpress"
                         className="flex-1 bg-white/5 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                       />
                     </div>
