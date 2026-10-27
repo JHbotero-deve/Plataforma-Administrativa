@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlsplit
 
 import psycopg2
 
@@ -20,8 +21,33 @@ SQL_FILES = [
 ]
 
 
+def _postgres_dsn() -> str | None:
+    db_url = (os.getenv("DATABASE_URL") or "").strip()
+    if not db_url:
+        return None
+
+    # SQLAlchemy dialect URLs are not accepted by psycopg2.
+    for prefix in ("postgresql+psycopg://", "postgres+psycopg://"):
+        if db_url.startswith(prefix):
+            db_url = "postgresql://" + db_url[len(prefix):]
+            break
+
+    parsed = urlsplit(db_url)
+    if not parsed.scheme.startswith("postgres") or not parsed.hostname:
+        raise RuntimeError(
+            "DATABASE_URL no es una URL PostgreSQL válida. En Railway, usa la referencia "
+            r"${{Postgres.DATABASE_URL}}; no uses valores de ejemplo."
+        )
+    if parsed.hostname.lower() in {"un_host_publico", "localhost_placeholder"} or ":puerto" in db_url:
+        raise RuntimeError(
+            "DATABASE_URL contiene un host/puerto de ejemplo. Configura la referencia "
+            r"${{Postgres.DATABASE_URL}} en Railway."
+        )
+    return db_url
+
+
 def init_database():
-    db_url = os.getenv("DATABASE_URL")
+    db_url = _postgres_dsn()
     conn = psycopg2.connect(db_url) if db_url else psycopg2.connect(
         host=os.getenv("DB_HOST", "db"),
         port=os.getenv("DB_PORT", "5432"),
