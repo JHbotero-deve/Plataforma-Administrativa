@@ -1,7 +1,10 @@
 import html
+import hashlib
 import json
 import re
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
@@ -24,6 +27,51 @@ def _asin(url: str) -> str | None:
     match = ASIN_RE.search(urlparse(url).path)
     return match.group(1).upper() if match else None
 
+
+def _aliexpress_affiliate_url(source_url: str) -> str | None:
+    """Convierte una URL con la API oficial de afiliados de AliExpress."""
+    app_key = os.getenv("ALIEXPRESS_APP_KEY", "").strip()
+    app_secret = os.getenv("ALIEXPRESS_APP_SECRET", "").strip()
+    tracking_id = (os.getenv("ALIEXPRESS_TRACKING_ID") or os.getenv("ALIEXPRESS_AFFILIATE_TRACKING_ID") or "").strip()
+    if not (app_key and app_secret and tracking_id):
+        return None
+    params = {
+        "app_key": app_key,
+        "method": "aliexpress.affiliate.link.generate",
+        "sign_method": "md5",
+        "timestamp": datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S"),
+        "format": "json",
+        "v": "2.0",
+        "promotion_link_type": "0",
+        "source_values": source_url,
+        "tracking_id": tracking_id,
+    }
+    app_signature = os.getenv("ALIEXPRESS_APP_SIGNATURE", "").strip()
+    if app_signature:
+        params["app_signature"] = app_signature
+    signature_source = app_secret + "".join(key + str(params[key]) for key in sorted(params)) + app_secret
+    params["sign"] = hashlib.md5(signature_source.encode("utf-8")).hexdigest().upper()
+    response = requests.post("https://eco.taobao.com/router/rest", data=params, headers={"Content-Type": "application/x-www-form-urlencoded"}, timeout=20)
+    response.raise_for_status()
+    payload = response.json()
+    def find_link(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in {"promotion_link", "promotionLink"} and isinstance(child, str) and child.startswith(("https://", "http://")):
+                    return child
+                found = find_link(child)
+                if found:
+                    return found
+        elif isinstance(value, list):
+            for child in value:
+                found = find_link(child)
+                if found:
+                    return found
+        return None
+    link = find_link(payload)
+    if not link:
+        raise RuntimeError("AliExpress no devolvió un enlace promocional; revisa credenciales, tracking ID y elegibilidad.")
+    return link
 
 def _parse_price(content: str) -> tuple[float | None, str | None]:
     """Obtiene el precio principal visible del producto Amazon."""
@@ -226,6 +274,12 @@ def import_url(
             query = dict(parse_qsl(parts.query, keep_blank_values=True))
             query["tag"] = partner_tag
             affiliate_url = urlunparse((parts.scheme, parts.netloc, parts.path, parts.params, urlencode(query), parts.fragment))
+    elif platform == "aliexpress":
+        try:
+            affiliate_url = _aliexpress_affiliate_url(resolved_url) or resolved_url
+        except (requests.RequestException, ValueError, RuntimeError) as exc:
+            print(f"[aliexpress] no se pudo generar el enlace afiliado: {type(exc).__name__}")
+            affiliate_url = resolved_url
 
     return {
         "platform": platform,
@@ -244,6 +298,7 @@ def import_url(
             "metadata_source": "open_graph" if metadata else "url_only",
             "original_url": url,
             "resolved_url": resolved_url,
+            "affiliate_link_status": "generated" if affiliate_url != resolved_url else "pending_or_not_configured",
             "gallery_urls": metadata.get("gallery_urls") or ([final_image] if final_image else []),
         },
     }
