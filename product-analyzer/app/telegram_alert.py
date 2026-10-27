@@ -545,7 +545,9 @@ def run_bot():
         try:
             lock_conn = _acquire_polling_lock()
         except Exception as exc:
-            print(f"[telegram-bot] No se pudo obtener el bloqueo de polling ({type(exc).__name__}); se reintentará.")
+            # El detalle de la excepción SQL permite diagnosticar el bloqueo sin imprimir credenciales.
+            detail = " ".join(str(exc).split())[:240]
+            print(f"[telegram-bot] No se pudo obtener el bloqueo de polling ({type(exc).__name__}: {detail}); se reintentará.")
         if lock_conn is None:
             print("[telegram-bot] Bloqueo de polling ocupado; se reintentará sin detener el servicio.")
             time.sleep(max(POLL_INTERVAL, 10))
