@@ -279,54 +279,25 @@ def _handle(token, chat_id, text):
     command = command.lower().strip()
 
     if not command.startswith("/"):
-        url = None
-        for candidate in re.findall(r"https?://[^\\s<>]+", text, re.I):
-            candidate = candidate.rstrip(".,;)")
+        for candidate in text.split():
+            candidate = candidate.strip().rstrip(".,;)")
             try:
                 detect_platform(candidate)
-                url = candidate
-                break
             except ValueError:
                 continue
-        if not url:
-            return _send(token, chat_id, "Envía una URL válida de Amazon o AliExpress, o usa /help.")
-
-        title_match = re.search(r"(?:t[ií]tulo|nombre|producto)\\s*[:=]\\s*([^\\r\\n]+)", text, re.I)
-        price_match = re.search(r"(?:precio|price)\\s*[:=]\\s*(?:(?:COP|USD|EUR|US\\$)\\s*)?\\$?\\s*([0-9][0-9.,]*)", text, re.I)
-        currency_match = re.search(r"\\b(COP|USD|EUR)\\b", text, re.I)
-        image_match = re.search(r"(?:imagen|image)\\s*[:=]\\s*(https?://[^\\s<>]+)", text, re.I)
-        title = title_match.group(1).strip() if title_match else None
-        image = image_match.group(1).rstrip(".,;)") if image_match else ""
-        currency = currency_match.group(1).upper() if currency_match else "USD"
-        price_value = ""
-        if price_match:
-            raw_price = price_match.group(1).strip()
-            if "," in raw_price and "." in raw_price:
-                raw_price = raw_price.replace(".", "").replace(",", ".")
-            elif "." in raw_price and len(raw_price.rsplit(".", 1)[-1]) == 3:
-                raw_price = raw_price.replace(".", "")
-            elif "," in raw_price and len(raw_price.rsplit(",", 1)[-1]) == 3:
-                raw_price = raw_price.replace(",", "")
-            else:
-                raw_price = raw_price.replace(",", ".")
-            try:
-                parsed_price = float(raw_price)
-                if parsed_price > 0:
-                    price_value = str(parsed_price)
-            except ValueError:
-                pass
-        args = "|".join(("accesorios", url, price_value, title or "", image, currency))
-        result, payload, score = _add_url(args)
-        if result is None:
-            return _send(token, chat_id, f"<b>No pude importar el enlace</b>\\n{html.escape(str(payload))}")
-        score_text = f"{float(score):.1f}/100" if score is not None else "pendiente: el CLI debe enviar el precio para puntuar"
-        message = (
-            f"<b>URL recibida e importada</b>\\n{html.escape(payload['title'])}\\n"
-            f"Plataforma: {html.escape(payload['platform'])}\\n"
-            f"Score: {score_text}\\n"
-            f'<a href="{html.escape(payload["product_url"], quote=True)}">Abrir producto original</a>'
-        )
-        return _send(token, chat_id, message)
+            result, payload, score = _add_url("accesorios|" + candidate)
+            if result is None:
+                return _send(token, chat_id, "<b>No pude importar el enlace</b>\\n" + html.escape(str(payload)))
+            score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score pendiente: envía precio con /agregar"
+            message = (
+                "<b>URL recibida e importada</b>\\n"
+                + html.escape(payload["title"]) + "\\n"
+                + "Plataforma: " + html.escape(payload["platform"]) + "\\n"
+                + score_text + "\\n"
+                + '<a href="' + html.escape(payload["product_url"], quote=True) + '">Abrir producto original</a>'
+            )
+            return _send(token, chat_id, message)
+        return _send(token, chat_id, "Envía una URL válida de Amazon o AliExpress, o usa /help.")
 
     if command in ("/start", "/help"):
         return _send(token, chat_id, (
