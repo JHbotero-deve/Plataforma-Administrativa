@@ -407,6 +407,20 @@ def _handle(token, chat_id, text):
         return _send(token, chat_id, message)
 
     if command == "/modelar":
+        if not argument.strip():
+            try:
+                scored, missing_price, errors = _model_active_products()
+                return _send(
+                    token, chat_id,
+                    "<b>Modelado del catálogo</b>\n"
+                    f"Productos puntuados: {scored}\n"
+                    f"Sin precio/categoría: {missing_price}\n"
+                    f"Errores: {errors}\n"
+                    "Usa /agregar URL|precio|título|imagen|moneda para completar datos faltantes."
+                )
+            except Exception as exc:
+                print(f"[telegram-bot] batch modeling error: {type(exc).__name__}: {exc}")
+                return _send(token, chat_id, "No pude modelar el catálogo. Revisa la conexión a PostgreSQL y los logs.")
         result, error = _model_product(argument.strip())
         if result is None:
             return _send(token, chat_id, f"<b>Error de modelado</b>\n{html.escape(str(error))}")
