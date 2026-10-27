@@ -48,6 +48,11 @@ def run_pipeline():
             print(f"[tiktok] error sincronizando Creator: {exc}")
     else:
         print("[tiktok] integración no configurada; se conserva el ciclo principal.")
+
+    try:
+        publish_top_opportunities(limit=50)
+    except Exception as exc:
+        print(f"[tienda] error publicando catálogo por URL: {type(exc).__name__}: {exc}")
     print("== Ciclo completo ==")
 
 def publish_top_opportunities(limit=15):
@@ -56,7 +61,8 @@ def publish_top_opportunities(limit=15):
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT p.id, p.title, p.current_price, p.image_url, p.product_url,
+                SELECT p.id, p.title, p.current_price, p.image_url,
+                       COALESCE(p.affiliate_url, p.product_url) AS product_url,
                        p.currency, COALESCE(s.opportunity_score, 0) AS opportunity_score
                 FROM products p
                 LEFT JOIN product_scores s ON s.product_id = p.id
@@ -67,7 +73,7 @@ def publish_top_opportunities(limit=15):
             """, (limit,))
             products = cur.fetchall()
 
-            # La tienda automática del worker queda dedicada a Amazon.
+            # La tienda automática conserva solo productos de Amazon y AliExpress importados por URL.
             cur.execute("""
                 UPDATE published_cards pc
                 SET is_published = FALSE, updated_at = NOW()
