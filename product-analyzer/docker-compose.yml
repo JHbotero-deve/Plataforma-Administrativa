@@ -57,6 +57,21 @@ services:
       - ./app:/app
     command: ["python", "-c", "from telegram_alert import run_bot; run_bot()"]
 
+  link-queue:
+    build: ./app
+    container_name: productos_link_queue
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./app:/app
+    command: ["python", "link_queue_worker.py"]
+
   api:
     build: ./app
     container_name: productos_api
