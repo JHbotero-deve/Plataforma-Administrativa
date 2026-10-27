@@ -54,7 +54,7 @@
 <label class="import-category"><span>Categoría</span><select class="field" id="category"><option value="otros" selected>Otros</option><option value="accesorios">Accesorios</option><option value="electronicos">Electrónica</option><option value="hogar">Hogar</option><option value="belleza">Belleza</option><option value="ropa">Ropa</option><option value="calzado">Calzado</option></select></label>
 <button class="btn primary" id="importBtn" type="submit">Importar producto</button>
 </div></form>
-<p class="import-help">No pegues una URL de imagen. Si la tienda no permite leer los datos automáticamente, abre el creador para buscar en Mercado Libre o subir una imagen real.</p>
+<p class="import-help">No pegues una URL de imagen. Si la tienda no permite leer los datos automáticamente, usa el enlace de Amazon o AliExpress; si faltan datos, completa título, precio e imagen manualmente.</p>
 <div class="import-fallback"><a class="btn small" href="https://central-7ykr.vercel.app/tarjetas">Abrir creador de tarjetas</a></div>
 <div class="import-result" id="importResult" role="status" aria-live="polite"></div>
 </div></section>
@@ -65,10 +65,10 @@
 
 
 <section id="telegram"><div class="wrap"><div class="section-head"><div><div class="eyebrow">05 · automatización</div><h2>Telegram</h2><p>Consulta el catálogo y las oportunidades de Central directamente desde Telegram.</p></div><div class="mono" id="telegramStatus">Comprobando…</div></div><div class="panel" style="padding:20px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap"><div><strong id="telegramName">Bot de Central</strong><div class="status" id="telegramDetail" style="margin-top:5px">Verificando conexión con Telegram.</div></div><a class="btn primary" id="telegramOpen" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Abrir Telegram</a></div></div></section>
-<section id="estado"><div class="wrap"><div class="section-head"><div><div class="eyebrow">06 · operación</div><h2>Estado de Central</h2></div></div><div class="metrics"><div class="metric"><span>Productos activos</span><strong id="count">—</strong></div><div class="metric"><span>Última actualización</span><strong id="last" style="font-size:14px">—</strong></div><div class="metric"><span>Mercado Libre</span><strong id="mlCount">—</strong></div><div class="metric"><span>Amazon</span><strong id="amzCount">—</strong></div></div></div></section>
+<section id="estado"><div class="wrap"><div class="section-head"><div><div class="eyebrow">06 · operación</div><h2>Estado de Central</h2></div></div><div class="metrics"><div class="metric"><span>Productos activos</span><strong id="count">—</strong></div><div class="metric"><span>Última actualización</span><strong id="last" style="font-size:14px">—</strong></div><div class="metric"><span>AliExpress</span><strong id="aeCount">—</strong></div><div class="metric"><span>Amazon</span><strong id="amzCount">—</strong></div></div></div></section>
 </main>
 
-<footer><div class="wrap">Central · datos reales · ciclo automático 2h · vigencia 48h · Amazon · Mercado Libre · Telegram · Wompi preparado.</div></footer>
+<footer><div class="wrap">Central · importación por URL · Amazon · AliExpress · Telegram · Wompi preparado.</div></footer>
 
 <script>
 (()=>{"use strict";
@@ -93,7 +93,7 @@ function card(p){
     ? '<img src="/api/v1/media/image?url='+encodeURIComponent(images[0])+'" alt="'+esc(p.title)+'" loading="lazy" data-images="'+esc(JSON.stringify(images))+'" data-index="0" data-direct="0" onerror="const a=JSON.parse(this.dataset.images||\'[]\');const i=Number(this.dataset.index||0);if(this.dataset.direct===\'0\'){this.dataset.direct=\'1\';this.src=a[i]}else{const n=i+1;if(a[n]){this.dataset.index=String(n);this.dataset.direct=\'0\';this.src=\'/api/v1/media/image?url=\'+encodeURIComponent(a[n])}else{this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'}}"><span class="noimg" style="display:none">Sin imagen</span>'
     : '<span class="noimg">Sin imagen</span>';
   const platform=String(p.platform||"Origen").toLowerCase();
-  const label=platform==="amazon"?"Amazon":platform==="mercadolibre"||platform==="mercado libre"?"Mercado Libre":platform==="tiktok"?"TikTok":platform==="aliexpress"?"AliExpress":"Central";
+  const label=platform==="amazon"?"Amazon":platform==="aliexpress"?"AliExpress":"Central";
   const destination=p.affiliate_url||p.product_url||"/tienda";
   return '<article class="card radar-card" data-product="'+esc(id)+'">'+
     '<div class="card-media">'+image+
@@ -209,7 +209,7 @@ async function load(){
     $("count").textContent=items.length;
     const last=items.map(x=>x.updated_at).filter(Boolean).sort().pop();
     $("last").textContent=date(last);
-    $("mlCount").textContent=items.filter(x=>String(x.platform||"").toLowerCase()==="mercadolibre").length;
+    $("aeCount").textContent=items.filter(x=>String(x.platform||"").toLowerCase()==="aliexpress").length;
     $("amzCount").textContent=items.filter(x=>String(x.platform||"").toLowerCase()==="amazon").length;
     $("updated").textContent=new Date().toLocaleTimeString("es-CO");
   }
@@ -222,7 +222,7 @@ async function load(){
   if(pipelineResult.status==="fulfilled"){
     const pipeline=pipelineResult.value,run=pipeline.latest;
     const runStatus=run?.status==="success"?"OK":"ATENCIÓN";
-    $("pipelineMeta").textContent=run?("Último ciclo: "+runStatus+" · "+date(run.finished_at)+" · Amazon "+Number(run.amazon_products||0)+" · Mercado Libre "+Number(run.mercadolibre_products||0)+" · TikTok "+Number(run.tiktok_products||0)+" · Telegram preparados "+Number(run.telegram_prepared||0)+(Number(run.error_count||0)?" · errores "+Number(run.error_count):"")):"Sin ejecuciones registradas";
+    $("pipelineMeta").textContent=run?("Último ciclo: "+runStatus+" · "+date(run.finished_at)+" · Amazon "+Number(run.amazon_products||0)+" · AliExpress "+Number(run.aliexpress_products||0)+" · TikTok "+Number(run.tiktok_products||0)+" · Telegram preparados "+Number(run.telegram_prepared||0)+(Number(run.error_count||0)?" · errores "+Number(run.error_count):"")):"Sin ejecuciones registradas";
   }
   status(itemsResult.status==="fulfilled"?"ok":"error",itemsResult.status==="fulfilled"?"Central conectado":"Productos no disponibles");
 }
