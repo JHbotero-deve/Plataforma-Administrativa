@@ -3,31 +3,10 @@ import time
 
 import schedule
 
-from analysis import score_product
-from db import get_connection, upsert_product
+from db import get_connection
 from init_db import init_database
-from notifications import send_telegram_alert
 from seed_catalog import seed_catalog
 from tiktok_creator import creator_configured, sync_showcase
-
-SEARCH_CONFIG = [
-    ("accesorios", "soporte celular"),
-    ("accesorios", "audifonos bluetooth"),
-    ("electronica", "smartwatch"),
-    ("electronica", "teclado mecanico"),
-    ("electronica", "mouse gamer"),
-    ("hogar", "organizador hogar"),
-    ("hogar", "lampara led"),
-    ("ropa", "campera mujer"),
-    ("calzado", "zapatillas urbanas"),
-    ("fitness", "accesorios gimnasio"),
-]
-SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
-AMAZON_BATCH_SIZE = int(os.getenv("AMAZON_BATCH_SIZE", "15"))
-
-def build_url(title: str, product_url: str | None) -> str:
-    return product_url or "#"
-
 
 def expire_catalog():
     conn = get_connection()
@@ -49,57 +28,18 @@ def expire_catalog():
 
 
 def run_pipeline():
-    print("== Iniciando ciclo de ingesta y análisis ==")
+    print("== Iniciando ciclo de mantenimiento del catálogo ==")
     expire_catalog()
     conn = get_connection()
-    product_ids = []
     try:
-        # Amazon y AliExpress se importan por URL; no se ejecutan búsquedas automáticas.
-        print("[ingesta] modo URL activado: Amazon y AliExpress.")
-
-        averages = {}
         with conn.cursor() as cur:
-            cur.execute("""
-                SELECT c.name AS category, p.currency, AVG(p.current_price) AS avg_price
-                FROM products p
-                JOIN categories c ON c.id = p.category_id
-                WHERE p.is_active = TRUE AND p.current_price IS NOT NULL
-                GROUP BY c.name, p.currency
-            """)
-            for row in cur.fetchall():
-                averages[(row["category"], row["currency"])] = float(row["avg_price"] or 0)
-
-        for product_id in set(product_ids):
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT c.name AS category, p.currency
-                    FROM products p
-                    LEFT JOIN categories c ON c.id = p.category_id
-                    WHERE p.id = %s
-                """, (product_id,))
-                row = cur.fetchone()
-            if not row:
-                continue
-            score = score_product(conn, product_id, averages.get((row["category"], row["currency"]), 0))
-            print(f"Producto {product_id} -> opportunity_score = {score}")
-            if score >= SCORE_THRESHOLD:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT p.title, p.current_price, p.product_url FROM products p WHERE p.id = %s", (product_id,))
-                    product = cur.fetchone()
-                if product:
-                    send_telegram_alert({
-                        "title": product["title"],
-                        "price": product["current_price"],
-                        "url": build_url(product["title"], product["product_url"]),
-                        "score": round(score, 1),
-                    })
+            cur.execute("SELECT COUNT(*) AS active FROM products WHERE is_active = TRUE")
+            active = cur.fetchone()["active"]
+        print(f"[catálogo] productos activos tras vencimientos: {active}")
     finally:
         conn.close()
 
-    # La publicación de tarjetas es manual y única: Studio -> Publicar en Central.
-    # El worker solo ingesta, actualiza y puntúa productos; no crea tarjetas automáticamente.
-    print("[storefront] publicación automática desactivada; Studio es el único publicador.")
-
+    # El catálogo externo entra únicamente por URL; no hay búsquedas automáticas.
     if creator_configured():
         try:
             result = sync_showcase(limit=200)
@@ -109,7 +49,6 @@ def run_pipeline():
     else:
         print("[tiktok] integración no configurada; se conserva el ciclo principal.")
     print("== Ciclo completo ==")
-
 
 def publish_top_opportunities(limit=15):
     """Publish exactly the best active Amazon products without requiring a score row."""
