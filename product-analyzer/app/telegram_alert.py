@@ -185,23 +185,30 @@ def _search_products(term, limit=8):
     return []
 
 def _add_url(argument):
-    parts = [part.strip() for part in argument.split("|")]
-    if len(parts) < 2:
-        return None, "Uso: /agregar con categoría, URL, precio, título e imagen", None
+    raw = (argument or "").strip()
+    if not raw:
+        return None, "Uso: /agregar URL_DE_AMAZON_O_ALIEXPRESS o categoría|url|precio|título|imagen|moneda", None
 
-    category, url = parts[0].lower(), parts[1]
+    parts = [part.strip() for part in raw.split("|")]
+    if parts[0].lower() in ALLOWED_CATEGORIES and len(parts) >= 2:
+        category, url = parts[0].lower(), parts[1]
+        extras = parts[2:]
+    elif parts[0].lower().startswith(("https://", "http://")):
+        category, url, extras = "accesorios", parts[0], parts[1:]
+    else:
+        return None, "Envía una URL válida de Amazon o AliExpress. Ejemplo: /agregar https://.../dp/ASIN", None
+
     if category not in ALLOWED_CATEGORIES:
-        return None, "Categoría no válida.", None
+        return None, "Categoría no válida. Usa ropa, calzado o accesorios.", None
 
     try:
-        price = float(parts[2]) if len(parts) > 2 and parts[2] else None
+        price = float(extras[0].replace(",", ".")) if len(extras) > 0 and extras[0] else None
         product = import_url(
-            url,
-            category,
-            title=parts[3] if len(parts) > 3 and parts[3] else None,
+            url, category,
+            title=extras[1] if len(extras) > 1 and extras[1] else None,
             price=price,
-            image_url=parts[4] if len(parts) > 4 and parts[4] else None,
-            currency=parts[5] if len(parts) > 5 and parts[5] else "USD",
+            image_url=extras[2] if len(extras) > 2 and extras[2] else None,
+            currency=extras[3] if len(extras) > 3 and extras[3] else "USD",
         )
         if product["platform"] not in ALLOWED_PLATFORMS:
             return None, "Plataforma no habilitada para importación.", None
@@ -216,9 +223,8 @@ def _add_url(argument):
                         """
                         SELECT AVG(p.current_price) AS category_avg
                         FROM products p
-                        JOIN categories c ON c.id = p.category_id
-                        WHERE c.name = %s AND p.currency = %s
-                          AND p.current_price IS NOT NULL AND p.is_active = TRUE
+                        WHERE p.category_id = (SELECT id FROM categories WHERE name = %s)
+                          AND p.currency = %s AND p.current_price IS NOT NULL AND p.is_active = TRUE
                         """,
                         (category, product["currency"]),
                     )
@@ -227,9 +233,11 @@ def _add_url(argument):
             return product_id, product, score
         finally:
             conn.close()
+    except (TypeError, ValueError) as exc:
+        return None, str(exc) or "Precio no válido. Usa un número, por ejemplo 29.99.", None
     except Exception as exc:
-        print(f"[telegram-bot] url import error: {exc}")
-        return None, "No fue posible agregar el producto desde la URL.", None
+        print(f"[telegram-bot] url import error: {type(exc).__name__}: {exc}")
+        return None, "No fue posible guardar el producto. Revisa los logs de Central.", None
 
 
 def _model_product(argument):
