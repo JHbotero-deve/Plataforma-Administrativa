@@ -275,8 +275,13 @@ def _model_product(argument):
 
 
 def _handle(token, chat_id, text):
-    command, _, argument = text.partition(" ")
-    command = command.lower().strip()
+    match = re.match(r"^\s*/\s*([a-zA-Z_]+)(?:@\w+)?(?:\s+(.*))?$", text or "")
+    if match:
+        command = "/" + match.group(1).lower()
+        argument = (match.group(2) or "").strip()
+    else:
+        command, _, argument = (text or "").partition(" ")
+        command = command.lower().strip()
 
     if not command.startswith("/"):
         for candidate in text.split():
