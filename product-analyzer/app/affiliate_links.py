@@ -10,7 +10,7 @@ def generate_aliexpress_affiliate_url(source_url: str) -> str | None:
     """Devuelve el enlace promocional oficial; None si no hay credenciales."""
     parsed = urlparse(source_url)
     host = (parsed.hostname or "").lower().rstrip(".")
-    if host == "s.click.aliexpress.com":
+    if host in {"s.click.aliexpress.com", "a.aliexpress.com"}:
         return source_url
     app_key = os.getenv("ALIEXPRESS_APP_KEY", "").strip()
     app_secret = os.getenv("ALIEXPRESS_APP_SECRET", "").strip()
