@@ -135,7 +135,7 @@ def publish_top_opportunities(limit=15):
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 WHERE pc.product_id = p.id
-                  AND pl.name <> 'amazon'
+                  AND pl.name NOT IN ('amazon', 'aliexpress', 'personal')
                   AND pc.is_published = TRUE
             """)
 
@@ -174,7 +174,7 @@ def run_worker():
     time.sleep(5)
     init_database()
     seeded = seed_catalog()
-    print(f"== Catalogo inicial: Amazon {seeded['amazon']} | Mercado Libre {seeded['mercadolibre']} | Propios {seeded['personal']} ==")
+    print(f"== Catálogo inicial: Amazon {seeded.get('amazon', 0)} | AliExpress {seeded.get('aliexpress', 0)} | Propios {seeded.get('personal', 0)} ==")
     run_pipeline()
     schedule.every(2).hours.do(run_pipeline)
     while True:
