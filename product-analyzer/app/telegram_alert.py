@@ -12,7 +12,7 @@ from url_import import detect_platform, import_url
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
-ALLOWED_PLATFORMS = {"mercadolibre", "amazon"}
+ALLOWED_PLATFORMS = {"amazon", "aliexpress"}
 ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios"}
 
 
@@ -360,7 +360,7 @@ def _model_product(argument):
             "external_id": parts[2],
             "title": parts[3],
             "price": float(parts[4]),
-            "currency": "COP" if platform == "mercadolibre" else "USD",
+            "currency": "USD",
             "product_url": parts[5],
             "rating": float(parts[6]) if parts[6] else None,
             "reviews_count": int(parts[7] or 0),
@@ -397,29 +397,21 @@ def _handle(token, chat_id, text):
     if not command.startswith("/"):
         for part in text.split():
             try:
-                platform = detect_platform(part)
+                detect_platform(part)
             except ValueError:
                 continue
-            try:
-                conn = get_connection()
-                try:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            """
-                            INSERT INTO link_queue (url, platform, chat_id)
-                            VALUES (%s, %s, %s)
-                            RETURNING id
-                            """,
-                            (part, platform, str(chat_id)),
-                        )
-                        queue_id = cur.fetchone()["id"]
-                    conn.commit()
-                finally:
-                    conn.close()
-            except Exception as exc:
-                print(f"[telegram-bot] queue insert error: {type(exc).__name__}: {exc}")
-                return _send(token, chat_id, "No pude poner el enlace en la cola. Intenta de nuevo.")
-            return _send(token, chat_id, f"Enlace recibido. Lo estoy procesando (cola #{queue_id}).")
+            result, payload, score = _add_url(f"accesorios|{part}")
+            if result is None:
+                return _send(token, chat_id, f"<b>No pude importar el enlace</b>\\n{html.escape(str(payload))}")
+            score_text = f"{float(score):.1f}/100" if score is not None else "pendiente: falta precio autorizado"
+            message = (
+                f"<b>URL recibida e importada</b>\\n{html.escape(payload['title'])}\\n"
+                f"Plataforma: {html.escape(payload['platform'])}\\n"
+                f"Score: {score_text}\\n"
+                f'<a href="{html.escape(payload["product_url"], quote=True)}">Abrir producto original</a>'
+            )
+            return _send(token, chat_id, message)
+        return _send(token, chat_id, "Envía una URL válida de Amazon o AliExpress, o usa /help.")
 
     if command in ("/start", "/help"):
         return _send(token, chat_id, (
@@ -427,7 +419,7 @@ def _handle(token, chat_id, text):
             "/top — oportunidades con mayor score\n"
             "/buscar producto — buscar en los datos modelados\n"
             "/modelar — registrar y puntuar un producto\n"
-            "/agregar — importar un producto desde Amazon o Mercado Libre por URL\n"
+            "/agregar — importar un producto desde Amazon o AliExpress por URL\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda"
         ))
