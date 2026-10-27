@@ -187,7 +187,7 @@ def _search_products(term, limit=8):
 def _add_url(argument):
     parts = [part.strip() for part in argument.split("|")]
     if len(parts) < 2:
-        return None, "Uso: /agregar categoría|url|precio|título|imagen", None
+        return None, "Uso: /agregar con categoría, URL, precio, título e imagen", None
 
     category, url = parts[0].lower(), parts[1]
     if category not in ALLOWED_CATEGORIES:
@@ -305,7 +305,7 @@ def _handle(token, chat_id, text):
             "/top — oportunidades con mayor score\n"
             "/buscar producto — buscar en los datos modelados\n"
             "/modelar — registrar y puntuar un producto\n"
-            "/agregar — importar un producto desde Amazon o AliExpress por URL\n"
+            "/agregar — importar Amazon o AliExpress por URL con datos del CLI\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda"
         ))
