@@ -1,7 +1,7 @@
 CREATE TABLE IF NOT EXISTS link_queue (
     id BIGSERIAL PRIMARY KEY,
     url TEXT NOT NULL,
-    platform TEXT NOT NULL CHECK (platform IN ('amazon', 'mercadolibre')),
+    platform TEXT NOT NULL CHECK (platform IN ('amazon', 'aliexpress')),
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'done', 'failed')),
     chat_id TEXT,
     product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
