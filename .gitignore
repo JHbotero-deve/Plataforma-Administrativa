@@ -6,10 +6,15 @@ __pycache__/
 venv/
 *.egg-info/
 
-# Entornos y Secretos
+# Entornos y secretos: nunca versionar credenciales reales
 .env
+.env.*
+!.env.example
+.evn
 *.env.local
 *.env.*.local
+*.pem
+*.key
 
 # Archivos de logs y Docker
 *.log
