@@ -136,6 +136,7 @@ def pipeline_summary():
                 FROM platforms pl
                 LEFT JOIN products p
                   ON p.platform_id = pl.id AND p.is_active = TRUE
+                WHERE lower(pl.name) IN ('amazon', 'aliexpress', 'personal')
                 GROUP BY pl.name
                 ORDER BY pl.name
                 """
