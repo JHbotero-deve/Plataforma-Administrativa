@@ -1,21 +1,23 @@
 import html
 import json
 import re
-from urllib.parse import urlparse
+import os
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 
 AMAZON_HOST_RE = re.compile(r"(^|\.)(amazon\.[a-z.]+|amzn\.to|amzn\.com|a\.co)$", re.I)
 ASIN_RE = re.compile(r"(?:/dp/|/gp/product/)([A-Z0-9]{10})(?:[/?]|$)", re.I)
+ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d{8,})(?:\.html)?", re.I)
 
 
 def detect_platform(url: str) -> str:
     host = (urlparse(url).hostname or "").lower()
     if AMAZON_HOST_RE.search(host):
         return "amazon"
-    if "mercadolibre." in host or "mercadolivre." in host:
-        return "mercadolibre"
-    raise ValueError("La URL debe pertenecer a Amazon o Mercado Libre.")
+    if host == "aliexpress.com" or host.endswith(".aliexpress.com") or host == "aliexpress.us" or host.endswith(".aliexpress.us"):
+        return "aliexpress"
+    raise ValueError("La URL debe pertenecer a Amazon o AliExpress.")
 
 
 def _asin(url: str) -> str | None:
@@ -196,21 +198,14 @@ def import_url(
         raise ValueError("La URL debe comenzar con http:// o https://.")
 
     platform = detect_platform(url)
-    metadata = _metadata(url)
-    if platform == "amazon" and not _asin(metadata.get("resolved_url") or url):
-        try:
-            metadata["resolved_url"] = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15, allow_redirects=True).url
-        except requests.RequestException:
-            pass
-    resolved_url = metadata.get("resolved_url") or url
+    # Amazon: no descargar ni raspar la página; importar por URL sin provocar
+    # peticiones repetidas al marketplace. Se usan datos aportados o API autorizada.
+    metadata = {} if platform == "amazon" else _metadata(url)
+    resolved_url = url if platform == "amazon" else (metadata.get("resolved_url") or url)
     external_id = _asin(resolved_url) if platform == "amazon" else None
-    if platform == "amazon" and external_id and (not metadata.get("title") or metadata.get("price") is None or not metadata.get("image_url")):
-        web_metadata = _amazon_web_metadata(external_id)
-        for key, value in web_metadata.items():
-            if key == "gallery_urls":
-                metadata[key] = list(dict.fromkeys((metadata.get(key) or []) + value))
-            elif not metadata.get(key):
-                metadata[key] = value
+    if platform == "aliexpress":
+        match = ALIEXPRESS_ITEM_RE.search(urlparse(resolved_url).path)
+        external_id = "AE-" + match.group(1) if match else None
     if not external_id:
         path_id = re.search(r"/([A-Z]{2,4}-?[0-9]{6,})", parsed.path, re.I)
         external_id = path_id.group(1).upper() if path_id else re.sub(
@@ -223,6 +218,14 @@ def import_url(
     final_image = (image_url or metadata.get("image_url") or "").strip() or None
     final_price = price if price is not None else metadata.get("price")
     final_currency = metadata.get("currency") or currency
+    affiliate_url = resolved_url
+    if platform == "amazon" and external_id:
+        partner_tag = (os.getenv("AMAZON_PARTNER_TAG") or os.getenv("AMAZON_ASSOCIATE_TAG") or "").strip()
+        if partner_tag:
+            parts = urlparse(resolved_url)
+            query = dict(parse_qsl(parts.query, keep_blank_values=True))
+            query["tag"] = partner_tag
+            affiliate_url = urlunparse((parts.scheme, parts.netloc, parts.path, parts.params, urlencode(query), parts.fragment))
 
     return {
         "platform": platform,
@@ -230,6 +233,7 @@ def import_url(
         "title": final_title[:500],
         "image_url": final_image,
         "product_url": resolved_url,
+        "affiliate_url": affiliate_url,
         "price": final_price,
         "currency": str(final_currency).upper()[:10] if final_currency else "USD",
         "rating": None,
