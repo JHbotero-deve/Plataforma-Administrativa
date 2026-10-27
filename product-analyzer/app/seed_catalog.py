@@ -18,14 +18,6 @@ AMAZON_PRODUCTS = [
     ("hogar","B0BHZQGN26","Samsung T7 Shield Portable SSD 4TB"),
 ]
 
-MERCADOLIBRE_PRODUCTS = [
-    ("accesorios","MCO-SEARCH-SOPORTE-LINKON","Soporte para Celular Linkon 100% Aluminio Antideslizante","https://listado.mercadolibre.com.co/soporte-de-celular",41990),
-    ("accesorios","MCO-SEARCH-SOPORTE-AUTO","Soporte Celular para Auto Rejilla Holder Ajustable","https://listado.mercadolibre.com.co/soporte-de-celular",18081),
-    ("electronica","MCO-SEARCH-SONY-CH720N","Audífonos Sony WH-CH720N Noise Cancelling","https://listado.mercadolibre.com.co/audifonos-con-bluetooth",319899),
-    ("electronica","MCO-SEARCH-REDRAGON-K552","Teclado Gamer Redragon Kumara K552 RGB","https://listado.mercadolibre.com.co/teclado-mecanico",259900),
-    ("electronica","MCO-SEARCH-REDMI-BUDS-6","Auriculares Xiaomi Redmi Buds 6 Play","https://listado.mercadolibre.com.co/audifonos-de-bluetooth",54900),
-]
-
 PERSONAL_PRODUCTS = [
     ("otros","CENTRAL-PROP-001","Audífonos Urbanos Central","https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=900&q=85",129900),
     ("otros","CENTRAL-PROP-002","Reloj Minimal Central","https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=85",159900),
@@ -49,7 +41,7 @@ def _publish(conn, product_id, title, subtitle, price_display, image_url, produc
 
 def seed_catalog():
     conn = get_connection()
-    seeded = {"amazon":0,"mercadolibre":0,"personal":0}
+    seeded = {"amazon":0,"aliexpress":0,"personal":0}
     try:
         for category, asin, title in AMAZON_PRODUCTS:
             image=f"https://m.media-amazon.com/images/P/{asin}.01._SL1000_.jpg"
@@ -60,14 +52,6 @@ def seed_catalog():
             pid=upsert_product(conn,"amazon",category,product)
             _publish(conn,pid,title,"Producto real de Amazon","Consultar",image,product["product_url"])
             seeded["amazon"]+=1
-
-        for category, external_id, title, url, price in MERCADOLIBRE_PRODUCTS:
-            product={"external_id":external_id,"title":title,"image_url":None,"gallery_urls":[],
-                     "product_url":url,"price":price,"currency":"COP","rating":None,"reviews_count":0,
-                     "source_metadata":{"import_method":"verified_marketplace_seed","metadata_source":"public_mercadolibre_search"}}
-            pid=upsert_product(conn,"mercadolibre",category,product)
-            _publish(conn,pid,title,"Oferta encontrada en Mercado Libre",f"{price:,.0f} COP",None,url)
-            seeded["mercadolibre"]+=1
 
         for category, external_id, title, image, price in PERSONAL_PRODUCTS:
             product={"external_id":external_id,"title":title,"image_url":image,"gallery_urls":[image],
