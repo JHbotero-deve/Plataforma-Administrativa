@@ -1,3 +1,4 @@
+import hashlib
 import html
 import json
 import re
@@ -7,15 +8,16 @@ import requests
 
 AMAZON_HOST_RE = re.compile(r"(^|\.)(amazon\.[a-z.]+|amzn\.to|amzn\.com|a\.co)$", re.I)
 ASIN_RE = re.compile(r"(?:/dp/|/gp/product/)([A-Z0-9]{10})(?:[/?]|$)", re.I)
+ALIEXPRESS_HOST_RE = re.compile(r"(^|\\.)(aliexpress\\.(?:com|us|ru|es|fr|it|de|pl|nl|tr|br|mx|co\\.uk))$", re.I)
 
 
 def detect_platform(url: str) -> str:
     host = (urlparse(url).hostname or "").lower()
     if AMAZON_HOST_RE.search(host):
         return "amazon"
-    if "mercadolibre." in host or "mercadolivre." in host:
-        return "mercadolibre"
-    raise ValueError("La URL debe pertenecer a Amazon o Mercado Libre.")
+    if ALIEXPRESS_HOST_RE.search(host) or host.endswith(".aliexpress.com"):
+        return "aliexpress"
+    raise ValueError("La URL debe pertenecer a Amazon o AliExpress.")
 
 
 def _asin(url: str) -> str | None:
@@ -196,28 +198,16 @@ def import_url(
         raise ValueError("La URL debe comenzar con http:// o https://.")
 
     platform = detect_platform(url)
-    metadata = _metadata(url)
-    if platform == "amazon" and not _asin(metadata.get("resolved_url") or url):
-        try:
-            metadata["resolved_url"] = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15, allow_redirects=True).url
-        except requests.RequestException:
-            pass
+    # No se rastrean páginas de Amazon ni se siguen enlaces cortos automáticamente.
+    # La importación por URL no debe generar tráfico tipo bot ni eludir controles.
+    metadata = _metadata(url) if platform == "aliexpress" else {}
     resolved_url = metadata.get("resolved_url") or url
-    external_id = _asin(resolved_url) if platform == "amazon" else None
-    if platform == "amazon" and external_id and (not metadata.get("title") or metadata.get("price") is None or not metadata.get("image_url")):
-        web_metadata = _amazon_web_metadata(external_id)
-        for key, value in web_metadata.items():
-            if key == "gallery_urls":
-                metadata[key] = list(dict.fromkeys((metadata.get(key) or []) + value))
-            elif not metadata.get(key):
-                metadata[key] = value
+    external_id = _asin(url) if platform == "amazon" else None
+    if platform == "aliexpress":
+        item_match = re.search(r"/item/(\\d+)(?:\\.html)?", parsed.path, re.I)
+        external_id = item_match.group(1) if item_match else None
     if not external_id:
-        path_id = re.search(r"/([A-Z]{2,4}-?[0-9]{6,})", parsed.path, re.I)
-        external_id = path_id.group(1).upper() if path_id else re.sub(
-            r"[^a-zA-Z0-9]+", "-", parsed.path.strip("/")
-        )[:120]
-    if not external_id:
-        raise ValueError("No fue posible identificar el producto en la URL.")
+        external_id = "URL-" + hashlib.sha256(url.encode("utf-8")).hexdigest()[:24].upper()
 
     final_title = (title or metadata.get("title") or f"Producto {platform.title()} {external_id}").strip()
     final_image = (image_url or metadata.get("image_url") or "").strip() or None
