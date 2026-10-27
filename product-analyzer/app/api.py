@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field
 from psycopg2.extras import Json
 
 from analysis import score_product
-from amazon_api import fetch_amazon_products
 from db import get_connection, upsert_product
 from monetization import router as monetization_router
 from publications import router as publication_router
