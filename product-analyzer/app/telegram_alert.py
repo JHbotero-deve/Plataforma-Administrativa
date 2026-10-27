@@ -434,10 +434,10 @@ def _handle(token, chat_id, text):
                 total = cur.fetchone()["total"]
                 cur.execute(
                     """
-                    SELECT COUNT(*) AS modeled
+                    SELECT COUNT(DISTINCT p.id) AS modeled
                     FROM products p
                     JOIN product_scores s ON s.product_id = p.id
-                    WHERE p.is_active = TRUE
+                    WHERE p.is_active = TRUE AND p.current_price IS NOT NULL
                     """
                 )
                 modeled = cur.fetchone()["modeled"]
