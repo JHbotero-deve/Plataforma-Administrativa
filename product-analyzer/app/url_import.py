@@ -76,6 +76,16 @@ def _aliexpress_affiliate_url(source_url: str) -> str | None:
 def _parse_price(content: str) -> tuple[float | None, str | None]:
     """Obtiene el precio principal visible del producto Amazon."""
     content = html.unescape(content)
+    # AliExpress puede exponer precio y moneda en los datos estructurados de la página.
+    generic_price = re.search(r'price[^0-9]{0,20}([0-9]+(?:\.[0-9]+)?)', content, re.I)
+    generic_currency = re.search(r'priceCurrency[^A-Z]{0,10}([A-Z]{3})', content)
+    if generic_price and generic_currency:
+        try:
+            value = float(generic_price.group(1))
+            if value > 0:
+                return value, generic_currency.group(1).upper()
+        except ValueError:
+            pass
     marker = re.search(
         r'id=["\']corePriceDisplay_desktop_feature_div["\']',
         content,
