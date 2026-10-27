@@ -1,23 +1,5 @@
 from db import get_connection, upsert_product
 
-AMAZON_PRODUCTS = [
-    ("accesorios","B09HM94VDS","Logitech MX Master 3S Mouse"),
-    ("accesorios","B0CFZK8M2S","Fitbit Charge 6 Fitness Tracker"),
-    ("accesorios","B09YH79VBC","Sony WH-1000XM5 Headphones"),
-    ("accesorios","B0BPC34J3D","LEGO Technic Ferrari Daytona SP3"),
-    ("hogar","B07KXH57QJ","KitchenAid Artisan Stand Mixer"),
-    ("electronica","B09VLHR4JC","Samsung T7 Shield Portable SSD 2TB"),
-    ("electronica","B09NCMZNJK","Nintendo Switch OLED Model Mario Red"),
-    ("electronica","B09RQ47HC8","JBL Flip 6 Portable Waterproof Speaker"),
-    ("electronica","B0CJM1GNFQ","Amazon Fire TV Stick 4K"),
-    ("accesorios","B0GJTFXNRX","Apple AirTag 2nd Generation"),
-    ("accesorios","B0GJTXVN9Z","Apple AirTag 2nd Generation 4 Pack"),
-    ("accesorios","B0D5M2KP2Z","Anker 737 Power Bank"),
-    ("electronica","B0CN5HYDHZ","Soundcore Motion+ / Motion X500 Bluetooth Speaker"),
-    ("electronica","B0C3ZR6JJL","Soundcore Life Note 3i True Wireless Earbuds"),
-    ("hogar","B0BHZQGN26","Samsung T7 Shield Portable SSD 4TB"),
-]
-
 PERSONAL_PRODUCTS = [
     ("otros","CENTRAL-PROP-001","Audífonos Urbanos Central","https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=900&q=85",129900),
     ("otros","CENTRAL-PROP-002","Reloj Minimal Central","https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=85",159900),
@@ -43,16 +25,6 @@ def seed_catalog():
     conn = get_connection()
     seeded = {"amazon":0,"aliexpress":0,"personal":0}
     try:
-        for category, asin, title in AMAZON_PRODUCTS:
-            image=f"https://m.media-amazon.com/images/P/{asin}.01._SL1000_.jpg"
-            product={"external_id":asin,"title":title,"image_url":image,
-                     "gallery_urls":[image],"product_url":f"https://www.amazon.com/dp/{asin}",
-                     "price":None,"currency":"USD","rating":None,"reviews_count":0,
-                     "source_metadata":{"import_method":"verified_catalog_seed","metadata_source":"public_amazon_listing"}}
-            pid=upsert_product(conn,"amazon",category,product)
-            _publish(conn,pid,title,"Producto real de Amazon","Consultar",image,product["product_url"])
-            seeded["amazon"]+=1
-
         for category, external_id, title, image, price in PERSONAL_PRODUCTS:
             product={"external_id":external_id,"title":title,"image_url":image,"gallery_urls":[image],
                      "product_url":None,"price":price,"currency":"COP","rating":5,"reviews_count":0,
