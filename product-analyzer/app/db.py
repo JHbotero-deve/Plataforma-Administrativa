@@ -1,4 +1,6 @@
 import os
+
+import requests
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 import psycopg2
