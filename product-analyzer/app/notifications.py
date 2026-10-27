@@ -31,6 +31,8 @@ def send_telegram_alert(product_info):
         f"<b>Plataforma:</b> {platform}",
         f"<b>Categoría:</b> {category}",
     ]
+    if product_info.get("affiliate_link_generated") is False:
+        lines.append("<b>Afiliación:</b> pendiente de configurar o generar.")
     if url:
         safe_url = html.escape(str(url), quote=True)
         lines.append(f'<a href="{safe_url}">Ver producto</a>')
