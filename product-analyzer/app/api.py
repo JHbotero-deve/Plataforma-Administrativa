@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field
 from psycopg2.extras import Json
 
 from analysis import score_product
-from amazon_api import fetch_amazon_products
 from db import get_connection, upsert_product
 from monetization import router as monetization_router
 from publications import router as publication_router
@@ -117,67 +116,18 @@ def _publish_external_product(conn, product_id, product, platform_label):
 
 @core_router.post("/store/sync")
 def sync_store_catalog():
-    """Importa productos reales al catálogo; las tarjetas se publican únicamente desde Studio."""
-    conn = get_connection()
-    amazon_imported = []
-    errors = []
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT p.external_id, pl.name AS platform
-                FROM products p
-                JOIN platforms pl ON pl.id = p.platform_id
-                WHERE p.is_active = TRUE AND pl.name = 'amazon'
-            """)
-            existing = {(str(row["platform"]).lower(), str(row["external_id"]).upper()) for row in cur.fetchall()}
-
-        # Amazon: hasta 15 productos reales nuevos y válidos.
-        try:
-            amazon_products = fetch_amazon_products(
-                {external_id for platform, external_id in existing if platform == "amazon"},
-                15,
-            )
-            for category, product in amazon_products[:15]:
-                try:
-                    product_id = upsert_product(conn, "amazon", category, product)
-                    with conn.cursor() as cur:
-                        cur.execute("""
-                            SELECT AVG(p.current_price) AS avg_price
-                            FROM products p
-                            JOIN categories c ON c.id = p.category_id
-                            WHERE p.is_active = TRUE AND c.name = %s
-                              AND p.currency = %s AND p.current_price IS NOT NULL
-                        """, (category, product.get("currency") or "USD"))
-                        average = cur.fetchone()["avg_price"]
-                    product["_score"] = score_product(conn, product_id, float(average or 0))
-                    conn.commit()
-                    amazon_imported.append({"id": product_id, "asin": product["external_id"], "title": product["title"]})
-                except Exception as exc:
-                    conn.rollback()
-                    errors.append(f"Amazon {product.get('external_id')}: {exc}")
-        except Exception as exc:
-            conn.rollback()
-            errors.append(f"Amazon: {exc}")
-
-        if not amazon_imported:
-            raise HTTPException(status_code=502, detail={
-                "message": "No se pudo importar ningún producto real.",
-                "errors": errors[:10],
-            })
-        return {
-            "amazon": {"imported": len(amazon_imported), "published": 0, "products": amazon_imported},
-            "total_published": 0,
-            "errors": errors[:10],
-        }
-    finally:
-        conn.close()
+    raise HTTPException(
+        status_code=410,
+        detail="La ingesta automática está desactivada. Usa la importación por URL de Amazon o AliExpress.",
+    )
 
 
 @core_router.post("/amazon/sync")
 def sync_amazon_store(limit: int = Query(20, ge=1, le=20)):
-    """Importa productos reales de Amazon y los publica."""
-    result = sync_store_catalog()
-    return result["amazon"]
+    raise HTTPException(
+        status_code=410,
+        detail="La búsqueda automática de Amazon está desactivada. Usa la importación por URL.",
+    )
 
 
 @core_router.get("/pipeline/summary")
