@@ -2,9 +2,9 @@ import hashlib
 import re
 from urllib.parse import urlparse
 
-AMAZON_HOST_RE = re.compile(r"(^|\\.)(amazon\\.[a-z.]+|amzn\\.to|amzn\\.com|a\\.co)$", re.I)
+AMAZON_HOST_RE = re.compile(r"(^|\.)(amazon\.[a-z.]+|amzn\.to|amzn\.com|a\.co)$", re.I)
 ASIN_RE = re.compile(r"(?:/dp/|/gp/product/)([A-Z0-9]{10})(?:[/?]|$)", re.I)
-ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\\d+)(?:\\.html)?", re.I)
+ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 
 def detect_platform(url: str) -> str:
@@ -44,10 +44,10 @@ def import_url(
     currency: str = "USD",
     image_url: str | None = None,
 ) -> dict:
-    """Registra enlaces proporcionados por el usuario o por los CLI autorizados.
+    """Registra enlaces suministrados por el usuario o por los CLI autorizados.
 
-    No descarga páginas, no sigue enlaces cortos y no usa scraping para evitar
-    bloqueos. El CLI puede enviar título, precio, moneda e imagen junto con la URL.
+    No descarga páginas ni sigue enlaces cortos automáticamente. El CLI puede
+    enviar título, precio, moneda e imagen junto con la URL.
     """
     url = url.strip()
     parsed = urlparse(url)
