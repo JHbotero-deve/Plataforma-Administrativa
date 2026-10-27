@@ -37,9 +37,9 @@ def _env_value(name: str, default: str = "") -> str:
     value = os.getenv(name)
     if value and value.strip():
         return value.strip()
-    target = name.strip().replace("\\u00a0", "").casefold()
+    target = name.strip().replace("\u00a0", "").casefold()
     for key, candidate in os.environ.items():
-        if key.strip().replace("\\u00a0", "").casefold() == target and candidate and str(candidate).strip():
+        if key.strip().replace("\u00a0", "").casefold() == target and candidate and str(candidate).strip():
             return str(candidate).strip()
     return default
 
