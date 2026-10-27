@@ -282,6 +282,48 @@ def _model_product(argument):
         return None, str(exc)
 
 
+def _model_active_products():
+    """Puntúa en lote productos activos con precio y categoría."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.id, p.current_price,
+                       COALESCE((
+                           SELECT AVG(p2.current_price)
+                           FROM products p2
+                           WHERE p2.category_id = p.category_id
+                             AND p2.currency = p.currency
+                             AND p2.is_active = TRUE
+                             AND p2.current_price IS NOT NULL
+                       ), p.current_price) AS category_avg
+                FROM products p
+                WHERE p.is_active = TRUE
+                  AND p.current_price IS NOT NULL
+                  AND p.current_price > 0
+                  AND p.category_id IS NOT NULL
+                ORDER BY p.updated_at DESC
+                LIMIT 500
+                """
+            )
+            products = cur.fetchall()
+            cur.execute("SELECT COUNT(*) AS total FROM products WHERE is_active = TRUE")
+            active_total = int(cur.fetchone()["total"] or 0)
+        scored = 0
+        errors = 0
+        for product in products:
+            try:
+                score_product(conn, product["id"], float(product["category_avg"] or product["current_price"]))
+                scored += 1
+            except Exception as exc:
+                errors += 1
+                print(f"[telegram-bot] modelado fallido para producto {product['id']}: {type(exc).__name__}")
+        return scored, max(active_total - len(products), 0), errors
+    finally:
+        conn.close()
+
+
 def _handle(token, chat_id, text):
     match = re.match(r"^\s*/\s*([a-zA-Z_]+)(?:@\w+)?(?:\s+(.*))?$", text or "")
     if match:
