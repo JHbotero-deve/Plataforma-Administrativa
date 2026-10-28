@@ -6,31 +6,18 @@ import schedule
 from amazon_api import fetch_amazon_products
 from analysis import score_product
 from db import get_connection, upsert_product
-from ingest import fetch_mercadolibre
 from init_db import init_database
 from notifications import send_telegram_alert
 from seed_catalog import seed_catalog
 from tiktok_creator import creator_configured, sync_showcase
 
-SEARCH_CONFIG = [
-    ("accesorios", "soporte celular"),
-    ("accesorios", "audifonos bluetooth"),
-    ("electronica", "smartwatch"),
-    ("electronica", "teclado mecanico"),
-    ("electronica", "mouse gamer"),
-    ("hogar", "organizador hogar"),
-    ("hogar", "lampara led"),
-    ("ropa", "campera mujer"),
-    ("calzado", "zapatillas urbanas"),
-    ("fitness", "accesorios gimnasio"),
-]
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
-AMAZON_BATCH_SIZE = int(os.getenv("AMAZON_BATCH_SIZE", "15"))
+AMAZON_BATCH_SIZE = int(os.getenv("AMAZON_BATCH_SIZE", "150"))
 
 def build_url(title: str, product_url: str | None) -> str:
     if product_url and product_url != "#":
         return product_url
-    return f"https://listado.mercadolibre.com.co/{title.replace(' ', '-')}"
+    return f"https://www.amazon.com/s?k={title.replace(' ', '+')}"
 
 
 def expire_catalog():
@@ -80,7 +67,7 @@ def ingest_amazon(conn) -> list[int]:
 
 
 def run_pipeline():
-    print("== Iniciando ciclo de ingesta y análisis ==")
+    print("== Iniciando ciclo de ingesta y análisis (Amazon & AliExpress) ==")
     expire_catalog()
     conn = get_connection()
     product_ids = []
@@ -89,22 +76,6 @@ def run_pipeline():
             product_ids.extend(ingest_amazon(conn))
         except Exception as exc:
             print(f"[amazon] ciclo abortado: {exc}")
-
-        for category, term in SEARCH_CONFIG:
-            try:
-                products = fetch_mercadolibre(term)
-            except Exception as exc:
-                print(f"[mercadolibre] error trayendo '{term}': {exc}")
-                continue
-            if not products:
-                print(f"[mercadolibre] sin resultados reales para '{term}'.")
-                continue
-            for product in products:
-                try:
-                    product_ids.append(upsert_product(conn, "mercadolibre", category, product))
-                except Exception as exc:
-                    conn.rollback()
-                    print(f"[mercadolibre] error insertando producto: {exc}")
 
         averages = {}
         with conn.cursor() as cur:

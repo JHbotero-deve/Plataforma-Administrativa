@@ -5,11 +5,21 @@ import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
 
-def get_connection():
+def get_connection(max_retries: int = 3, delay: float = 1.0):
     db_url = os.getenv("DATABASE_URL", "").strip()
     if not db_url:
         raise RuntimeError("DATABASE_URL es obligatoria; Central usa PostgreSQL de Railway como unica base de datos.")
-    return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
+
+    last_error = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
+        except Exception as e:
+            last_error = e
+            if attempt < max_retries:
+                time.sleep(delay * attempt)
+            else:
+                raise RuntimeError(f"No se pudo conectar a la base de datos tras {max_retries} intentos: {last_error}")
 
 
 def _affiliate_url(product: dict) -> str | None:

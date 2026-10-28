@@ -21,7 +21,8 @@ class PublicationPayload(BaseModel):
     sale_price: Optional[float] = Field(default=None, gt=0)
     cost_price: Optional[float] = Field(default=None, ge=0)
     opportunity_score: Optional[float] = None
-    footer: Optional[str] = Field(default="Disponible en Central", max_length=200)
+    footer: Optional[str] = Field(
+        default="Disponible en Central", max_length=200)
     accent: str = Field(default="#b6f23a", min_length=4, max_length=20)
     is_published: bool = True
 
@@ -54,13 +55,18 @@ def list_publications(limit: int = Query(20, ge=1, le=100), include_unpublished:
             )
             rows = cur.fetchall()
 
-            import re, unicodedata
+            import re
+            import unicodedata
             for row in rows:
-                slug = unicodedata.normalize("NFKD", row["title"] or "").encode("ascii", "ignore").decode().lower()
-                row["slug"] = re.sub(r"[^a-z0-9]+", "-", slug).strip("-")[:90] or "producto"
+                slug = unicodedata.normalize("NFKD", row["title"] or "").encode(
+                    "ascii", "ignore").decode().lower()
+                row["slug"] = re.sub(r"[^a-z0-9]+", "-",
+                                     slug).strip("-")[:90] or "producto"
                 row["slug"] = row["slug"] + "-" + str(row["product_id"])
-                row["canonical_url"] = os.getenv("PUBLIC_STORE_URL", "https://central-7ykr.vercel.app").rstrip() + "/producto/" + row["slug"]
-                row["checkout_mode"] = "CENTRAL" if str(row["platform"]).lower() == "personal" else "EXTERNAL"
+                row["canonical_url"] = os.getenv(
+                    "PUBLIC_STORE_URL", "https://central-7ykr.vercel.app").rstrip() + "/producto/" + row["slug"]
+                row["checkout_mode"] = "CENTRAL" if str(
+                    row["platform"]).lower() == "personal" else "EXTERNAL"
             return rows
     finally:
         conn.close()
@@ -85,14 +91,16 @@ def publish_card(payload: PublicationPayload):
             )
             product = cur.fetchone()
             if not product:
-                raise HTTPException(status_code=404, detail="Producto activo no encontrado")
+                raise HTTPException(
+                    status_code=404, detail="Producto activo no encontrado")
 
             # Fuentes externas: se publica la ficha original sin editar.
             # Producto personal: Studio sí puede editarlo antes de publicar.
             is_personal = str(product["platform"]).lower() == "personal"
             if not is_personal:
                 canonical_title = product["title"]
-                canonical_image = product["image_url"] or ((product["image_gallery"] or [None])[0])
+                canonical_image = product["image_url"] or (
+                    (product["image_gallery"] or [None])[0])
                 canonical_url = product["affiliate_url"] or product["product_url"]
                 canonical_price = product["current_price"]
                 payload = payload.model_copy(update={
@@ -128,15 +136,18 @@ def publish_card(payload: PublicationPayload):
                 (
                     payload.product_id, payload.title, payload.subtitle, payload.price_display,
                     payload.image_url or product["image_url"], payload.product_url or product["product_url"],
-                    payload.sale_price if payload.sale_price is not None else product["current_price"],
-                    payload.cost_price if payload.cost_price is not None else product["current_price"],
+                    payload.sale_price if payload.sale_price is not None else product[
+                        "current_price"],
+                    payload.cost_price if payload.cost_price is not None else product[
+                        "current_price"],
                     ((payload.sale_price if payload.sale_price is not None else product["current_price"]) or 0) -
                     ((payload.cost_price if payload.cost_price is not None else product["current_price"]) or 0),
                     (((payload.sale_price if payload.sale_price is not None else product["current_price"]) -
                       (payload.cost_price if payload.cost_price is not None else product["current_price"])) /
                      (payload.sale_price if payload.sale_price is not None else product["current_price"])) * 100
                     if (payload.sale_price if payload.sale_price is not None else product["current_price"]) else 0,
-                    payload.opportunity_score if payload.opportunity_score is not None else product["opportunity_score"],
+                    payload.opportunity_score if payload.opportunity_score is not None else product[
+                        "opportunity_score"],
                     payload.footer, payload.accent, payload.is_published,
                 ),
             )
@@ -173,7 +184,8 @@ def update_publication(publication_id: int, payload: PublicationPayload):
             )
             current = cur.fetchone()
             if not current:
-                raise HTTPException(status_code=404, detail="Publicación no encontrada")
+                raise HTTPException(
+                    status_code=404, detail="Publicación no encontrada")
 
             if str(current["platform"]).lower() != "personal":
                 # Una publicación externa no puede convertirse en una ficha editada.
@@ -203,7 +215,8 @@ def update_publication(publication_id: int, payload: PublicationPayload):
                     payload.title, payload.subtitle, payload.price_display, payload.image_url,
                     payload.product_url, payload.sale_price, payload.cost_price,
                     ((payload.sale_price or 0) - (payload.cost_price or 0)),
-                    (((payload.sale_price or 0) - (payload.cost_price or 0)) / payload.sale_price * 100)
+                    (((payload.sale_price or 0) - (payload.cost_price or 0)) /
+                     payload.sale_price * 100)
                     if payload.sale_price else 0,
                     payload.opportunity_score, payload.footer, payload.accent,
                     payload.is_published, publication_id,
@@ -211,7 +224,8 @@ def update_publication(publication_id: int, payload: PublicationPayload):
             )
             result = cur.fetchone()
             if not result:
-                raise HTTPException(status_code=404, detail="Publicación no encontrada")
+                raise HTTPException(
+                    status_code=404, detail="Publicación no encontrada")
         conn.commit()
         return result
     except HTTPException:
@@ -233,9 +247,11 @@ def publish_publication_telegram(publication_id: int):
             )
             publication = cur.fetchone()
         if not publication:
-            raise HTTPException(status_code=404, detail="Publicación no encontrada")
+            raise HTTPException(
+                status_code=404, detail="Publicación no encontrada")
         base = os.getenv("PUBLIC_STORE_URL", "").rstrip("/")
-        publication["store_url"] = f"{base}/tienda" if base else publication.get("product_url")
+        publication["store_url"] = f"{base}/tienda" if base else publication.get(
+            "product_url")
         send_telegram_publication(publication)
         return {"status": "sent", "channel": "telegram", "publication_id": publication_id}
     except HTTPException:

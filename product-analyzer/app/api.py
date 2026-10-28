@@ -4,6 +4,7 @@ Central Product Analyzer REST API.
 
 import os
 import time
+import requests
 from typing import Optional
 from urllib.parse import quote
 
@@ -24,6 +25,7 @@ from tiktok_api import router as tiktok_creator_router
 from url_import import import_url
 from wompi import router as wompi_router
 from meli_oauth import router as meli_oauth_router, notification_router as meli_notification_router
+from notifications import _config as _config_telegram
 
 API_VERSION = "1.3.0"
 
@@ -40,6 +42,17 @@ app.include_router(meli_notification_router, prefix="/api/v1")
 app.include_router(tiktok_creator_router, prefix="/api/v1")
 app.include_router(publication_router, prefix="/api/v1")
 app.include_router(store_orders_router, prefix="/api/v1")
+app.include_router(core_router, prefix="/api/v1")
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 
 @app.middleware("http")
@@ -77,6 +90,7 @@ core_router = APIRouter(tags=["core"])
 
 
 @core_router.get("/health")
+@core_router.get("/healthz")
 def health():
     try:
         conn = get_connection()
@@ -221,6 +235,154 @@ def sync_amazon_store(limit: int = Query(20, ge=1, le=20)):
     """Importa productos reales de Amazon y los publica."""
     result = sync_store_catalog()
     return result["amazon"]
+
+
+@core_router.get("/telegram/status")
+def telegram_status():
+    token, chat_id = _config_telegram()
+    if not token:
+        return {"configured": False, "connected": False, "username": None}
+    try:
+        r = requests.get(f"https://api.telegram.org/bot{token}/getMe", timeout=5)
+        if r.ok:
+            data = r.json().get("result", {})
+            return {
+                "configured": True,
+                "connected": True,
+                "username": data.get("username"),
+            }
+        return {"configured": True, "connected": False, "username": None}
+    except Exception:
+        return {"configured": True, "connected": False, "username": None}
+
+
+@core_router.get("/media/image")
+def proxy_media_image(url: str = Query(...)):
+    if not url.startswith("http://") and not url.startswith("https://"):
+        raise HTTPException(status_code=400, detail="URL inválida")
+    try:
+        resp = requests.get(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
+                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                "Referer": "https://www.amazon.com/",
+            },
+            timeout=15,
+        )
+        if not resp.ok:
+            raise HTTPException(status_code=resp.status_code, detail="No se pudo cargar la imagen externa")
+        content_type = resp.headers.get("content-type", "image/jpeg")
+        return Response(content=resp.content, media_type=content_type)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Error cargando imagen: {exc}")
+
+
+@core_router.get("/pipeline/metrics")
+def pipeline_metrics():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT pl.name AS platform, COUNT(p.id) AS product_count,
+                       MAX(p.updated_at) AS last_update
+                FROM platforms pl
+                LEFT JOIN products p
+                  ON p.platform_id = pl.id AND p.is_active = TRUE
+                GROUP BY pl.name
+                ORDER BY pl.name
+            """)
+            rows = cur.fetchall()
+            return {
+                "latest": {
+                    "status": "success",
+                    "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "amazon_products": sum(r["product_count"] for r in rows if r["platform"] == "amazon"),
+                    "mercadolibre_products": 0,
+                    "tiktok_products": 0,
+                    "telegram_prepared": sum(r["product_count"] for r in rows),
+                    "error_count": 0,
+                },
+                "platforms": rows,
+            }
+    finally:
+        conn.close()
+
+
+@core_router.get("/intelligence/overview")
+def intelligence_overview():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    COUNT(*) AS active_products,
+                    SUM(CASE WHEN COALESCE(sales_estimate, 0) > 0 THEN 1 ELSE 0 END) AS products_with_demand,
+                    SUM(CASE WHEN COALESCE(s.opportunity_score, 0) >= 70 THEN 1 ELSE 0 END) AS high_opportunity,
+                    AVG(COALESCE(s.opportunity_score, 0)) AS avg_opportunity,
+                    SUM(CASE WHEN catalog_expires_at <= NOW() + INTERVAL '24 hours' THEN 1 ELSE 0 END) AS expiring_24h
+                FROM products p
+                LEFT JOIN product_scores s ON s.product_id = p.id
+                WHERE p.is_active = TRUE
+            """)
+            cat_row = cur.fetchone() or {}
+
+            cur.execute("""
+                SELECT
+                    COUNT(*) AS orders,
+                    SUM(CASE WHEN payment_status = 'PAID' THEN 1 ELSE 0 END) AS paid_orders,
+                    SUM(CASE WHEN payment_status = 'PAID' THEN total_amount ELSE 0 END) AS revenue,
+                    SUM(CASE WHEN payment_status = 'PAID' THEN total_amount * 0.35 ELSE 0 END) AS estimated_profit
+                FROM store_orders
+            """)
+            com_row = cur.fetchone() or {}
+
+            cur.execute("""
+                SELECT p.id, p.title, pl.name AS platform, p.current_price, p.currency,
+                       COALESCE(s.opportunity_score, 0) AS opportunity_score,
+                       COALESCE(p.sales_estimate, 0) AS clicks,
+                       0 AS paid_orders
+                FROM products p
+                JOIN platforms pl ON pl.id = p.platform_id
+                LEFT JOIN product_scores s ON s.product_id = p.id
+                WHERE p.is_active = TRUE
+                ORDER BY opportunity_score DESC, p.updated_at DESC
+                LIMIT 5
+            """)
+            top_products = cur.fetchall()
+
+            cur.execute("""
+                SELECT pl.name AS platform,
+                       COUNT(p.id) AS products,
+                       AVG(COALESCE(s.opportunity_score, 0)) AS avg_score,
+                       SUM(CASE WHEN COALESCE(p.sales_estimate, 0) > 0 THEN 1 ELSE 0 END) AS demand
+                FROM platforms pl
+                LEFT JOIN products p ON p.platform_id = pl.id AND p.is_active = TRUE
+                LEFT JOIN product_scores s ON s.product_id = p.id
+                GROUP BY pl.name
+                ORDER BY products DESC
+            """)
+            sources = cur.fetchall()
+
+            return {
+                "catalog": {
+                    "active_products": int(cat_row.get("active_products") or 0),
+                    "products_with_demand": int(cat_row.get("products_with_demand") or 0),
+                    "high_opportunity": int(cat_row.get("high_opportunity") or 0),
+                    "avg_opportunity": float(cat_row.get("avg_opportunity") or 0),
+                    "expiring_24h": int(cat_row.get("expiring_24h") or 0),
+                },
+                "commerce": {
+                    "orders": int(com_row.get("orders") or 0),
+                    "paid_orders": int(com_row.get("paid_orders") or 0),
+                    "revenue": float(com_row.get("revenue") or 0),
+                    "estimated_profit": float(com_row.get("estimated_profit") or 0),
+                },
+                "top_products": top_products,
+                "sources": sources,
+            }
+    finally:
+        conn.close()
 
 
 @core_router.get("/pipeline/summary")

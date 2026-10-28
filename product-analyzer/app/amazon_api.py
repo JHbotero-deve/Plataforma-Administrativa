@@ -126,26 +126,25 @@ def _title(item: dict[str, Any]) -> str | None:
     return str(title).strip() if title else None
 
 
-def _offer(item: dict[str, Any]) -> tuple[float | None, str | None]:
-    listings = (
-        ((item.get("offersV2") or {}).get("listings") or [])
-    )
-
+def _offer(item: dict[str, Any]) -> tuple[float | None, float | None, str | None]:
+    listings = ((item.get("offersV2") or {}).get("listings") or [])
     if not listings:
-        return None, None
+        return None, None, None
 
-    price = listings[0].get("price") or {}
+    listing = listings[0]
+    price = listing.get("price") or {}
     amount = price.get("amount")
     currency = price.get("currency")
 
+    saving_basis = listing.get("savingBasis") or listing.get("listPrice") or {}
+    list_amount = saving_basis.get("amount")
+
     try:
-        return (
-            (float(amount), str(currency).upper())
-            if amount is not None
-            else (None, None)
-        )
+        cur_price = float(amount) if amount is not None else None
+        list_price = float(list_amount) if list_amount is not None else None
+        return cur_price, list_price, str(currency).upper() if currency else "USD"
     except (TypeError, ValueError):
-        return None, None
+        return None, None, None
 
 
 def _amazon_image_from_html(url: str) -> str | None:
@@ -376,11 +375,16 @@ def _map_item(
     asin = str(item.get("asin") or "").strip().upper()
     title = _title(item)
     image = _first_image(item)
-    price, currency = _offer(item)
+    price, list_price, currency = _offer(item)
     url = item.get("detailPageURL")
 
     if not asin or not title or price is None or not url:
         return None
+
+    if list_price and price and list_price > price:
+        discount_pct = ((list_price - price) / list_price) * 100
+        if discount_pct < 40:
+            return None
 
     if not image and not allow_missing_image:
         return None
@@ -402,6 +406,7 @@ def _map_item(
             "metadata_source": "amazon_creators_api",
             "marketplace": MARKETPLACE,
             "keywords": category,
+            "list_price": list_price,
         },
     }
 
@@ -413,11 +418,16 @@ def _map_fallback_item(
 
     asin = str(item.get("asin") or "").strip().upper()
     title = _title(item)
-    price, currency = _offer(item)
+    price, list_price, currency = _offer(item)
     url = item.get("detailPageURL")
 
     if not asin or not title or price is None or not url:
         return None
+
+    if list_price and price and list_price > price:
+        discount_pct = ((list_price - price) / list_price) * 100
+        if discount_pct < 40:
+            return None
 
     image = _amazon_image_from_html(str(url))
 
@@ -439,21 +449,29 @@ def _map_fallback_item(
             "marketplace": MARKETPLACE,
             "keywords": category,
             "image_source": "og:image" if image else None,
+            "list_price": list_price,
         },
     }
 
 
 def fetch_amazon_products(
     existing_ids: set[str],
-    limit: int = 15,
+    limit: int = 150,
 ) -> list[tuple[str, dict[str, Any]]]:
 
     searches = [
-        ("Electronics", "wireless headphones"),
-        ("Electronics", "smart watch"),
-        ("HomeAndKitchen", "home gadgets"),
-        ("Computers", "computer accessories"),
-        ("VideoGames", "gaming accessories"),
+        ("Electronics", "tech deals 50% off sale"),
+        ("Electronics", "wireless headphones clearance"),
+        ("Electronics", "smart watch mega sale"),
+        ("HomeAndKitchen", "home gadgets clearance sale"),
+        ("Computers", "computer accessories discount"),
+        ("VideoGames", "gaming accessories sale"),
+        ("Beauty", "beauty products clearance"),
+        ("Sports", "fitness equipment deals"),
+        ("Clothing", "fashion clearance sale"),
+        ("Toys", "toys mega discount sale"),
+        ("Tools", "tools and home improvement deals"),
+        ("Automotive", "automotive gadgets sale"),
     ]
 
     results: list[tuple[str, dict[str, Any]]] = []
@@ -461,7 +479,7 @@ def fetch_amazon_products(
 
     for category, keywords in searches:
         try:
-            items = search_products(keywords, 10)
+            items = search_products(keywords, 30)
             added = 0
 
             for item in items:
@@ -485,7 +503,7 @@ def fetch_amazon_products(
 
             print(
                 f"[amazon] {keywords}: "
-                f"{added} productos nuevos válidos"
+                f"{added} productos nuevos válidos (>=40% desc)"
             )
 
         except Exception as exc:

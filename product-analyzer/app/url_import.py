@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 import requests
 
 AMAZON_HOST_RE = re.compile(r"(^|\.)(amazon\.[a-z.]+|amzn\.to|amzn\.com|a\.co)$", re.I)
+ALIEXPRESS_HOST_RE = re.compile(r"(^|\.)(aliexpress\.[a-z.]+|aliexpress\.ru|alii\.pub)$", re.I)
 ASIN_RE = re.compile(r"(?:/dp/|/gp/product/)([A-Z0-9]{10})(?:[/?]|$)", re.I)
 
 
@@ -13,9 +14,9 @@ def detect_platform(url: str) -> str:
     host = (urlparse(url).hostname or "").lower()
     if AMAZON_HOST_RE.search(host):
         return "amazon"
-    if "mercadolibre." in host or "mercadolivre." in host:
-        return "mercadolibre"
-    raise ValueError("La URL debe pertenecer a Amazon o Mercado Libre.")
+    if ALIEXPRESS_HOST_RE.search(host):
+        return "aliexpress"
+    raise ValueError("La URL debe pertenecer a Amazon o AliExpress.")
 
 
 def _asin(url: str) -> str | None:

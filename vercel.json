@@ -75,22 +75,22 @@
   "redirects": [
     {
       "source": "/tienda",
-      "destination": "tienda.html",
+      "destination": "/tienda.html",
       "permanent": false
     },
     {
       "source": "/catalogo",
-      "destination": "https://central-7ykr.vercel.app/catalogo",
+      "destination": "/index.html",
       "permanent": false
     },
     {
       "source": "/tarjetas",
-      "destination": "https://central-7ykr.vercel.app/tarjetas",
+      "destination": "/index.html",
       "permanent": false
     },
     {
       "source": "/producto/:slug",
-      "destination": "https://central-7ykr.vercel.app/producto/:slug",
+      "destination": "/producto.html",
       "permanent": false
     }
   ]
