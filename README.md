@@ -7,7 +7,6 @@ Central es un radar de oportunidades de productos reales. El sistema ingiere fue
 - Vercel: frontend estático.
 - Railway: API, worker y bot de Telegram.
 - PostgreSQL: persistencia del catálogo, histórico y monetización.
-- Mercado Libre Colombia: ingesta automática.
 - Amazon: importación por URL y lote inicial configurado.
 - TikTok Shop Creator: integración preparada para productos del Showcase.
 - Telegram: alertas y bot interactivo.
@@ -23,16 +22,17 @@ El frontend se sirve desde `product-analyzer/frontend` mediante Vercel. Consume 
 
 Funciones disponibles:
 
-- oportunidades ordenadas por score;
-- catálogo de productos reales;
-- importación de Amazon y Mercado Libre mediante URL;
-- imágenes reales cuando la fuente las proporciona;
-- soporte de modelo 3D real dentro de la misma tarjeta cuando `model_url` está configurado;
-- estado de fuentes y vigencia del catálogo.
+- Oportunidades ordenadas por score.
+- Catálogo de productos reales.
+- Importación de Amazon y Mercado Libre mediante URL.
+- Imágenes reales cuando la fuente las proporciona.
+- Soporte de modelo 3D real dentro de la misma tarjeta cuando `model_url` está configurado.
+- Estado de fuentes y vigencia del catálogo.
 
 No existe fallback de productos ficticios en producción.
 
 ### Tarjetas de producto
+
 La tarjeta es el contenedor único del producto. Si existe `model_url` válido, la zona multimedia usa un visor 3D interactivo con rotación y zoom dentro de la propia tarjeta. Si no existe modelo 3D, conserva las imágenes reales disponibles y permite recorrerlas dentro de la tarjeta. No se fabrica un modelo 3D cuando la fuente no lo proporciona.
 
 ## API

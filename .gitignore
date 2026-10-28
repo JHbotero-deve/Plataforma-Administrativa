@@ -1,4 +1,4 @@
-﻿# Python / Entornos virtuales
+# Python / Entornos virtuales
 __pycache__/
 *.pyc
 *.pyo
@@ -31,3 +31,7 @@ build/
 out/
 /shelf/
 /workspace.xml
+
+# Secretos locales
+.evn
+.env
