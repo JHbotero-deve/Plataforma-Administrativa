@@ -1,5 +1,4 @@
 {
-  "outputDirectory": "product-analyzer/frontend",
   "rewrites": [
     {
       "source": "/api/v1/:path*",
