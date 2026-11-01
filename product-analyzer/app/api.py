@@ -24,6 +24,10 @@ from admin_auth import (
     set_admin_cookie,
 )
 from analysis import score_product
+from aliexpress_oauth import (
+    ensure_aliexpress_oauth_storage,
+    router as aliexpress_oauth_router,
+)
 from db import get_connection, upsert_product
 from notifications import send_telegram_alert
 from monetization import router as monetization_router
@@ -53,6 +57,7 @@ async def ensure_admin_draft_storage():
     global notification_worker_task
     ensure_draft_storage()
     ensure_commerce_storage()
+    ensure_aliexpress_oauth_storage()
     notification_worker_task = asyncio.create_task(notification_delivery_loop())
 
 
@@ -84,6 +89,7 @@ app.include_router(wompi_router, prefix="/api/v1")
 app.include_router(tiktok_creator_router, prefix="/api/v1")
 app.include_router(publication_router, prefix="/api/v1")
 app.include_router(store_orders_router, prefix="/api/v1")
+app.include_router(aliexpress_oauth_router, prefix="/api/v1")
 
 
 @app.middleware("http")

@@ -30,6 +30,8 @@ El bot mantiene /top, /buscar, /modelar y /estado. También acepta URLs de Amazo
 
 El worker busca ropa, calzado y accesorios en AliExpress mediante `aliexpress.affiliate.product.query` en `https://api-sg.aliexpress.com/sync`, con firma IOP HMAC-SHA256. Revisa descuento, ventas recientes, evaluación, comisión y score, y envía hasta cinco alertas nuevas por ciclo. Requiere `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_APP_SECRET` y `ALIEXPRESS_TRACKING_ID`; el token OAuth no es necesario para esta consulta de afiliados. Los umbrales se ajustan con `PROMOTION_MIN_DISCOUNT`, `PROMOTION_MIN_30D_VOLUME`, `PROMOTION_MIN_EVALUATION`, `PROMOTION_MIN_COMMISSION` y `PROMOTION_MIN_SCORE`.
 
+AE-Dropshipper usa un flujo OAuth separado: iniciar sesión como administrador y abrir `/api/v1/aliexpress/oauth/start`; AliExpress regresa a `ALIEXPRESS_CALLBACK_URL`. La API intercambia el código con `/rest/auth/token/create`, consume el `state` una sola vez y cifra los tokens en PostgreSQL con `ALIEXPRESS_TOKEN_ENCRYPTION_KEY`. Esta autorización no habilita por sí misma los métodos Affiliate.
+
 ## CLI autorizados
 
 Usa `python scripts/importar-url-central.py --url "URL_DEL_PRODUCTO" --category accesorios` y añade `--title`, `--price`, `--currency` o `--image` si el CLI origen ya conoce esos datos. Configura `CENTRAL_API_URL` y `CENTRAL_INGEST_API_KEY`; la clave se envía en el encabezado y no debe guardarse en el código del bot.

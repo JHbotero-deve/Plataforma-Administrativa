@@ -20,6 +20,7 @@ SQL_FILES = [
     "sql/016_admin_publication_drafts.sql",
     "sql/017_store_notifications.sql",
     "sql/018_promotion_alerts.sql",
+    "sql/019_aliexpress_oauth.sql",
 ]
 
 
