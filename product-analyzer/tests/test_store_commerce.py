@@ -50,6 +50,16 @@ class StoreCommerceTests(unittest.TestCase):
         self.assertEqual(token["schema"]["minLength"], 40)
         self.assertEqual(token["schema"]["maxLength"], 64)
 
+    def test_admin_invoice_listing_repairs_legacy_missing_tokens(self):
+        cursor = unittest.mock.MagicMock()
+        cursor.fetchone.return_value = {"public_token": "a" * 43}
+        invoice = {"invoice_number": "FAC-123", "public_token": None}
+
+        store_orders._ensure_invoice_tokens(cursor, [invoice])
+
+        self.assertEqual(invoice["public_token"], "a" * 43)
+        self.assertIn("public_token IS NULL", cursor.execute.call_args.args[0])
+
     def test_checkout_return_url_stays_on_the_store_origin(self):
         with patch.dict(
             os.environ,

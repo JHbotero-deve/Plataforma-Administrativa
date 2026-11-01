@@ -60,6 +60,30 @@ def ensure_commerce_storage():
   conn.close()
 
 
+def _ensure_invoice_tokens(cur, rows):
+ for row in rows:
+  if not row.get("invoice_number") or str(row.get("public_token") or "").strip():
+   continue
+  token = secrets.token_urlsafe(32)
+  cur.execute(
+      """UPDATE store_invoices SET public_token=%s
+         WHERE invoice_number=%s
+           AND (public_token IS NULL OR public_token='')
+         RETURNING public_token""",
+      (token, row["invoice_number"]),
+  )
+  saved = cur.fetchone()
+  if saved:
+   row["public_token"] = saved["public_token"]
+  else:
+   cur.execute(
+       "SELECT public_token FROM store_invoices WHERE invoice_number=%s",
+       (row["invoice_number"],),
+   )
+   current = cur.fetchone()
+   row["public_token"] = current["public_token"] if current else None
+
+
 class StoreOrderPayload(BaseModel):
  product_id: int = Field(gt=0)
  publication_id: Optional[int] = Field(default=None, gt=0)
@@ -125,7 +149,10 @@ def list_store_orders(limit: int = Query(50, ge=1, le=200)):
           ORDER BY o.created_at DESC LIMIT %s""",
        (limit,),
    )
-   return cur.fetchall()
+   rows = cur.fetchall()
+   _ensure_invoice_tokens(cur, rows)
+  conn.commit()
+  return rows
  finally:
   conn.close()
 
@@ -197,7 +224,10 @@ def list_invoices(limit: int = Query(50, ge=1, le=200)):
           ORDER BY i.issued_at DESC LIMIT %s""",
        (limit,),
    )
-   return cur.fetchall()
+   rows = cur.fetchall()
+   _ensure_invoice_tokens(cur, rows)
+  conn.commit()
+  return rows
  finally:
   conn.close()
 
