@@ -571,7 +571,15 @@ class PersonalProduct(BaseModel):
 
 
 @core_router.post("/products/personal")
-def create_personal_product(payload: PersonalProduct):
+def create_personal_product(
+    payload: PersonalProduct,
+    x_central_ingest_key: str = Header(default="", alias="X-Central-Ingest-Key"),
+):
+    expected_key = (os.getenv("CENTRAL_INGEST_API_KEY") or "").strip()
+    if not expected_key:
+        raise HTTPException(status_code=503, detail="La carga personal no está configurada.")
+    if not x_central_ingest_key or not secrets.compare_digest(x_central_ingest_key, expected_key):
+        raise HTTPException(status_code=401, detail="Credencial de ingesta inválida.")
     conn = get_connection()
     try:
         with conn.cursor() as cur:
