@@ -5,7 +5,7 @@ import hmac
 import os
 import secrets
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Header, HTTPException, Request
 from psycopg2.extras import Json
@@ -65,6 +65,38 @@ def _event_checksum(event: dict[str, Any]) -> str:
 
 def _checkout_base_url() -> str:
     return os.getenv("WOMPI_CHECKOUT_URL", "https://checkout.wompi.co/p/").rstrip("/") + "/"
+
+
+def _redirect_url(reference: str, requested: str | None = None) -> str:
+    store_url = os.getenv(
+        "PUBLIC_STORE_URL", "https://central-7ykr.vercel.app"
+    ).strip().rstrip("/")
+    if requested is not None and not isinstance(requested, str):
+        raise HTTPException(
+            status_code=400, detail="La URL de regreso no es válida."
+        )
+    configured = requested or os.getenv("WOMPI_REDIRECT_URL", "").strip()
+    if not configured:
+        configured = f"{store_url}/resultado-pago.html"
+    if requested:
+        try:
+            target = urlsplit(requested)
+            store = urlsplit(store_url)
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail="La URL de regreso no es válida."
+            )
+        if (target.scheme, target.netloc) != (store.scheme, store.netloc):
+            raise HTTPException(
+                status_code=400,
+                detail="La URL de regreso debe pertenecer a la tienda Central.",
+            )
+    parsed = urlsplit(configured)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query["reference"] = reference
+    return urlunsplit(
+        (parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment)
+    )
 
 
 class ProductCheckout(BaseModel):
@@ -135,8 +167,7 @@ def create_product_checkout(req: ProductCheckout):
         conn.commit()
     finally:
         conn.close()
-    redirect = req.redirect_url or os.getenv(
-        "WOMPI_REDIRECT_URL", "").strip() or None
+    redirect = _redirect_url(reference, req.redirect_url)
     params = [("public-key", public_key), ("currency", currency), ("amount-in-cents", str(cents)), ("reference", reference), ("signature:integrity",
                                                                                                                               signature), ("customer-data:email", req.customer_email.strip().lower()), ("customer-data:full-name", req.customer_name.strip())]
     if req.customer_phone:
@@ -301,8 +332,7 @@ async def create_cart_checkout(request: Request):
     finally:
         conn.close()
 
-    redirect = body.get("redirect_url") or os.getenv(
-        "WOMPI_REDIRECT_URL", "").strip() or None
+    redirect = _redirect_url(reference, body.get("redirect_url"))
     params = [
         ("public-key", public_key),
         ("currency", currency),
@@ -403,10 +433,13 @@ def get_payment(reference: str):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                """SELECT id, reference, transaction_id, provider, customer_email,
-                        amount_in_cents, currency, status, payment_method_type,
-                        status_message, environment, created_at, updated_at, paid_at
-                    FROM payment_transactions WHERE reference = %s""",
+                """SELECT p.id,p.reference,p.transaction_id,p.provider,
+                          p.amount_in_cents,p.currency,p.status,p.payment_method_type,
+                          p.status_message,p.environment,p.created_at,p.updated_at,p.paid_at,
+                          i.invoice_number,i.public_token
+                   FROM payment_transactions p
+                   LEFT JOIN store_invoices i ON i.order_id=p.order_id
+                   WHERE p.reference = %s""",
                 (reference,),
             )
             payment = cur.fetchone()
@@ -441,9 +474,29 @@ async def wompi_events(
     if not reference or not transaction_id or not status:
         raise HTTPException(
             status_code=400, detail="Evento de transacción incompleto")
+    try:
+        event_amount = int(transaction.get("amount_in_cents"))
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=400, detail="El evento no incluye un monto válido")
+    event_currency = str(transaction.get("currency") or "").upper()
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            cur.execute(
+                """SELECT id,amount_in_cents,currency
+                   FROM payment_transactions WHERE reference=%s FOR UPDATE""",
+                (reference,),
+            )
+            expected_payment = cur.fetchone()
+            if expected_payment and (
+                event_amount != int(expected_payment["amount_in_cents"])
+                or event_currency != str(expected_payment["currency"]).upper()
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail="El monto o la moneda del evento no coincide con el pago.",
+                )
             cur.execute(
                 """INSERT INTO payment_events
                 (provider, event_type, transaction_id, checksum, payload)
@@ -481,10 +534,48 @@ async def wompi_events(
                     cur.execute("""UPDATE products p SET stock=CASE WHEN p.stock IS NULL THEN NULL ELSE GREATEST(p.stock-oi.quantity,0) END
                                    FROM store_order_items oi
                                    WHERE oi.order_id=%s AND oi.product_id=p.id""", (order["id"],))
-                    cur.execute("""INSERT INTO store_invoices(order_id,invoice_number,total_amount,currency,status)
-                                   SELECT id,'FAC-'||to_char(NOW(),'YYYYMMDDHH24MISS')||'-'||id,total_amount,currency,'ISSUED'
-                                   FROM store_orders WHERE id=%s
-                                   ON CONFLICT(order_id) DO NOTHING""", (order["id"],))
+                    invoice_token = secrets.token_urlsafe(32)
+                    cur.execute(
+                        """INSERT INTO store_invoices
+                             (order_id,invoice_number,total_amount,currency,status,public_token)
+                           SELECT id,'FAC-'||to_char(NOW(),'YYYYMMDDHH24MISS')||'-'||id,
+                                  total_amount,currency,'ISSUED',%s
+                           FROM store_orders WHERE id=%s
+                           ON CONFLICT(order_id) DO NOTHING
+                           RETURNING invoice_number,public_token""",
+                        (invoice_token, order["id"]),
+                    )
+                    invoice = cur.fetchone()
+                    if not invoice:
+                        cur.execute(
+                            """SELECT invoice_number,public_token
+                               FROM store_invoices WHERE order_id=%s""",
+                            (order["id"],),
+                        )
+                        invoice = cur.fetchone()
+                    cur.execute(
+                        """SELECT customer_email FROM store_orders WHERE id=%s""",
+                        (order["id"],),
+                    )
+                    customer = cur.fetchone()
+                    recipients = [
+                        ("EMAIL", "CUSTOMER_RECEIPT", customer["customer_email"]),
+                        ("TELEGRAM", "SELLER_SALE", "configured-chat"),
+                    ]
+                    seller_email = os.getenv("CENTRAL_ADMIN_EMAIL", "").strip()
+                    if seller_email:
+                        recipients.append(("EMAIL", "SELLER_SALE", seller_email))
+                    cur.executemany(
+                        """INSERT INTO store_notification_outbox
+                             (order_id,channel,notification_type,recipient)
+                           VALUES (%s,%s,%s,%s)
+                           ON CONFLICT(order_id,channel,notification_type,recipient)
+                           DO NOTHING""",
+                        [
+                            (order["id"], channel, kind, recipient)
+                            for channel, kind, recipient in recipients
+                        ],
+                    )
             elif payment and payment.get("order_id") and status in {"DECLINED", "VOIDED", "ERROR"}:
                 cur.execute("""UPDATE store_orders SET status=%s,payment_status=%s,updated_at=NOW() WHERE id=%s AND payment_status='PENDING'""",
                             (status, status, payment["order_id"]))

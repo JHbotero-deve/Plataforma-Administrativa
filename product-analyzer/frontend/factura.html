@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Comprobante de compra · Central</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:24px;background:#f2f0eb;color:#232721;font:15px/1.5 system-ui,sans-serif}.sheet{width:min(820px,100%);margin:24px auto;padding:clamp(22px,5vw,54px);background:#fff;border:1px solid #e1dfd8;border-radius:14px;box-shadow:0 12px 40px #0000000d}.brand{font-weight:800;letter-spacing:.08em;color:#3b563e}.head{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;border-bottom:1px solid #e6e5df;padding-bottom:24px}.muted{color:#777e75;font-size:13px}.number{font-weight:700;text-align:right}h1{font-size:clamp(26px,5vw,38px);margin:24px 0 4px}table{width:100%;border-collapse:collapse;margin:24px 0}th,td{text-align:left;padding:12px 8px;border-bottom:1px solid #e8e7e2}th:last-child,td:last-child{text-align:right}.total{text-align:right;font-size:20px;font-weight:800;padding:12px 0}.notice{padding:14px;background:#f5f4ef;border-radius:8px;color:#686e65;font-size:12px}.actions{display:flex;justify-content:flex-end;gap:10px;margin:18px auto;width:min(820px,100%)}button,.link{border:0;border-radius:7px;background:#3b563e;color:#fff;padding:11px 16px;font-weight:700;text-decoration:none;cursor:pointer}.error{color:#a22d23}.hidden{display:none!important}@media print{body{padding:0;background:#fff}.sheet{margin:0;width:100%;border:0;box-shadow:none}.actions{display:none}}
+</style>
+</head>
+<body>
+<div class="actions"><a class="link" href="/tienda">Volver a la tienda</a><button id="print" class="hidden" type="button">Imprimir / Guardar PDF</button></div>
+<main class="sheet" aria-live="polite">
+ <div id="state" class="muted">Cargando comprobante privado…</div>
+ <div id="invoice" class="hidden">
+  <div class="head"><div><div class="brand">CENTRAL</div><div class="muted">Comprobante comercial de compra</div></div><div class="number" id="number"></div></div>
+  <h1>Compra confirmada</h1>
+  <div class="muted" id="customer"></div>
+  <div class="muted" id="issued"></div>
+  <table><thead><tr><th>Producto</th><th>Cantidad</th><th>Precio unitario</th><th>Total</th></tr></thead><tbody id="items"></tbody></table>
+  <div class="total" id="total"></div>
+  <div class="notice">Este es un comprobante comercial de compra. No reemplaza una factura electrónica validada por la DIAN.</div>
+ </div>
+</main>
+<script>
+(()=>{"use strict";
+const params=new URLSearchParams(location.search),token=params.get("token"),number=params.get("numero");
+const state=document.getElementById("state"),invoice=document.getElementById("invoice");
+const esc=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+const money=(value,currency)=>new Intl.NumberFormat("es-CO",{style:"currency",currency:currency||"COP",maximumFractionDigits:0}).format(Number(value||0));
+async function load(){
+ if(!token||!number||token.length<40){state.className="error";state.textContent="El enlace del comprobante no es válido.";return}
+ try{
+  const response=await fetch("/api/v1/store/invoices/"+encodeURIComponent(number)+"?token="+encodeURIComponent(token),{cache:"no-store"});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.detail||"No se pudo encontrar el comprobante.");
+  document.getElementById("number").textContent="N.º "+data.invoice_number;
+  document.getElementById("customer").textContent="Cliente: "+data.customer_name;
+  document.getElementById("issued").textContent="Fecha: "+new Date(data.issued_at).toLocaleString("es-CO")+" · Pedido: "+data.reference;
+  document.getElementById("items").innerHTML=(data.items||[]).map(item=>"<tr><td>"+esc(item.product_title)+"</td><td>"+Number(item.quantity||0)+"</td><td>"+money(item.unit_price,data.currency)+"</td><td>"+money(item.line_total,data.currency)+"</td></tr>").join("");
+  document.getElementById("total").textContent="Total pagado: "+money(data.total_amount,data.currency);
+  invoice.classList.remove("hidden");state.classList.add("hidden");document.getElementById("print").classList.remove("hidden");
+ }catch(error){state.className="error";state.textContent=error.message}
+}
+document.getElementById("print").addEventListener("click",()=>window.print());
+load();
+})();
+</script>
+</body>
+</html>

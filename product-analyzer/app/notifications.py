@@ -124,3 +124,41 @@ def send_telegram_publication(publication):
 
     if not _post_telegram(token, method, payload, timeout=15):
         raise RuntimeError("Telegram no pudo enviar la publicación.")
+
+
+def send_store_sale_notification(order, invoice, items):
+    token, chat_id = _config()
+    if not token or not chat_id:
+        return False
+
+    currency = html.escape(str(order.get("currency") or "COP"))
+    total = html.escape(str(order.get("total_amount") or "0"))
+    profit = html.escape(str(order.get("estimated_profit") or "0"))
+    lines = [
+        "<b>Venta aprobada en Central</b>",
+        f"<b>Pedido:</b> {html.escape(str(order.get('reference') or '—'))}",
+        f"<b>Total:</b> {currency} {total}",
+        f"<b>Utilidad bruta estimada:</b> {currency} {profit}",
+        "<b>Productos:</b>",
+    ]
+    for item in items[:10]:
+        lines.append(
+            f"• {html.escape(str(item.get('product_title') or 'Producto'))} "
+            f"× {int(item.get('quantity') or 0)}"
+        )
+    if len(items) > 10:
+        lines.append(f"… y {len(items) - 10} productos más")
+    lines.append(
+        "Utilidad estimada antes de comisiones, impuestos, envíos y devoluciones."
+    )
+    return _post_telegram(
+        token,
+        "sendMessage",
+        {
+            "chat_id": chat_id,
+            "text": "\n".join(lines),
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        },
+        timeout=15,
+    )

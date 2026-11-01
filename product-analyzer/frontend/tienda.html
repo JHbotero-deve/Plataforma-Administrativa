@@ -194,7 +194,7 @@ $("drawer").onclick=e=>{if(e.target===$("drawer"))closeCart()};
 $("checkout").onsubmit=async e=>{
   e.preventDefault();if(!cart.length){$("err").textContent="El carrito está vacío";return}
   $("err").textContent="Preparando Wompi…";
-  try{const r=await fetch(API+"/wompi/checkout/cart",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:cart.map(x=>({product_id:x.product_id,publication_id:x.publication_id,quantity:x.quantity})),customer_name:$("name").value.trim(),customer_email:$("email").value.trim(),customer_phone:$("phone").value.trim()||null})});const d=await r.json();if(!r.ok)throw Error(d.detail||"No fue posible iniciar el pago");localStorage.removeItem("central_cart");location.href=d.checkout_url}catch(err){$("err").textContent=err.message}
+  try{const r=await fetch(API+"/wompi/checkout/cart",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:cart.map(x=>({product_id:x.product_id,publication_id:x.publication_id,quantity:x.quantity})),customer_name:$("name").value.trim(),customer_email:$("email").value.trim(),customer_phone:$("phone").value.trim()||null})});const d=await r.json();if(!r.ok)throw Error(d.detail||"No fue posible iniciar el pago");location.href=d.checkout_url}catch(err){$("err").textContent=err.message}
 };
 renderCart();load();
 })();

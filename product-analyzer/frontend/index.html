@@ -36,15 +36,16 @@
 .radar-card .card-body{padding:15px 16px 17px!important;background:#11151b!important}
 .radar-card .category{color:#ff8a00!important}
 .radar-card h3,.radar-card .card-price{color:#fff!important}
+.sales-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}.sales-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:15px}.sales-card span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase}.sales-card strong{display:block;margin-top:6px;color:var(--accent);font:700 19px "JetBrains Mono";overflow-wrap:anywhere}.sales-note{padding:12px 14px;border:1px solid var(--line);border-radius:9px;color:var(--muted);font-size:12px}.sales-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0}.sales-status{color:var(--muted);font-size:12px}@media(max-width:850px){.sales-summary{grid-template-columns:1fr 1fr}}@media(max-width:560px){.sales-summary{grid-template-columns:1fr 1fr}.sales-card{padding:12px}.sales-card strong{font-size:16px}}
 </style>
 <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 </head>
-<body><nav class="nav"><div class="wrap"><div class="brand">CENTRAL <b>·</b> RADAR</div><div class="navlinks"><a href="#oportunidades">Oportunidades</a><a href="#importar">Importar producto</a><a href="#publicaciones">Gestionar tienda</a><a href="https://central-7ykr.vercel.app/catalogo">Catálogo activo</a><a href="/admin-login.html">Acceso administrativo</a><a href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Abrir tienda</a><a href="#telegram">Telegram</a></div><div class="status" id="status"><span class="dot"></span>Central operativo</div></div></nav>
+<body><nav class="nav"><div class="wrap"><div class="brand">CENTRAL <b>·</b> RADAR</div><div class="navlinks"><a href="#oportunidades">Oportunidades</a><a href="#importar">Importar producto</a><a href="#publicaciones">Gestionar tienda</a><a href="#ventas" id="salesNav" hidden>Ventas</a><a href="https://central-7ykr.vercel.app/catalogo">Catálogo activo</a><a href="/admin-login.html">Acceso administrativo</a><a href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Abrir tienda</a><a href="#telegram">Telegram</a></div><div class="status" id="status"><span class="dot"></span>Central operativo</div></div></nav>
 
 <header><div class="wrap"><div class="eyebrow">Producto real · análisis · monetización</div><h1>Detecta oportunidades antes de que desaparezcan.</h1><p class="hero-copy">Central reúne productos reales, calcula una señal de oportunidad y mantiene un catálogo con renovación automática cada 2 horas y vigencia de 48 horas. No usa productos de demostración.</p><div class="actions"><a class="btn primary" href="#oportunidades">Ver oportunidades</a><a class="btn" href="#importar">Importar producto</a><a class="btn" href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Abrir tienda</a></div></div></header>
 
 <main>
-<section id="inteligencia"><div class="wrap"><div class="section-head"><div><div class="eyebrow">00 · inteligencia comercial</div><h2>Centro de control comercial</h2><p>Una sola lectura para decidir qué importar, qué publicar, qué vender y qué retirar.</p></div><div class="mono" id="intelUpdated">—</div></div><div class="quickbar"><div><strong>Gestión de productos</strong><br><span>Importa desde una plataforma o crea una tarjeta manualmente para incorporarla al catálogo.</span></div><div class="actions"><a class="btn primary small" href="https://central-7ykr.vercel.app/tarjetas">Crear tarjeta</a><a class="btn small" href="#importar">Importar producto</a></div></div><div class="intel"><div class="intel-card"><span>Productos activos</span><strong id="iProducts">—</strong><small id="iDemand">— con demanda</small></div><div class="intel-card"><span>Oportunidades altas</span><strong id="iHigh">—</strong><small>puntuación ≥ 70</small></div><div class="intel-card"><span>Score promedio</span><strong id="iScore">—</strong><small>señal sobre 100</small></div><div class="intel-card"><span>Ventas aprobadas</span><strong id="iPaid">—</strong><small id="iOrders">— pedidos</small></div><div class="intel-card"><span>Ingresos</span><strong id="iRevenue">—</strong><small id="iProfit">— utilidad estimada</small></div><div class="intel-card"><span>Riesgos</span><strong id="iRisk">—</strong><small>vencen en 24 h</small></div></div><div class="intel-layout"><div class="intel-panel"><h3>Productos que merecen atención</h3><div id="signals">Analizando catálogo…</div></div><div class="intel-panel"><h3>Rendimiento por fuente</h3><div id="sources">Analizando fuentes…</div><div id="pipelineMeta" class="status" style="margin-top:12px">Sincronización: —</div></div></div></div></section>
+<section id="inteligencia" hidden><div class="wrap"><div class="section-head"><div><div class="eyebrow">00 · inteligencia comercial</div><h2>Centro de control comercial</h2><p>Una sola lectura para decidir qué importar, qué publicar, qué vender y qué retirar.</p></div><div class="mono" id="intelUpdated">—</div></div><div class="quickbar"><div><strong>Gestión de productos</strong><br><span>Importa desde una plataforma o crea una tarjeta manualmente para incorporarla al catálogo.</span></div><div class="actions"><a class="btn primary small" href="https://central-7ykr.vercel.app/tarjetas">Crear tarjeta</a><a class="btn small" href="#importar">Importar producto</a></div></div><div class="intel"><div class="intel-card"><span>Productos activos</span><strong id="iProducts">—</strong><small id="iDemand">— con demanda</small></div><div class="intel-card"><span>Oportunidades altas</span><strong id="iHigh">—</strong><small>puntuación ≥ 70</small></div><div class="intel-card"><span>Score promedio</span><strong id="iScore">—</strong><small>señal sobre 100</small></div><div class="intel-card"><span>Ventas aprobadas</span><strong id="iPaid">—</strong><small id="iOrders">— pedidos</small></div><div class="intel-card"><span>Ingresos</span><strong id="iRevenue">—</strong><small id="iProfit">— utilidad estimada</small></div><div class="intel-card"><span>Riesgos</span><strong id="iRisk">—</strong><small>vencen en 24 h</small></div></div><div class="intel-layout"><div class="intel-panel"><h3>Productos que merecen atención</h3><div id="signals">Analizando catálogo…</div></div><div class="intel-panel"><h3>Rendimiento por fuente</h3><div id="sources">Analizando fuentes…</div><div id="pipelineMeta" class="status" style="margin-top:12px">Sincronización: —</div></div></div></div></section>
 <section id="oportunidades"><div class="wrap"><div class="section-head"><div><div class="eyebrow">02 · puntuación</div><h2>Oportunidades activas</h2><p>Productos reales ordenados por la señal calculada por Central.</p></div><div class="mono" id="updated">—</div></div><div class="grid" id="featured"><div class="empty">Cargando datos reales…</div></div></div></section>
 
 <section id="importar"><div class="wrap">
@@ -58,14 +59,11 @@
 <div class="import-fallback"><a class="btn small" href="https://central-7ykr.vercel.app/tarjetas">Abrir creador de tarjetas</a></div>
 <div class="import-result" id="importResult" role="status" aria-live="polite"></div>
 </div></section>
-<section id="publicaciones"><div class="wrap"><div class="section-head"><div><div class="eyebrow">04 · tienda</div><h2>Gestionar tarjetas publicadas</h2><p>Publica oportunidades, edita los textos visibles, despublica o elimina una ficha sin borrar el producto del catálogo.</p></div><div class="pub-actions"><a class="btn small" href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Ver tienda</a><button class="btn small" id="adminLogout" type="button">Cerrar sesión</button></div></div><div id="publicationMessage" class="pub-empty">Comprobando sesión administrativa…</div><div id="publicationList" class="pub-grid"></div></div></section>
+<section id="publicaciones"><div class="wrap"><div class="section-head"><div><div class="eyebrow">04 · tienda</div><h2>Gestionar tarjetas publicadas</h2><p>Publica oportunidades, edita los textos visibles, despublica o elimina una ficha sin borrar el producto del catálogo.</p></div><div class="pub-actions"><a class="btn small" href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Ver tienda</a><a class="btn small" id="salesAnchor" href="#ventas" hidden>Ventas</a><button class="btn small" id="adminLogout" type="button">Cerrar sesión</button></div></div><div id="publicationMessage" class="pub-empty">Comprobando sesión administrativa…</div><div id="publicationList" class="pub-grid"></div></div></section>
 
-
-
-
-
-<section id="telegram"><div class="wrap"><div class="section-head"><div><div class="eyebrow">05 · automatización</div><h2>Telegram</h2><p>Consulta el catálogo y las oportunidades de Central directamente desde Telegram.</p></div><div class="mono" id="telegramStatus">Comprobando…</div></div><div class="panel" style="padding:20px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap"><div><strong id="telegramName">Bot de Central</strong><div class="status" id="telegramDetail" style="margin-top:5px">Verificando conexión con Telegram.</div></div><a class="btn primary" id="telegramOpen" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Abrir Telegram</a></div></div></section>
-<section id="estado"><div class="wrap"><div class="section-head"><div><div class="eyebrow">06 · operación</div><h2>Estado de Central</h2></div></div><div class="metrics"><div class="metric"><span>Productos activos</span><strong id="count">—</strong></div><div class="metric"><span>Última actualización</span><strong id="last" style="font-size:14px">—</strong></div><div class="metric"><span>AliExpress</span><strong id="aeCount">—</strong></div><div class="metric"><span>Amazon</span><strong id="amzCount">—</strong></div></div></div></section>
+<section id="salesAdmin" hidden><div class="wrap"><div class="section-head"><div><div class="eyebrow">05 · administración de tienda</div><h2>Ventas, pedidos y comprobantes</h2><p>Datos confirmados por Wompi y costos guardados en cada pedido.</p></div><div class="sales-status" id="salesUpdated">—</div></div><div class="sales-summary"><div class="sales-card"><span>Ventas cobradas</span><strong id="salesGross">—</strong></div><div class="sales-card"><span>Utilidad bruta estimada</span><strong id="salesProfit">—</strong></div><div class="sales-card"><span>Pedidos aprobados</span><strong id="salesOrders">—</strong></div><div class="sales-card"><span>Unidades vendidas</span><strong id="salesUnits">—</strong></div><div class="sales-card"><span>Ventas de hoy</span><strong id="salesToday">—</strong></div><div class="sales-card"><span>Ventas del mes</span><strong id="salesMonth">—</strong></div><div class="sales-card"><span>Ticket promedio</span><strong id="salesAverage">—</strong></div><div class="sales-card"><span>Pagos pendientes</span><strong id="salesPending">—</strong></div><div class="sales-card"><span>Pagos rechazados/anulados</span><strong id="salesFailed">—</strong></div></div><div class="sales-note">La utilidad es una estimación con el costo registrado al vender; no descuenta comisión de Wompi, impuestos, envíos, devoluciones ni otros gastos. El documento generado es un comprobante comercial, no una factura electrónica DIAN.</div><div class="sales-toolbar"><strong>Últimos pedidos</strong><div class="pub-actions"><span class="sales-status" id="notificationStatus">Estado de avisos: —</span><button class="btn small" id="retryNotifications" type="button">Reintentar avisos pendientes</button></div></div><div id="salesMessage" class="pub-empty">Cargando ventas…</div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Pedido / cliente</th><th>Estado</th><th>Unidades</th><th>Total</th><th>Utilidad bruta est.</th><th>Comprobante</th></tr></thead><tbody id="salesRows"></tbody></table></div></div></section>
+<section id="telegram"><div class="wrap"><div class="section-head"><div><div class="eyebrow">06 · automatización</div><h2>Telegram</h2><p>Consulta el catálogo y las oportunidades de Central directamente desde Telegram.</p></div><div class="mono" id="telegramStatus">Comprobando…</div></div><div class="panel" style="padding:20px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap"><div><strong id="telegramName">Bot de Central</strong><div class="status" id="telegramDetail" style="margin-top:5px">Verificando conexión con Telegram.</div></div><a class="btn primary" id="telegramOpen" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Abrir Telegram</a></div></div></section>
+<section id="estado"><div class="wrap"><div class="section-head"><div><div class="eyebrow">07 · operación</div><h2>Estado de Central</h2></div></div><div class="metrics"><div class="metric"><span>Productos activos</span><strong id="count">—</strong></div><div class="metric"><span>Última actualización</span><strong id="last" style="font-size:14px">—</strong></div><div class="metric"><span>AliExpress</span><strong id="aeCount">—</strong></div><div class="metric"><span>Amazon</span><strong id="amzCount">—</strong></div></div></div></section>
 </main>
 
 <footer><div class="wrap">Central · importación por URL · Amazon · AliExpress · Telegram · Wompi preparado.</div></footer>
@@ -140,6 +138,55 @@ function renderIntelligence(i){
     </div>`
   ).join("");
   $("sources").innerHTML=sources||'<div class="empty">Sin fuentes activas.</div>';
+}
+async function loadCommerceAdmin(){
+ const section=$("salesAdmin");
+ if(!adminSessionActive){section.hidden=true;return}
+ try{
+  const [metrics,orders]=await Promise.all([get("/store/metrics"),get("/store/orders?limit=100")]);
+  const n=metrics.notifications||{};
+  section.hidden=false;
+   $("salesNav").hidden=false;
+   $("salesAnchor").hidden=false;
+  $("salesGross").textContent=money(metrics.gross_sales,metrics.currency);
+  $("salesProfit").textContent=money(metrics.estimated_profit,metrics.currency);
+  $("salesOrders").textContent=Number(metrics.paid_orders||0).toLocaleString("es-CO");
+  $("salesFailed").textContent=Number(metrics.failed_orders||0).toLocaleString("es-CO");
+  $("salesUnits").textContent=Number(metrics.units_sold||0).toLocaleString("es-CO");
+  $("salesToday").textContent=money(metrics.today_sales,metrics.currency);
+  $("salesMonth").textContent=money(metrics.month_sales,metrics.currency);
+  $("salesAverage").textContent=money(metrics.average_ticket,metrics.currency);
+  $("salesPending").textContent=Number(metrics.pending_orders||0).toLocaleString("es-CO");
+  $("salesUpdated").textContent="Actualizado "+new Date().toLocaleTimeString("es-CO");
+  $("notificationStatus").textContent=
+   "Avisos pendientes: "+Number(n.pending||0)+" · reintentando: "+Number(n.retrying||0)+
+   " · correo: "+(n.email_provider==="smtp"?"SMTP":n.email_provider==="resend"?"Resend":"sin configurar")+
+   " · email administrador: "+(n.seller_email_configured?"configurado":"sin destinatario")+
+   " · Telegram: "+(n.telegram_configured?"configurado":"sin configurar");
+  $("salesRows").innerHTML=orders.length?orders.map(order=>{
+   const statuses={PAID:"Pagado",PENDING:"Pendiente",DECLINED:"Rechazado",VOIDED:"Anulado",ERROR:"Error"};
+   const invoice=order.invoice_number&&order.public_token
+    ?'<a href="/factura.html?numero='+encodeURIComponent(order.invoice_number)+'&token='+encodeURIComponent(order.public_token)+'" target="_blank" rel="noopener noreferrer">Ver comprobante</a>'
+    :'—';
+   return '<tr><td>'+esc(date(order.paid_at||order.created_at))+'</td>'+
+    '<td><b>'+esc(order.reference)+'</b><br>'+esc(order.customer_name||"")+'<br>'+esc(order.customer_email||"")+'</td>'+
+    '<td>'+esc(statuses[order.payment_status]||order.payment_status||order.status)+'</td>'+
+    '<td>'+Number(order.quantity||0).toLocaleString("es-CO")+'</td>'+
+    '<td>'+money(order.total_amount,order.currency)+'</td>'+
+    '<td>'+money(order.estimated_profit,order.currency)+'</td><td>'+invoice+'</td></tr>';
+  }).join(""):'<tr><td colspan="7">Todavía no hay pedidos.</td></tr>';
+  $("salesMessage").textContent=orders.length+" pedidos recientes · "+Number(metrics.failed_orders||0)+" pagos rechazados/anulados · "+Number(metrics.margin_pct||0)+"% de margen bruto estimado.";
+ }catch(error){
+  if(requireSession(error)){
+   adminSessionActive=false;
+   section.hidden=true;
+   $("inteligencia").hidden=true;
+   $("salesNav").hidden=true;
+   $("salesAnchor").hidden=true;
+  }else{
+   $("salesMessage").textContent="No se pudieron cargar las ventas: "+error.message;
+  }
+ }
 }
 async function loadTelegram(){
   const statusEl=$("telegramStatus"),nameEl=$("telegramName"),detailEl=$("telegramDetail"),openEl=$("telegramOpen");
@@ -260,6 +307,9 @@ async function loadPublications(){
  try{
   const rows=await get("/publications?include_unpublished=true&limit=100"),drafts=await get("/publications/drafts");
   adminSessionActive=true;
+  $("inteligencia").hidden=false;
+  $("salesNav").hidden=false;
+  $("salesAnchor").hidden=false;
   publishedProductIds=new Set(rows.map(row=>String(row.product_id)));
   message.textContent=rows.length?rows.length+" tarjetas encontradas. Los borradores se sincronizan automáticamente.":"No hay tarjetas publicadas ni borradores.";
   list.innerHTML=rows.map(row=>{
@@ -277,7 +327,17 @@ async function loadPublications(){
     dirtyPublicationIds.add(id);schedulePublicationDraft(form);
    }
   });
- }catch(error){list.innerHTML="";if(requireSession(error))adminSessionActive=false;else message.textContent="No fue posible cargar las tarjetas: "+error.message;}
+  await loadCommerceAdmin();
+ }catch(error){
+  list.innerHTML="";
+  if(requireSession(error)){
+   adminSessionActive=false;
+   $("salesAdmin").hidden=true;
+   $("inteligencia").hidden=true;
+   $("salesNav").hidden=true;
+   $("salesAnchor").hidden=true;
+  }else message.textContent="No fue posible cargar las tarjetas: "+error.message;
+ }
 }
 async function load(){
   const [itemsResult,topResult,intelResult,pipelineResult]=await Promise.allSettled([
@@ -424,11 +484,29 @@ async function refreshDashboard(){
  dashboardRefreshInProgress=true;
  try{
   await Promise.allSettled([load(),loadTelegram()]);
-  if(adminSessionActive&&dirtyPublicationIds.size===0)await loadPublications();
+  if(adminSessionActive){
+   if(dirtyPublicationIds.size===0)await loadPublications();
+   else await loadCommerceAdmin();
+  }
  }finally{dashboardRefreshInProgress=false}
 }
 setInterval(()=>{if(document.visibilityState==="visible")refreshDashboard()},60000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refreshDashboard()});
+
+const retryNotifications=$("retryNotifications");
+if(retryNotifications)retryNotifications.addEventListener("click",async()=>{
+ retryNotifications.disabled=true;
+ $("salesMessage").textContent="Reintentando enviar avisos pendientes…";
+ try{
+  const response=await fetch(API+"/store/notifications/retry",requestOptions({method:"POST",headers:adminHeaders({Accept:"application/json"})}));
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok)throw Object.assign(new Error(result.detail||"No se pudo reintentar el envío"),{status:response.status});
+  $("salesMessage").textContent="Avisos enviados: "+Number(result.delivered||0)+" · pendientes fallidos: "+Number(result.failed||0)+".";
+  await loadCommerceAdmin();
+ }catch(error){
+  if(!requireSession(error))$("salesMessage").textContent="No se pudieron reintentar los avisos: "+error.message;
+ }finally{retryNotifications.disabled=false}
+});
 
 })();
 </script>

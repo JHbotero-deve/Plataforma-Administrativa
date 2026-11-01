@@ -2,6 +2,8 @@
 Central Product Analyzer REST API.
 """
 
+import asyncio
+import logging
 import os
 import secrets
 import time
@@ -26,13 +28,15 @@ from db import get_connection, upsert_product
 from notifications import send_telegram_alert
 from monetization import router as monetization_router
 from publications import ensure_draft_storage, router as publication_router
-from store_orders import router as store_orders_router
+from store_orders import ensure_commerce_storage, router as store_orders_router
+from store_notifications import process_pending_notifications
 from tiktok_api import router as tiktok_creator_router
 from url_import import import_url
 from wompi import router as wompi_router
 from notifications import _config as _config_telegram
 
 API_VERSION = "1.3.0"
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="Central Product Analyzer API",
@@ -41,9 +45,38 @@ app = FastAPI(
 )
 
 
+notification_worker_task = None
+
+
 @app.on_event("startup")
-def ensure_admin_draft_storage():
+async def ensure_admin_draft_storage():
+    global notification_worker_task
     ensure_draft_storage()
+    ensure_commerce_storage()
+    notification_worker_task = asyncio.create_task(notification_delivery_loop())
+
+
+@app.on_event("shutdown")
+async def stop_notification_delivery():
+    if notification_worker_task:
+        notification_worker_task.cancel()
+        try:
+            await notification_worker_task
+        except asyncio.CancelledError:
+            pass
+
+
+async def notification_delivery_loop():
+    while True:
+        try:
+            result = await asyncio.to_thread(process_pending_notifications)
+            if result["failed"]:
+                logger.warning(
+                    "Store notifications retried: %s failed", result["failed"]
+                )
+        except Exception:
+            logger.exception("Store notification delivery cycle failed")
+        await asyncio.sleep(30)
 
 
 app.include_router(monetization_router, prefix="/api/v1")
@@ -270,7 +303,9 @@ def pipeline_metrics():
         conn.close()
 
 
-@core_router.get("/intelligence/overview")
+@core_router.get(
+    "/intelligence/overview", dependencies=[Depends(require_admin)]
+)
 def intelligence_overview():
     conn = get_connection()
     try:
@@ -293,7 +328,7 @@ def intelligence_overview():
                     COUNT(*) AS orders,
                     SUM(CASE WHEN payment_status = 'PAID' THEN 1 ELSE 0 END) AS paid_orders,
                     SUM(CASE WHEN payment_status = 'PAID' THEN total_amount ELSE 0 END) AS revenue,
-                    SUM(CASE WHEN payment_status = 'PAID' THEN total_amount * 0.35 ELSE 0 END) AS estimated_profit
+                    SUM(CASE WHEN payment_status = 'PAID' THEN estimated_profit ELSE 0 END) AS estimated_profit
                 FROM store_orders
             """)
             com_row = cur.fetchone() or {}
@@ -302,7 +337,8 @@ def intelligence_overview():
                 SELECT p.id, p.title, pl.name AS platform, p.current_price, p.currency,
                        COALESCE(s.opportunity_score, 0) AS opportunity_score,
                        COALESCE(p.sales_estimate, 0) AS clicks,
-                       0 AS paid_orders
+                (SELECT COUNT(*) FROM store_orders so
+                  WHERE so.product_id=p.id AND so.payment_status='PAID') AS paid_orders
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN product_scores s ON s.product_id = p.id

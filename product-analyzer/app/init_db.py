@@ -18,6 +18,7 @@ SQL_FILES = [
     "sql/012_seo_affiliate_cart_invoice.sql",
     "sql/015_amazon_aliexpress_only.sql",
     "sql/016_admin_publication_drafts.sql",
+    "sql/017_store_notifications.sql",
 ]
 
 
