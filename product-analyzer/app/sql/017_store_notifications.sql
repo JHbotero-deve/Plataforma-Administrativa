@@ -3,7 +3,7 @@ ALTER TABLE store_invoices
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_store_invoices_public_token
     ON store_invoices(public_token)
-    WHERE public_token IS NOT NULL;
+    WHERE public_token IS NOT NULL AND public_token<>'';
 
 CREATE TABLE IF NOT EXISTS store_notification_outbox (
     id BIGSERIAL PRIMARY KEY,

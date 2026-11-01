@@ -22,7 +22,8 @@ def ensure_commerce_storage():
    )
    cur.execute(
        """CREATE UNIQUE INDEX IF NOT EXISTS idx_store_invoices_public_token
-          ON store_invoices(public_token) WHERE public_token IS NOT NULL"""
+          ON store_invoices(public_token)
+          WHERE public_token IS NOT NULL AND public_token<>''"""
    )
    cur.execute(
        """CREATE TABLE IF NOT EXISTS store_notification_outbox (
@@ -46,7 +47,9 @@ def ensure_commerce_storage():
        """CREATE INDEX IF NOT EXISTS idx_store_notification_outbox_pending
           ON store_notification_outbox(status,available_at,id)"""
    )
-   cur.execute("SELECT id FROM store_invoices WHERE public_token IS NULL")
+   cur.execute(
+       "SELECT id FROM store_invoices WHERE public_token IS NULL OR public_token=''"
+   )
    for row in cur.fetchall():
     cur.execute(
         "UPDATE store_invoices SET public_token=%s WHERE id=%s",
