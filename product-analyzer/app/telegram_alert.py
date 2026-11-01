@@ -190,11 +190,11 @@ def _search_products(term, limit=8):
                 LEFT JOIN categories c ON c.id = p.category_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
-                  AND p.title ILIKE %s
+                  AND (p.title ILIKE %s OR COALESCE(c.name, '') ILIKE %s)
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC
                 LIMIT %s
                 """,
-                (f"%{term}%", limit),
+                (f"%{term}%", f"%{term}%", limit),
             )
             rows = cur.fetchall()
             if rows:
@@ -410,9 +410,10 @@ def _handle(token, chat_id, text):
         return _send(token, chat_id, (
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
-            "/buscar producto — buscar en todo el catálogo activo\n"
+            "/buscar producto — buscar por título o categoría en el catálogo activo\n"
             "/modelar — puntuar en lote productos activos con precio; admite datos manuales\n"
             "/agregar URL — importar Amazon o AliExpress; también categoría|url|precio|título|imagen|moneda\n"
+            "Publicación — selecciona productos en Studio y usa «Publicar en Central»\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda"
         ))
@@ -442,8 +443,9 @@ def _handle(token, chat_id, text):
             return _send(
                 token,
                 chat_id,
-                f"No encontré productos modelados para: {html.escape(term)}\n"
-                "Puedes agregar uno con /agregar URL.",
+                f"No encontré productos por título o categoría para: {html.escape(term)}\n"
+                "Los enlaces importados sin título real no se pueden buscar por nombre; "
+                "completa los datos con /agregar categoría|URL|precio|título|imagen|moneda.",
             )
         if not _send(token, chat_id, f"<b>Resultados: {html.escape(term)}</b>"):
             return False
@@ -480,6 +482,14 @@ def _handle(token, chat_id, text):
         if image:
             message += f'\nImagen: <a href="{html.escape(image, quote=True)}">ver imagen</a>'
         return _send(token, chat_id, message)
+
+    if command == "/publicar":
+        return _send(
+            token,
+            chat_id,
+            "La publicación se gestiona desde Studio: selecciona el producto y usa "
+            "«Publicar en Central». Telegram no publica directamente.",
+        )
 
     if command == "/modelar":
         if not argument.strip():

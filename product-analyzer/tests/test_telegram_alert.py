@@ -41,6 +41,30 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertIn("/agregar URL", send.call_args.args[2])
 
+    def test_search_matches_category_as_well_as_title(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [{"title": "Zapato", "category": "calzado"}]
+
+        with patch.object(telegram_alert, "get_connection", return_value=connection):
+            products = telegram_alert._search_products("calzado")
+
+        query, parameters = cursor.execute.call_args.args
+        self.assertIn("p.title ILIKE %s OR COALESCE(c.name, '') ILIKE %s", query)
+        self.assertEqual(parameters, ("%calzado%", "%calzado%", 8))
+        self.assertEqual(products, cursor.fetchall.return_value)
+        connection.close.assert_called_once()
+
+    def test_publish_command_explains_studio_workflow(self):
+        send = MagicMock(return_value=True)
+
+        with patch.object(telegram_alert, "_send", send):
+            result = telegram_alert._handle("token", "chat", "/publicar")
+
+        self.assertTrue(result)
+        self.assertIn("Studio", send.call_args.args[2])
+        self.assertIn("Telegram no publica", send.call_args.args[2])
+
     def test_add_accepts_a_plain_product_url(self):
         product = {
             "platform": "amazon",
