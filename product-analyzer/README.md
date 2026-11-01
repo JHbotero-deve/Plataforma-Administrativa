@@ -28,7 +28,7 @@ Amazon se importa por URL sin descargar ni raspar sus páginas. Central agrega `
 ## Telegram
 El bot mantiene /top, /buscar, /modelar y /estado. También acepta URLs de Amazon y AliExpress. El endpoint autenticado `/api/v1/products/import-cli` guarda el producto y envía el enlace afiliado a Telegram. El servicio de Telegram en Railway requiere TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID; sin esas variables queda deshabilitado de forma segura.
 
-El worker busca ropa, calzado y accesorios en AliExpress mediante `aliexpress.affiliate.product.query`, revisa descuento, ventas recientes, evaluación, comisión y score, y envía hasta cinco alertas nuevas por ciclo. Requiere `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_APP_SECRET` y `ALIEXPRESS_TRACKING_ID`; el token OAuth no es necesario para esta consulta de afiliados. Los umbrales se ajustan con `PROMOTION_MIN_DISCOUNT`, `PROMOTION_MIN_30D_VOLUME`, `PROMOTION_MIN_EVALUATION`, `PROMOTION_MIN_COMMISSION` y `PROMOTION_MIN_SCORE`.
+El worker busca ropa, calzado y accesorios en AliExpress mediante `aliexpress.affiliate.product.query` en `https://api-sg.aliexpress.com/sync`, con firma IOP HMAC-SHA256. Revisa descuento, ventas recientes, evaluación, comisión y score, y envía hasta cinco alertas nuevas por ciclo. Requiere `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_APP_SECRET` y `ALIEXPRESS_TRACKING_ID`; el token OAuth no es necesario para esta consulta de afiliados. Los umbrales se ajustan con `PROMOTION_MIN_DISCOUNT`, `PROMOTION_MIN_30D_VOLUME`, `PROMOTION_MIN_EVALUATION`, `PROMOTION_MIN_COMMISSION` y `PROMOTION_MIN_SCORE`.
 
 ## CLI autorizados
 

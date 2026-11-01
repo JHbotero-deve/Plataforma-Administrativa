@@ -66,9 +66,16 @@ def _official_url(value, *, image=False):
     try:
         parsed = urlsplit(str(value or "").strip())
         host = (parsed.hostname or "").lower().rstrip(".")
+        port = parsed.port
     except ValueError:
         return None
-    if parsed.scheme != "https" or not host or parsed.username or parsed.password:
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not host
+        or parsed.username
+        or parsed.password
+        or port not in {None, 443}
+    ):
         return None
     allowed_suffixes = (
         (".alicdn.com", ".aliexpress-media.com")
@@ -80,7 +87,9 @@ def _official_url(value, *, image=False):
         if image
         else {"aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub"}
     )
-    return parsed.geturl() if host in allowed_hosts or host.endswith(allowed_suffixes) else None
+    if host not in allowed_hosts and not host.endswith(allowed_suffixes):
+        return None
+    return parsed._replace(scheme="https").geturl()
 
 
 def _product_results(payload):
@@ -95,6 +104,11 @@ def _product_results(payload):
             f"({code}: {response.get('resp_msg') or 'sin descripción'})."
         )
     result = response.get("result") or {}
+    if "promos" in result and "products" not in result:
+        raise RuntimeError(
+            "AliExpress devolvió campañas promocionales, no productos; "
+            "usa aliexpress.affiliate.product.query para obtener artículos."
+        )
     products = result.get("products") or []
     if isinstance(products, dict):
         products = products.get("product") or products.get("products") or []

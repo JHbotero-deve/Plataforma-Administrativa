@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import os
 import sys
 import unittest
@@ -39,7 +41,19 @@ class AliExpressPromotionBotTests(unittest.TestCase):
         params = post.call_args.kwargs["data"]
         self.assertEqual(params["tracking_id"], "v1")
         self.assertEqual(params["method"], "aliexpress.affiliate.product.query")
-        self.assertEqual(len(params["sign"]), 32)
+        canonical = "".join(
+            key + str(value)
+            for key, value in sorted(params.items())
+            if key != "sign"
+        )
+        expected = hmac.new(
+            b"app-secret", canonical.encode("utf-8"), hashlib.sha256
+        ).hexdigest().upper()
+        self.assertEqual(params["sign"], expected)
+        self.assertEqual(len(params["sign"]), 64)
+        self.assertEqual(params["sign_method"], "sha256")
+        self.assertTrue(params["timestamp"].isdigit())
+        self.assertEqual(len(params["timestamp"]), 13)
 
     def test_product_query_response_extracts_official_result_list(self):
         payload = {
@@ -61,6 +75,70 @@ class AliExpressPromotionBotTests(unittest.TestCase):
         products = promotion_bots._product_results(payload)
 
         self.assertEqual([item["product_id"] for item in products], ["123", "456"])
+
+    def test_promotion_campaign_response_is_not_mistaken_for_product_results(self):
+        payload = {
+            "code": "0",
+            "resp_result": {
+                "result": {
+                    "current_record_count": "50",
+                    "promos": [
+                        {
+                            "promo_name": "single days big sale",
+                            "promo_desc": "single days big sale",
+                            "product_num": "100",
+                        }
+                    ],
+                },
+                "resp_code": "200",
+                "resp_msg": "success",
+            },
+        }
+
+        with self.assertRaisesRegex(RuntimeError, "campañas promocionales, no productos"):
+            promotion_bots._product_results(payload)
+
+    def test_normalizes_documented_affiliate_response_and_upgrades_official_http_link(self):
+        payload = {
+            "code": "0",
+            "resp_result": {
+                "resp_code": "200",
+                "resp_msg": "success",
+                "result": {
+                    "products": [
+                        {
+                            "product_id": "33006951782",
+                            "product_title": "Vestido",
+                            "product_detail_url": "https://www.aliexpress.com/item/33006951782.html",
+                            "promotion_link": "http://s.click.aliexpress.com/e/xxxxx",
+                            "product_main_image_url": "https://ae01.alicdn.com/kf/image.jpg",
+                            "product_small_image_urls": [],
+                            "target_sale_price": "350",
+                            "target_sale_price_currency": "USD",
+                            "original_price": "100",
+                            "discount": "50%",
+                            "evaluate_rate": "89.2%",
+                            "lastest_volume": "300",
+                            "hot_product_commission_rate": "60%",
+                            "commission_rate": "3.5%",
+                            "relevant_market_commission_rate": "10%",
+                            "promo_code_info": {
+                                "promo_code": "GMG20207",
+                                "code_promotionurl": "https://s.click.aliexpress.com/e/_xxxxx",
+                            },
+                        }
+                    ]
+                },
+            },
+        }
+
+        [raw] = promotion_bots._product_results(payload)
+        product = promotion_bots._normalize_product(raw, "ropa")
+
+        self.assertEqual(product["affiliate_url"], "https://s.click.aliexpress.com/e/_xxxxx")
+        self.assertEqual(product["commission_rate"], 10)
+        self.assertEqual(product["gallery_urls"], [])
+        self.assertFalse(promotion_bots._review_product(product))
 
     def test_reviewer_accepts_a_verified_discount_with_sales_and_affiliate_link(self):
         raw = {
