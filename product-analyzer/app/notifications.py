@@ -76,6 +76,18 @@ def send_telegram_alert(product_info):
         f"<b>Plataforma:</b> {platform}",
         f"<b>Categoría:</b> {category}",
     ]
+    if product_info.get("discount") is not None:
+        discount = html.escape(str(product_info["discount"])[:20])
+        lines.append(f"<b>Descuento:</b> {discount}%")
+    if product_info.get("commission_rate") is not None:
+        commission = html.escape(str(product_info["commission_rate"])[:20])
+        lines.append(f"<b>Comisión afiliada:</b> {commission}%")
+    if product_info.get("sales_estimate") is not None:
+        sales = html.escape(str(product_info["sales_estimate"])[:20])
+        lines.append(f"<b>Ventas últimos 30 días:</b> {sales}")
+    if product_info.get("promo_code"):
+        promo_code = html.escape(str(product_info["promo_code"])[:60])
+        lines.append(f"<b>Cupón:</b> <code>{promo_code}</code>")
     if product_info.get("affiliate_link_generated") is False:
         lines.append("<b>Afiliación:</b> pendiente de configurar o generar.")
     if url:

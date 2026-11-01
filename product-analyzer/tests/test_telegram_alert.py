@@ -79,6 +79,33 @@ class TelegramApiResponseTests(unittest.TestCase):
 
         self.assertFalse(result)
 
+    def test_promotion_alert_contains_discount_commission_sales_and_coupon(self):
+        with (
+            patch.object(notifications, "_config", return_value=("token", "chat")),
+            patch.object(notifications, "_post_telegram", return_value=True) as post,
+        ):
+            result = notifications.send_telegram_alert(
+                {
+                    "title": "Oferta",
+                    "price": 12,
+                    "score": 85,
+                    "platform": "AliExpress",
+                    "category": "accesorios",
+                    "discount": 40,
+                    "commission_rate": 5,
+                    "sales_estimate": 1200,
+                    "promo_code": "SAVE10",
+                    "url": "https://s.click.aliexpress.com/e/abc123",
+                }
+            )
+
+        message = post.call_args.args[2]["text"]
+        self.assertTrue(result)
+        self.assertIn("Descuento:</b> 40%", message)
+        self.assertIn("Comisión afiliada:</b> 5%", message)
+        self.assertIn("Ventas últimos 30 días:</b> 1200", message)
+        self.assertIn("<code>SAVE10</code>", message)
+
 
 class SupportedMarketplaceTests(unittest.TestCase):
     def test_amazon_and_aliexpress_urls_are_supported(self):

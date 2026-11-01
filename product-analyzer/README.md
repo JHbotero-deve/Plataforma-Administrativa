@@ -4,13 +4,13 @@
 - Frontend estático en Vercel desde `product-analyzer/frontend`.
 - API y worker en Railway desde `product-analyzer/app`.
 - PostgreSQL como persistencia.
-- Amazon y AliExpress: importación exclusivamente por URL aportada por los CLI autorizados.
+- AliExpress descubre automáticamente ofertas con su API oficial de afiliados; Amazon requiere acceso a su API de catálogo para búsquedas automáticas.
 - Los enlaces afiliados de Amazon y AliExpress se generan con sus respectivos datos de afiliación cuando están configurados.
 - Telegram para consulta y alertas.
 - Wompi preparado para pagos.
 
 ## Flujo
-Fuentes -> ingesta cada 2 horas -> PostgreSQL -> scoring -> API -> Vercel.
+AliExpress Affiliate API -> descubrimiento y revisión cada 2 horas -> PostgreSQL -> scoring -> API -> Vercel; las mejores ofertas nuevas se notifican por Telegram.
 
 ## Tarjetas
 Cada producto se representa en una tarjeta única. La zona multimedia admite imágenes reales y, cuando `model_url` apunta a un modelo GLB/GLTF accesible, activa el visor 3D dentro de la misma tarjeta. Sin modelo válido, no se simula 3D.
@@ -28,6 +28,7 @@ Amazon se importa por URL sin descargar ni raspar sus páginas. Central agrega `
 ## Telegram
 El bot mantiene /top, /buscar, /modelar y /estado. También acepta URLs de Amazon y AliExpress. El endpoint autenticado `/api/v1/products/import-cli` guarda el producto y envía el enlace afiliado a Telegram. El servicio de Telegram en Railway requiere TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID; sin esas variables queda deshabilitado de forma segura.
 
+El worker busca ropa, calzado y accesorios en AliExpress mediante `aliexpress.affiliate.product.query`, revisa descuento, ventas recientes, evaluación, comisión y score, y envía hasta cinco alertas nuevas por ciclo. Requiere `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_APP_SECRET` y `ALIEXPRESS_TRACKING_ID`; el token OAuth no es necesario para esta consulta de afiliados. Los umbrales se ajustan con `PROMOTION_MIN_DISCOUNT`, `PROMOTION_MIN_30D_VOLUME`, `PROMOTION_MIN_EVALUATION`, `PROMOTION_MIN_COMMISSION` y `PROMOTION_MIN_SCORE`.
 
 ## CLI autorizados
 

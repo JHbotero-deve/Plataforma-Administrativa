@@ -7,6 +7,7 @@ from analysis import score_product
 from db import get_connection, upsert_product
 from init_db import init_database
 from notifications import send_telegram_alert
+from promotion_bots import run_promotion_cycle
 from seed_catalog import seed_catalog
 from tiktok_creator import creator_configured, sync_showcase
 
@@ -38,12 +39,21 @@ def expire_catalog():
 
 
 def run_pipeline():
-    print("== Iniciando ciclo de ingesta y análisis (Amazon & AliExpress) ==")
+    print("== Iniciando ciclo de análisis de catálogo y promociones AliExpress ==")
     expire_catalog()
+    try:
+        promotions = run_promotion_cycle()
+        print(
+            "[promotions] consultados={queried} aprobados={approved} "
+            "nuevos_avisos={alerts}".format(**promotions)
+        )
+    except Exception as exc:
+        print(f"[promotions] ciclo falló: {type(exc).__name__}: {exc}")
+
     conn = get_connection()
     product_ids = []
     try:
-        print("[ingesta] modo URL: los productos entran desde el CLI autorizado por Telegram o el endpoint de importación.")
+        print("[ingesta] se conservan las importaciones manuales y por CLI autorizado.")
 
         averages = {}
         with conn.cursor() as cur:
@@ -167,7 +177,10 @@ def run_worker():
     time.sleep(5)
     init_database()
     seeded = seed_catalog()
-    print(f"== Catálogo inicial: Amazon {seeded['amazon']} | AliExpress por URL | Propios {seeded['personal']} ==")
+    print(
+        f"== Catálogo inicial: Amazon {seeded['amazon']} | "
+        f"AliExpress por URL {seeded['aliexpress']} | Propios {seeded['personal']} =="
+    )
     run_pipeline()
     schedule.every(2).hours.do(run_pipeline)
     while True:

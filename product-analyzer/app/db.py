@@ -63,6 +63,21 @@ def _affiliate_url(product: dict, platform_name: str | None = None) -> str | Non
             query["ascsubtag"] = tracking
         return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
     if platform == "aliexpress":
+        affiliate_url = (product.get("affiliate_url") or "").strip()
+        if affiliate_url:
+            parts = urlsplit(affiliate_url)
+            host = (parts.hostname or "").lower().rstrip(".")
+            if parts.scheme == "https" and (
+                host == "aliexpress.com"
+                or host.endswith(".aliexpress.com")
+                or host == "aliexpress.us"
+                or host.endswith(".aliexpress.us")
+                or host == "aliexpress.ru"
+                or host.endswith(".aliexpress.ru")
+                or host == "alii.pub"
+                or host.endswith(".alii.pub")
+            ):
+                return affiliate_url
         try:
             return generate_aliexpress_affiliate_url(url)
         except (requests.RequestException, ValueError, RuntimeError) as exc:
