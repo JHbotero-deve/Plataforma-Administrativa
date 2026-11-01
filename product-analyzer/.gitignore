@@ -1,6 +1,11 @@
 # Secretos y Configuración
 .env
+.env.*
+!.env.example
+.evn
 *.log
+*.pem
+*.key
 
 # Python
 __pycache__/
