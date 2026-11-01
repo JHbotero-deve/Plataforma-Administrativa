@@ -58,7 +58,7 @@
 <div class="import-fallback"><a class="btn small" href="https://central-7ykr.vercel.app/tarjetas">Abrir creador de tarjetas</a></div>
 <div class="import-result" id="importResult" role="status" aria-live="polite"></div>
 </div></section>
-<section id="publicaciones"><div class="wrap"><div class="section-head"><div><div class="eyebrow">04 · tienda</div><h2>Gestionar tarjetas publicadas</h2><p>Publica oportunidades, edita los textos visibles, despublica o elimina una ficha sin borrar el producto del catálogo.</p></div><a class="btn small" href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Ver tienda</a></div><div id="publicationMessage" class="pub-empty">Comprobando sesión administrativa…</div><div id="publicationList" class="pub-grid"></div></div></section>
+<section id="publicaciones"><div class="wrap"><div class="section-head"><div><div class="eyebrow">04 · tienda</div><h2>Gestionar tarjetas publicadas</h2><p>Publica oportunidades, edita los textos visibles, despublica o elimina una ficha sin borrar el producto del catálogo.</p></div><div class="pub-actions"><a class="btn small" href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Ver tienda</a><button class="btn small" id="adminLogout" type="button">Cerrar sesión</button></div></div><div id="publicationMessage" class="pub-empty">Comprobando sesión administrativa…</div><div id="publicationList" class="pub-grid"></div></div></section>
 
 
 
@@ -76,7 +76,7 @@ const API="/api/v1", $=id=>document.getElementById(id);
 const authHeaders=(extra={})=>extra;
 const adminHeaders=(extra={})=>extra;
 const requestOptions=(options={})=>({...options,credentials:"include",cache:"no-store"});
-const requireSession=error=>{if(error?.status===401){$("publicationMessage").innerHTML='Sesión administrativa requerida. <a href="https://central-7ykr.vercel.app/tarjetas">Inicia sesión con tu contraseña</a>; no necesitas la clave interna de Railway.';return true}return false};
+const requireSession=error=>{if(error?.status===401){$("publicationMessage").innerHTML='Sesión administrativa requerida. <a href="/admin-login.html">Inicia sesión con tu contraseña</a>; no necesitas la clave interna de Railway.';return true}return false};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=(v,c)=>{if(v==null||Number.isNaN(Number(v)))return"—";const n=Number(v);const cur=String(c||"COP").toUpperCase();if(cur==="USD"||cur==="US$"||cur==="$"){const cop=n*3329.61;return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(cop)+" COP";}try{return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(n)+" COP"}catch{return n.toLocaleString("es-CO")+" COP"}};
 const date=v=>v?new Date(v).toLocaleString("es-CO"):"—";
@@ -193,11 +193,91 @@ document.addEventListener("click",e=>{
   if(p)showRadarSpecs(p);
 });
 let publishedProductIds=new Set();
+const draftTimers=new Map(),draftQueues=new Map(),draftRevisions=new Map(),serverDraftRevisions=new Map(),dirtyPublicationIds=new Set();
+let adminSessionActive=false;
+const localDraftKey=id=>"central.publication.draft.v1."+id;
+function readLocalDraft(id){
+ try{const value=localStorage.getItem(localDraftKey(id));return value?JSON.parse(value):null}
+ catch{return null}
+}
+function clearLocalDraft(id){
+ try{localStorage.removeItem(localDraftKey(id))}catch{}
+}
+function publicationDraft(form){
+ const data=new FormData(form);
+ return {subtitle:String(data.get("subtitle")||"").trim()||null,footer:String(data.get("footer")||"Disponible en Central").trim(),accent:String(data.get("accent")||"#b6f23a"),is_published:data.get("is_published")==="on"};
+}
+function draftStatus(id,text){
+ const element=document.querySelector('[data-draft-status="'+CSS.escape(String(id))+'"]');
+ if(element)element.textContent=text;
+}
+const importDraftKey="central.import.draft.v1";
+function restoreImportDraft(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(importDraftKey)||"null");
+  if(!saved)return;
+  if(typeof saved.url==="string")$("url").value=saved.url;
+  if(typeof saved.category==="string"&&[...$("category").options].some(option=>option.value===saved.category))$("category").value=saved.category;
+ }catch{}
+}
+function saveImportDraft(){
+ try{localStorage.setItem(importDraftKey,JSON.stringify({url:$("url").value,category:$("category").value,updated_at:new Date().toISOString()}))}
+ catch{$("importResult").textContent="No se pudo guardar el borrador local; mantén esta página abierta hasta completar la importación."}
+}
+function schedulePublicationDraft(form){
+ const id=String(form.dataset.publicationForm),revision=(draftRevisions.get(id)||0)+1;
+ draftRevisions.set(id,revision);dirtyPublicationIds.add(id);
+ const draft={...publicationDraft(form),revision:serverDraftRevisions.get(id)||0,updated_at:new Date().toISOString()};
+ try{localStorage.setItem(localDraftKey(id),JSON.stringify(draft))}
+ catch{draftStatus(id,"Guardando en servidor; el almacenamiento local no está disponible.")}
+ draftStatus(id,"Guardando borrador…");
+ clearTimeout(draftTimers.get(id));
+ draftTimers.set(id,setTimeout(()=>persistPublicationDraft(id,draft,revision),800));
+}
+async function persistPublicationDraft(id,draft,revision){
+ const previous=draftQueues.get(id)||Promise.resolve();
+ const operation=previous.catch(()=>{}).then(async()=>{
+  const response=await fetch(API+"/publications/"+encodeURIComponent(id)+"/draft",requestOptions({method:"PUT",headers:adminHeaders({"Content-Type":"application/json",Accept:"application/json"}),body:JSON.stringify({...draft,expected_revision:draft.revision})}));
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok)throw Object.assign(new Error(result.detail||"No fue posible sincronizar el borrador"),{status:response.status});
+  return result;
+ });
+ draftQueues.set(id,operation);
+ try{
+  await operation;
+  if(draftRevisions.get(id)!==revision)return;
+  dirtyPublicationIds.delete(id);serverDraftRevisions.set(id,result.revision);clearLocalDraft(id);
+  draftStatus(id,"Borrador sincronizado y recuperable en otros dispositivos.");
+ }catch(error){
+  if(draftRevisions.get(id)!==revision)return;
+  if(error.status===409)draftStatus(id,"Cambios en otro dispositivo. Tu borrador local se conservó; revísalo antes de pulsar Guardar ajustes.");
+  else if(!requireSession(error))draftStatus(id,"Sin sincronización: "+error.message+". El borrador queda en este dispositivo.");
+ }
+}
 async function loadPublications(){
  const message=$("publicationMessage"),list=$("publicationList");if(!message||!list)return;
- try{const rows=await get("/publications?include_unpublished=true&limit=100");publishedProductIds=new Set(rows.map(row=>String(row.product_id)));message.textContent=rows.length?rows.length+" tarjetas encontradas. Guarda cambios por tarjeta; retirar elimina solo la publicación.":"No hay tarjetas publicadas ni borradores.";
- list.innerHTML=rows.map(row=>`<article class="pub-card" data-publication-card="${row.id}"><div class="pub-meta">${esc(row.platform||"Producto")} · ${row.is_published?"Visible en tienda":"Borrador / retirada"}</div><h3>${esc(row.title)}</h3><div class="pub-meta">${esc(row.price_display||"Precio no disponible")}</div><form class="pub-form" data-publication-form="${row.id}"><label>Texto secundario<input type="text" name="subtitle" maxlength="500" value="${esc(row.subtitle||"")}"></label><label>Pie de tarjeta<input type="text" name="footer" maxlength="200" value="${esc(row.footer||"Disponible en Central")}"></label><label>Color de acento<input type="color" name="accent" value="${/^#[0-9a-f]{6}$/i.test(row.accent||"")?row.accent:"#b6f23a"}"></label><label class="pub-check"><input type="checkbox" name="is_published" ${row.is_published?"checked":""}> Visible en la tienda</label><div class="pub-actions"><button class="btn primary small" type="submit">Guardar ajustes</button><button class="btn small" type="button" data-remove-publication="${row.id}">Eliminar publicación</button></div></form></article>`).join("");
- }catch(error){list.innerHTML="";if(!requireSession(error))message.textContent="No fue posible cargar las tarjetas: "+error.message;}
+ if(dirtyPublicationIds.size||document.activeElement?.closest?.("[data-publication-form]"))return;
+ try{
+  const rows=await get("/publications?include_unpublished=true&limit=100"),drafts=await get("/publications/drafts");
+  adminSessionActive=true;
+  publishedProductIds=new Set(rows.map(row=>String(row.product_id)));
+  message.textContent=rows.length?rows.length+" tarjetas encontradas. Los borradores se sincronizan automáticamente.":"No hay tarjetas publicadas ni borradores.";
+  list.innerHTML=rows.map(row=>{
+   const id=String(row.id),serverDraft=drafts[id]||null,localDraft=readLocalDraft(id);
+   const serverTime=Date.parse(serverDraft?.updated_at||""),localTime=Date.parse(localDraft?.updated_at||"");
+   const useLocal=Boolean(localDraft&&(!serverDraft||!Number.isFinite(serverTime)||localTime>serverTime));
+   const draft=useLocal?localDraft:(serverDraft||row);
+   serverDraftRevisions.set(id,Number(draft.revision)||0);
+   const restored=Boolean(serverDraft||localDraft);
+   return `<article class="pub-card" data-publication-card="${row.id}"><div class="pub-meta">${esc(row.platform||"Producto")} · ${row.is_published?"Visible en tienda":"Borrador / retirada"}</div><h3>${esc(row.title)}</h3><div class="pub-meta">${esc(row.price_display||"Precio no disponible")}</div><form class="pub-form" data-publication-form="${row.id}"><label>Texto secundario<input type="text" name="subtitle" maxlength="500" value="${esc(draft.subtitle||"")}"></label><label>Pie de tarjeta<input type="text" name="footer" maxlength="200" value="${esc(draft.footer||"Disponible en Central")}"></label><label>Color de acento<input type="color" name="accent" value="${/^#[0-9a-f]{6}$/i.test(draft.accent||"")?draft.accent:"#b6f23a"}"></label><label class="pub-check"><input type="checkbox" name="is_published" ${draft.is_published?"checked":""}> Visible en la tienda</label><div class="pub-actions"><button class="btn primary small" type="submit">Guardar ajustes</button><button class="btn small" type="button" data-remove-publication="${row.id}">Eliminar publicación</button></div><div class="pub-meta" data-draft-status="${row.id}">${restored?"Borrador recuperado.":"Los cambios se guardan automáticamente."}</div></form></article>`;
+  }).join("");
+  list.querySelectorAll("[data-publication-form]").forEach(form=>{
+   const id=String(form.dataset.publicationForm),localDraft=readLocalDraft(id),serverDraft=drafts[id];
+   if(localDraft&&(!serverDraft||Date.parse(localDraft.updated_at||"")>Date.parse(serverDraft.updated_at||""))){
+    dirtyPublicationIds.add(id);schedulePublicationDraft(form);
+   }
+  });
+ }catch(error){list.innerHTML="";if(requireSession(error))adminSessionActive=false;else message.textContent="No fue posible cargar las tarjetas: "+error.message;}
 }
 async function load(){
   const [itemsResult,topResult,intelResult,pipelineResult]=await Promise.allSettled([
@@ -245,8 +325,10 @@ async function submitImport(e){
       (data.opportunity_score!=null?" · puntuación "+Math.round(data.opportunity_score):" · puntuación pendiente")+
       (data.product?.affiliate_url?" · enlace promocional conservado":"");
     $("url").value="";
+    try{localStorage.removeItem(importDraftKey)}catch{}
     await load();
   }catch(err){
+    if(requireSession(err)){out.textContent="";return}
     out.textContent="No se pudo importar: "+(err.message||"Error desconocido")+". ";
     const fallback=document.createElement("a");
     fallback.href="https://central-7ykr.vercel.app/tarjetas";
@@ -259,11 +341,37 @@ async function submitImport(e){
   }
 }
 const importForm=$("importForm");
-if(importForm) importForm.addEventListener("submit",submitImport);
+if(importForm){
+ restoreImportDraft();
+ importForm.addEventListener("input",saveImportDraft);
+ importForm.addEventListener("change",saveImportDraft);
+ importForm.addEventListener("submit",submitImport);
+}
 
 load();
 loadTelegram();
 loadPublications();
+
+const adminLogout=$("adminLogout");
+if(adminLogout)adminLogout.addEventListener("click",async()=>{
+ adminLogout.disabled=true;
+ try{
+  const response=await fetch(API+"/auth/logout",requestOptions({method:"POST",headers:adminHeaders({Accept:"application/json"})}));
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(result.detail||"No fue posible cerrar sesión.");
+  window.location.replace("/admin-login.html");
+ }catch(error){$("publicationMessage").textContent="No se cerró la sesión: "+error.message}
+ finally{adminLogout.disabled=false}
+});
+
+document.addEventListener("input",event=>{
+ const form=event.target.closest("[data-publication-form]");if(form)schedulePublicationDraft(form);
+});
+document.addEventListener("change",event=>{
+ const input=event.target;
+ if(input.type!=="checkbox"&&input.type!=="color")return;
+ const form=input.closest("[data-publication-form]");if(form)schedulePublicationDraft(form);
+});
 
 document.addEventListener("click",async event=>{
  const publish=event.target.closest("[data-publish-product]");
@@ -284,9 +392,12 @@ document.addEventListener("click",async event=>{
   if(!confirm("¿Eliminar esta publicación de la tienda? El producto seguirá en el catálogo."))return;
   remove.disabled=true;
   try{
+   const id=String(remove.dataset.removePublication);clearTimeout(draftTimers.get(id));draftTimers.delete(id);
+   const pendingDraft=draftQueues.get(id);if(pendingDraft)await pendingDraft.catch(()=>{});
    const response=await fetch(API+"/publications/"+encodeURIComponent(remove.dataset.removePublication),requestOptions({method:"DELETE",headers:adminHeaders({Accept:"application/json"})}));
    const data=await response.json().catch(()=>({}));
    if(!response.ok)throw Object.assign(new Error(data.detail||"No fue posible eliminar la publicación"),{status:response.status});
+   clearLocalDraft(id);dirtyPublicationIds.delete(id);draftRevisions.set(id,(draftRevisions.get(id)||0)+1);serverDraftRevisions.delete(id);document.activeElement?.blur?.();
    await loadPublications();await load();
   }catch(error){if(!requireSession(error))$("publicationMessage").textContent="No se pudo eliminar: "+error.message;}
   finally{remove.disabled=false;}
@@ -295,15 +406,29 @@ document.addEventListener("click",async event=>{
 document.addEventListener("submit",async event=>{
  const form=event.target.closest("[data-publication-form]");if(!form)return;event.preventDefault();
  const id=form.dataset.publicationForm;
+ clearTimeout(draftTimers.get(id));draftTimers.delete(id);
+ const pendingDraft=draftQueues.get(String(id));if(pendingDraft)await pendingDraft.catch(()=>{});
  let current;try{current=await get("/publications?include_unpublished=true&limit=100")}catch(error){if(!requireSession(error))$("publicationMessage").textContent=error.message;return}
  const row=current.find(item=>String(item.id)===String(id));if(!row){$("publicationMessage").textContent="No se encontró la publicación para actualizar.";return}
  const data=new FormData(form);
  const payload={product_id:row.product_id,title:row.title,subtitle:String(data.get("subtitle")||"").trim()||null,price_display:row.price_display,image_url:row.image_url,product_url:row.product_url,sale_price:row.sale_price,cost_price:row.cost_price,opportunity_score:row.opportunity_score,footer:String(data.get("footer")||"Disponible en Central").trim(),accent:String(data.get("accent")||"#b6f23a"),is_published:data.get("is_published")==="on"};
- const submit=form.querySelector('button[type="submit"]');submit.disabled=true;
- try{const response=await fetch(API+"/publications/"+encodeURIComponent(id),requestOptions({method:"PATCH",headers:adminHeaders({"Content-Type":"application/json",Accept:"application/json"}),body:JSON.stringify(payload)}));const result=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(new Error(result.detail||"No fue posible guardar los ajustes"),{status:response.status});$("publicationMessage").textContent="Ajustes guardados.";await loadPublications();await load()}
+ const controls=[...form.querySelectorAll("input,button")];controls.forEach(control=>control.disabled=true);
+ try{const response=await fetch(API+"/publications/"+encodeURIComponent(id),requestOptions({method:"PATCH",headers:adminHeaders({"Content-Type":"application/json",Accept:"application/json"}),body:JSON.stringify(payload)}));const result=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(new Error(result.detail||"No fue posible guardar los ajustes"),{status:response.status});dirtyPublicationIds.delete(String(id));clearLocalDraft(id);draftRevisions.set(String(id),(draftRevisions.get(String(id))||0)+1);serverDraftRevisions.delete(String(id));$("publicationMessage").textContent="Ajustes guardados.";document.activeElement?.blur?.();await loadPublications();await load()}
  catch(error){if(!requireSession(error))$("publicationMessage").textContent="No se guardaron los ajustes: "+error.message}
- finally{submit.disabled=false}
+ finally{controls.forEach(control=>control.disabled=false)}
 });
+
+let dashboardRefreshInProgress=false;
+async function refreshDashboard(){
+ if(dashboardRefreshInProgress)return;
+ dashboardRefreshInProgress=true;
+ try{
+  await Promise.allSettled([load(),loadTelegram()]);
+  if(adminSessionActive&&dirtyPublicationIds.size===0)await loadPublications();
+ }finally{dashboardRefreshInProgress=false}
+}
+setInterval(()=>{if(document.visibilityState==="visible")refreshDashboard()},60000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")refreshDashboard()});
 
 })();
 </script>

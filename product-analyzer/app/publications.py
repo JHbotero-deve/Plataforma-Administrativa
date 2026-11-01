@@ -1,14 +1,30 @@
 """Central published-card API."""
-from typing import Optional
 import os
+from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from admin_auth import require_admin
 from db import get_connection
 from notifications import send_telegram_publication
 
 router = APIRouter(tags=["publications"])
+
+
+def ensure_draft_storage():
+    migration = Path(__file__).with_name("sql") / "016_admin_publication_drafts.sql"
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur, migration.open(encoding="utf-8") as file:
+            cur.execute(file.read())
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 class PublicationPayload(BaseModel):
@@ -27,8 +43,22 @@ class PublicationPayload(BaseModel):
     is_published: bool = True
 
 
+class PublicationDraftPayload(BaseModel):
+    subtitle: Optional[str] = Field(default=None, max_length=500)
+    footer: str = Field(default="Disponible en Central", max_length=200)
+    accent: str = Field(default="#b6f23a", pattern=r"^#[0-9a-fA-F]{6}$")
+    is_published: bool = True
+    expected_revision: int = Field(default=0, ge=0)
+
+
 @router.get("/publications")
-def list_publications(limit: int = Query(20, ge=1, le=100), include_unpublished: bool = False):
+def list_publications(
+    request: Request,
+    limit: int = Query(20, ge=1, le=100),
+    include_unpublished: bool = False,
+):
+    if include_unpublished:
+        require_admin(request)
     conn = get_connection()
     try:
         with conn.cursor() as cur:
@@ -72,7 +102,148 @@ def list_publications(limit: int = Query(20, ge=1, le=100), include_unpublished:
         conn.close()
 
 
-@router.post("/publications")
+@router.get(
+    "/publications/drafts", dependencies=[Depends(require_admin)]
+)
+def list_publication_drafts():
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT publication_id, subtitle, footer, accent,
+                       is_published, revision, updated_at
+                FROM admin_publication_drafts
+                """
+            )
+            rows = cur.fetchall()
+        return {str(row["publication_id"]): row for row in rows}
+    finally:
+        conn.close()
+
+
+@router.put(
+    "/publications/{publication_id}/draft",
+    dependencies=[Depends(require_admin)],
+)
+def save_publication_draft(
+    publication_id: int,
+    payload: PublicationDraftPayload,
+):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT pc.id
+                FROM published_cards pc
+                JOIN products p ON p.id = pc.product_id
+                WHERE pc.id = %s AND p.is_active = TRUE
+                """,
+                (publication_id,),
+            )
+            if not cur.fetchone():
+                raise HTTPException(
+                    status_code=404, detail="Publicación no encontrada"
+                )
+            cur.execute(
+                "SELECT revision FROM admin_publication_drafts WHERE publication_id = %s",
+                (publication_id,),
+            )
+            current_draft = cur.fetchone()
+            if current_draft:
+                if current_draft["revision"] != payload.expected_revision:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="El borrador cambió en otro dispositivo. Tu copia local se conservó.",
+                    )
+                cur.execute(
+                    """
+                    UPDATE admin_publication_drafts
+                    SET subtitle = %s, footer = %s, accent = %s,
+                        is_published = %s, revision = revision + 1, updated_at = NOW()
+                    WHERE publication_id = %s AND revision = %s
+                    RETURNING revision, updated_at
+                    """,
+                    (
+                        payload.subtitle,
+                        payload.footer,
+                        payload.accent,
+                        payload.is_published,
+                        publication_id,
+                        payload.expected_revision,
+                    ),
+                )
+            else:
+                if payload.expected_revision != 0:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="El borrador cambió en otro dispositivo. Tu copia local se conservó.",
+                    )
+                cur.execute(
+                    """
+                    INSERT INTO admin_publication_drafts (
+                        publication_id, subtitle, footer, accent,
+                        is_published, revision, updated_at
+                    )
+                    VALUES (%s, %s, %s, %s, %s, 1, NOW())
+                    ON CONFLICT (publication_id) DO NOTHING
+                    RETURNING revision, updated_at
+                    """,
+                    (
+                        publication_id,
+                        payload.subtitle,
+                        payload.footer,
+                        payload.accent,
+                        payload.is_published,
+                    ),
+                )
+            saved = cur.fetchone()
+            if not saved:
+                raise HTTPException(
+                    status_code=409,
+                    detail="El borrador cambió en otro dispositivo. Tu copia local se conservó.",
+                )
+        conn.commit()
+        return {
+            "status": "saved",
+            "revision": saved["revision"],
+            "updated_at": saved["updated_at"],
+        }
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@router.delete(
+    "/publications/{publication_id}/draft",
+    dependencies=[Depends(require_admin)],
+)
+def delete_publication_draft(publication_id: int):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM admin_publication_drafts WHERE publication_id = %s",
+                (publication_id,),
+            )
+        conn.commit()
+        return {"status": "deleted"}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@router.post(
+    "/publications", dependencies=[Depends(require_admin)]
+)
 def publish_card(payload: PublicationPayload):
     conn = get_connection()
     try:
@@ -152,6 +323,10 @@ def publish_card(payload: PublicationPayload):
                 ),
             )
             publication_id = cur.fetchone()["id"]
+            cur.execute(
+                "DELETE FROM admin_publication_drafts WHERE publication_id = %s",
+                (publication_id,),
+            )
         conn.commit()
         return {"id": publication_id, "status": "published" if payload.is_published else "draft"}
     except HTTPException:
@@ -164,7 +339,9 @@ def publish_card(payload: PublicationPayload):
         conn.close()
 
 
-@router.patch("/publications/{publication_id}")
+@router.patch(
+    "/publications/{publication_id}", dependencies=[Depends(require_admin)]
+)
 def update_publication(publication_id: int, payload: PublicationPayload):
     conn = get_connection()
     try:
@@ -226,6 +403,10 @@ def update_publication(publication_id: int, payload: PublicationPayload):
             if not result:
                 raise HTTPException(
                     status_code=404, detail="Publicación no encontrada")
+            cur.execute(
+                "DELETE FROM admin_publication_drafts WHERE publication_id = %s",
+                (publication_id,),
+            )
         conn.commit()
         return result
     except HTTPException:
@@ -235,7 +416,43 @@ def update_publication(publication_id: int, payload: PublicationPayload):
         conn.close()
 
 
-@router.post("/publications/{publication_id}/telegram")
+@router.delete(
+    "/publications/{publication_id}",
+    dependencies=[Depends(require_admin)],
+)
+def delete_publication(publication_id: int):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM published_cards
+                WHERE id = %s
+                RETURNING id
+                """,
+                (publication_id,),
+            )
+            deleted = cur.fetchone()
+            if not deleted:
+                raise HTTPException(
+                    status_code=404, detail="Publicación no encontrada"
+                )
+        conn.commit()
+        return {"id": deleted["id"], "status": "deleted"}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@router.post(
+    "/publications/{publication_id}/telegram",
+    dependencies=[Depends(require_admin)],
+)
 def publish_publication_telegram(publication_id: int):
     conn = get_connection()
     try:

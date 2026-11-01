@@ -9,17 +9,23 @@ import requests
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, FastAPI, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from psycopg2.extras import Json
 
+from admin_auth import (
+    authenticate_admin,
+    clear_admin_cookie,
+    require_admin,
+    set_admin_cookie,
+)
 from analysis import score_product
 from db import get_connection, upsert_product
 from notifications import send_telegram_alert
 from monetization import router as monetization_router
-from publications import router as publication_router
+from publications import ensure_draft_storage, router as publication_router
 from store_orders import router as store_orders_router
 from tiktok_api import router as tiktok_creator_router
 from url_import import import_url
@@ -33,6 +39,12 @@ app = FastAPI(
     description="Ingesta, análisis, comparación y monetización de productos reales.",
     version=API_VERSION,
 )
+
+
+@app.on_event("startup")
+def ensure_admin_draft_storage():
+    ensure_draft_storage()
+
 
 app.include_router(monetization_router, prefix="/api/v1")
 app.include_router(wompi_router, prefix="/api/v1")
@@ -84,6 +96,29 @@ app.add_middleware(
 core_router = APIRouter(tags=["core"])
 
 
+class AdminLoginRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=256)
+
+
+@core_router.post("/auth/login")
+def admin_login(payload: AdminLoginRequest, response: Response):
+    email = authenticate_admin(payload.email, payload.password)
+    set_admin_cookie(response, email)
+    return {"authenticated": True}
+
+
+@core_router.get("/auth/session")
+def admin_session(email: str = Depends(require_admin)):
+    return {"authenticated": True, "email": email}
+
+
+@core_router.post("/auth/logout")
+def admin_logout(response: Response):
+    clear_admin_cookie(response)
+    return {"authenticated": False}
+
+
 @core_router.get("/health")
 @core_router.get("/healthz")
 def health():
@@ -129,7 +164,7 @@ def _publish_external_product(conn, product_id, product, platform_label):
         ))
 
 
-@core_router.post("/store/sync")
+@core_router.post("/store/sync", dependencies=[Depends(require_admin)])
 def sync_store_catalog():
     raise HTTPException(
         status_code=410,
@@ -137,7 +172,7 @@ def sync_store_catalog():
     )
 
 
-@core_router.post("/amazon/sync")
+@core_router.post("/amazon/sync", dependencies=[Depends(require_admin)])
 def sync_amazon_store(limit: int = Query(20, ge=1, le=20)):
     raise HTTPException(
         status_code=410,
@@ -467,7 +502,9 @@ class ProductImport(BaseModel):
     image_url: Optional[str] = Field(default=None, max_length=2_000_000)
 
 
-@core_router.post("/products/import-url")
+@core_router.post(
+    "/products/import-url", dependencies=[Depends(require_admin)]
+)
 def import_product_from_url(payload: ProductImport):
     try:
         product = import_url(
@@ -631,7 +668,9 @@ class ProductImages(BaseModel):
     images: list[str] = Field(default_factory=list, max_length=5)
 
 
-@core_router.patch("/products/{product_id}/images")
+@core_router.patch(
+    "/products/{product_id}/images", dependencies=[Depends(require_admin)]
+)
 def update_product_images(product_id: int, payload: ProductImages):
     clean=[str(x).strip() for x in payload.images if str(x).strip()]
     if len(clean)>5: raise HTTPException(status_code=400, detail="Máximo 5 imágenes por producto")
@@ -654,7 +693,9 @@ class ModelUpdate(BaseModel):
     model_shape: Optional[str] = None
 
 
-@core_router.patch("/products/{product_id}/model")
+@core_router.patch(
+    "/products/{product_id}/model", dependencies=[Depends(require_admin)]
+)
 def set_product_model(product_id: int, update: ModelUpdate):
     conn = get_connection()
     try:

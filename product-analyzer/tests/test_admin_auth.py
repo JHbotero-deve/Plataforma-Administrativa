@@ -1,0 +1,179 @@
+import os
+import sys
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from fastapi import HTTPException, Response
+from pydantic import ValidationError
+from starlette.requests import Request
+
+
+APP_PATH = Path(__file__).resolve().parents[1] / "app"
+sys.path.insert(0, str(APP_PATH))
+
+import admin_auth
+import api
+from publications import PublicationDraftPayload
+
+
+class AdminAuthenticationTests(unittest.TestCase):
+    def setUp(self):
+        self.environment = patch.dict(
+            os.environ,
+            {
+                "CENTRAL_ADMIN_EMAIL": "admin@example.com",
+                "CENTRAL_ADMIN_PASSWORD": "a-strong-password",
+                "CENTRAL_AUTH_SECRET": "s" * 64,
+            },
+            clear=True,
+        )
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
+
+    def request(self, method="GET", token=None, origin=None):
+        headers = []
+        if token:
+            headers.append(
+                (
+                    b"cookie",
+                    f"{admin_auth.ADMIN_COOKIE_NAME}={token}".encode(),
+                )
+            )
+        if origin:
+            headers.append((b"origin", origin.encode()))
+        return Request(
+            {
+                "type": "http",
+                "method": method,
+                "scheme": "https",
+                "path": "/api/v1/auth/session",
+                "raw_path": b"/api/v1/auth/session",
+                "query_string": b"",
+                "headers": headers,
+                "server": ("example.com", 443),
+                "client": ("127.0.0.1", 1),
+            }
+        )
+
+    def test_valid_credentials_create_a_verifiable_session(self):
+        email = admin_auth.authenticate_admin(
+            " ADMIN@example.com ", "a-strong-password"
+        )
+        token = admin_auth.create_session_token(email)
+
+        self.assertTrue(admin_auth.verify_session_token(token))
+
+    def test_invalid_credentials_are_rejected(self):
+        with self.assertRaises(HTTPException) as error:
+            admin_auth.authenticate_admin("admin@example.com", "wrong")
+
+        self.assertEqual(error.exception.status_code, 401)
+
+    def test_tampered_session_is_rejected(self):
+        token = admin_auth.create_session_token("admin@example.com")
+        payload, signature = token.split(".", 1)
+
+        self.assertFalse(
+            admin_auth.verify_session_token(payload + "." + "0" * len(signature))
+        )
+
+    def test_expired_session_is_rejected(self):
+        with patch.object(admin_auth.time, "time", return_value=1000):
+            token = admin_auth.create_session_token("admin@example.com")
+        with patch.object(admin_auth.time, "time", return_value=1000 + admin_auth.SESSION_MAX_AGE):
+            self.assertFalse(admin_auth.verify_session_token(token))
+
+    def test_missing_auth_configuration_fails_closed(self):
+        os.environ.pop("CENTRAL_AUTH_SECRET")
+
+        with self.assertRaises(HTTPException) as error:
+            admin_auth.authenticate_admin("admin@example.com", "a-strong-password")
+
+        self.assertEqual(error.exception.status_code, 503)
+
+    def test_admin_dependency_accepts_a_valid_cookie(self):
+        token = admin_auth.create_session_token("admin@example.com")
+
+        self.assertEqual(
+            admin_auth.require_admin(self.request(token=token)),
+            "admin@example.com",
+        )
+
+    def test_admin_dependency_rejects_a_missing_cookie(self):
+        with self.assertRaises(HTTPException) as error:
+            admin_auth.require_admin(self.request(method="PATCH"))
+
+        self.assertEqual(error.exception.status_code, 401)
+
+    def test_mutation_requires_the_configured_origin(self):
+        token = admin_auth.create_session_token("admin@example.com")
+
+        with self.assertRaises(HTTPException) as error:
+            admin_auth.require_admin(self.request(method="PATCH", token=token))
+
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_mutation_accepts_the_store_origin(self):
+        token = admin_auth.create_session_token("admin@example.com")
+
+        self.assertEqual(
+            admin_auth.require_admin(
+                self.request(
+                    method="PATCH",
+                    token=token,
+                    origin="https://central-7ykr.vercel.app",
+                )
+            ),
+            "admin@example.com",
+        )
+
+    def test_session_cookie_is_http_only_secure_and_same_site(self):
+        response = Response()
+        admin_auth.set_admin_cookie(response, "admin@example.com")
+        cookie = response.headers["set-cookie"]
+
+        self.assertIn("httponly", cookie.lower())
+        self.assertIn("secure", cookie.lower())
+        self.assertIn("samesite=strict", cookie.lower())
+        self.assertIn("path=/api/v1", cookie.lower())
+
+    def test_publication_draft_rejects_invalid_color_and_revision(self):
+        with self.assertRaises(ValidationError):
+            PublicationDraftPayload(accent="red")
+        with self.assertRaises(ValidationError):
+            PublicationDraftPayload(expected_revision=-1)
+
+    def test_admin_mutations_require_a_session(self):
+        guarded_routes = [
+            *api.core_router.routes,
+            *api.publication_router.routes,
+            *api.tiktok_creator_router.routes,
+        ]
+        expected = {
+            ("POST", "/products/import-url"),
+            ("PATCH", "/products/{product_id}/images"),
+            ("PATCH", "/products/{product_id}/model"),
+            ("POST", "/publications"),
+            ("PATCH", "/publications/{publication_id}"),
+            ("DELETE", "/publications/{publication_id}"),
+            ("POST", "/publications/{publication_id}/telegram"),
+            ("PUT", "/publications/{publication_id}/draft"),
+            ("DELETE", "/publications/{publication_id}/draft"),
+            ("POST", "/tiktok/creator/sync"),
+        }
+        protected = set()
+
+        for route in guarded_routes:
+            for method in route.methods or ():
+                if any(
+                    dependency.call is admin_auth.require_admin
+                    for dependency in route.dependant.dependencies
+                ):
+                    protected.add((method, route.path))
+
+        self.assertTrue(expected.issubset(protected))
+
+
+if __name__ == "__main__":
+    unittest.main()
