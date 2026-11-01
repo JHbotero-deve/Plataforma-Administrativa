@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlsplit
 
 import psycopg2
 
@@ -15,13 +16,31 @@ SQL_FILES = [
     "sql/010_personal_products.sql",
     "sql/011_store_commerce.sql",
     "sql/012_seo_affiliate_cart_invoice.sql",
-    "sql/013_meli_oauth.sql",
     "sql/014_link_queue.sql",
+    "sql/015_amazon_aliexpress_only.sql",
 ]
 
 
+def _postgres_dsn() -> str | None:
+    db_url = (os.getenv("DATABASE_URL") or "").strip()
+    if not db_url:
+        return None
+
+    for prefix in ("postgresql+psycopg://", "postgres+psycopg://"):
+        if db_url.startswith(prefix):
+            db_url = "postgresql://" + db_url[len(prefix):]
+            break
+
+    parsed = urlsplit(db_url)
+    if not parsed.scheme.startswith("postgres") or not parsed.hostname:
+        raise RuntimeError("DATABASE_URL debe ser una URL PostgreSQL válida.")
+    if parsed.hostname.lower() in {"un_host_publico", "localhost_placeholder"} or ":puerto" in db_url:
+        raise RuntimeError("DATABASE_URL contiene un host o puerto de ejemplo.")
+    return db_url
+
+
 def init_database():
-    db_url = os.getenv("DATABASE_URL")
+    db_url = _postgres_dsn()
     conn = psycopg2.connect(db_url) if db_url else psycopg2.connect(
         host=os.getenv("DB_HOST", "db"),
         port=os.getenv("DB_PORT", "5432"),

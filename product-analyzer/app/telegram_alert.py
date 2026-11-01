@@ -1,6 +1,7 @@
-from aliexpress_api import search_aliexpress
 import html
+import math
 import os
+import re
 import time
 from urllib.parse import urlparse
 
@@ -12,16 +13,25 @@ from url_import import detect_platform, import_url
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
-ALLOWED_PLATFORMS = {"mercadolibre", "amazon"}
+ALLOWED_PLATFORMS = {"amazon", "aliexpress"}
 ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios"}
 
 
+def _env(name, default=""):
+    target = name.replace("\u00a0", "").strip().casefold()
+    for key, candidate in os.environ.items():
+        normalized_key = key.replace("\u00a0", "").strip().casefold()
+        if normalized_key == target and candidate is not None and str(candidate).strip():
+            return str(candidate).strip()
+    return default
+
+
 def _token():
-    return os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_TOKEN")
+    return _env("TELEGRAM_BOT_TOKEN") or _env("BOT_TOKEN") or _env("TELEGRAM_TOKEN")
 
 
 def _allowed_chat(chat_id):
-    configured = os.getenv("TELEGRAM_CHAT_ID") or os.getenv("CHAT_ID")
+    configured = _env("TELEGRAM_CHAT_ID") or _env("CHAT_ID")
     if not configured:
         print("[telegram-bot] Bot bloqueado: TELEGRAM_CHAT_ID no está configurado.")
         return False
@@ -41,47 +51,67 @@ def _send(token, chat_id, text):
             timeout=10,
         )
         payload = r.json()
-        if not r.ok or not payload.get("ok"):
-            print(f"[telegram-bot] send rejected: {payload.get('description', 'respuesta inválida')}")
+        if not r.ok or not isinstance(payload, dict) or payload.get("ok") is not True:
+            print(f"[telegram-bot] send rejected: HTTP {r.status_code}")
             return False
         return True
     except (requests.RequestException, ValueError) as exc:
-        print(f"[telegram-bot] send error: {exc}")
+        print(f"[telegram-bot] send error: {type(exc).__name__}")
         return False
+
+
+def _score_text(value):
+    try:
+        score = float(value)
+        return f"{score:.1f}" if math.isfinite(score) else "N/D"
+    except (TypeError, ValueError, OverflowError):
+        return "N/D"
+
+
+def _is_http_url(value):
+    try:
+        parsed = urlparse(str(value or "").strip())
+        return parsed.scheme in ("http", "https") and bool(parsed.hostname)
+    except ValueError:
+        return False
+
+
+def _product_link(value):
+    url = str(value or "").strip()
+    return url if len(url) <= 1000 and _is_http_url(url) else None
 
 
 def _format_product(p):
     title = html.escape(str(p.get("title") or "Sin título")[:90])
     price = p.get("current_price")
-    currency = html.escape(str(p.get("currency") or ""))
-    platform = html.escape(str(p.get("platform") or "N/D"))
-    category = html.escape(str(p.get("category") or "N/D"))
-    rating = p.get("rating")
-    reviews = p.get("reviews_count")
-    sales = p.get("sales_estimate")
+    currency = html.escape(str(p.get("currency") or "")[:10])
+    platform = html.escape(str(p.get("platform") or "N/D")[:40])
+    category = html.escape(str(p.get("category") or "N/D")[:40])
+    rating = html.escape(str(p.get("rating") if p.get("rating") is not None else "N/D")[:20])
+    reviews = html.escape(str(p.get("reviews_count") if p.get("reviews_count") is not None else "N/D")[:20])
+    sales = html.escape(str(p.get("sales_estimate") if p.get("sales_estimate") is not None else "N/D")[:20])
     opportunity = p.get("opportunity_score")
     price_score = p.get("price_score")
     demand_score = p.get("demand_score")
     trend_score = p.get("trend_score")
-    url = str(p.get("product_url") or "").strip()
+    url = _product_link(p.get("affiliate_url") or p.get("product_url"))
 
     lines = [
         f"<b>{title}</b>",
         f"Precio: {price if price is not None else 'N/D'} {currency}".strip(),
-        f"Oportunidad: {round(float(opportunity), 1) if opportunity is not None else 'N/D'}/100",
+        f"Oportunidad: {_score_text(opportunity)}/100",
         (
             "Modelo: "
-            f"precio {round(float(price_score), 1) if price_score is not None else 'N/D'}, "
-            f"demanda {round(float(demand_score), 1) if demand_score is not None else 'N/D'}, "
-            f"tendencia {round(float(trend_score), 1) if trend_score is not None else 'N/D'}"
+            f"precio {_score_text(price_score)}, "
+            f"demanda {_score_text(demand_score)}, "
+            f"tendencia {_score_text(trend_score)}"
         ),
         f"Rating: {rating if rating is not None else 'N/D'} | Reseñas: {reviews if reviews is not None else 'N/D'}",
         f"Ventas estimadas: {sales if sales is not None else 'N/D'}",
         f"Plataforma: {platform}",
         f"Categoría: {category}",
     ]
-    parsed = urlparse(url)
-    if parsed.scheme in ("http", "https") and parsed.netloc:
+    if url:
         lines.append(f'<a href="{html.escape(url, quote=True)}">Ver producto</a>')
     return "\n".join(lines)
 
@@ -89,7 +119,7 @@ def _format_product(p):
 def _send_product(token, chat_id, product):
     image_url = str(product.get("image_url") or "").strip()
     text = _format_product(product)
-    if image_url.startswith(("http://", "https://")):
+    if _is_http_url(image_url) and len(text) <= 1024:
         try:
             r = requests.post(
                 f"{API_BASE}/bot{token}/sendPhoto",
@@ -102,11 +132,11 @@ def _send_product(token, chat_id, product):
                 timeout=15,
             )
             payload = r.json()
-            if r.ok and payload.get("ok"):
+            if r.ok and isinstance(payload, dict) and payload.get("ok") is True:
                 return True
-            print(f"[telegram-bot] sendPhoto rejected: {payload.get('description', 'respuesta inválida')}")
+            print(f"[telegram-bot] sendPhoto rejected: HTTP {r.status_code}")
         except (requests.RequestException, ValueError) as exc:
-            print(f"[telegram-bot] sendPhoto error: {exc}")
+            print(f"[telegram-bot] sendPhoto error: {type(exc).__name__}")
     return _send(token, chat_id, text)
 
 
@@ -116,7 +146,7 @@ def _top_products(limit=25):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.title, p.current_price, p.currency, p.product_url, p.image_url,
+                SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -140,65 +170,7 @@ def _top_products(limit=25):
     finally:
         conn.close()
 
-    live_results = []
-    try:
-        from amazon_api import search_products, _map_item, _map_fallback_item
-        items = search_products("deals discounts promotion", limit // 2 + 1)
-        tag = os.getenv("AMAZON_PARTNER_TAG", "").strip()
-        for item in items:
-            prod = _map_item(item, "general") or _map_fallback_item(item, "general")
-            if prod:
-                price = prod.get("price")
-                url = prod.get("product_url")
-                if tag and url:
-                    url = url + ("&" if "?" in url else "?") + f"tag={tag}"
-                live_results.append({
-                    "title": prod.get("title"),
-                    "current_price": price,
-                    "currency": prod.get("currency") or "USD",
-                    "product_url": url,
-                    "image_url": prod.get("image_url"),
-                    "rating": 4.8,
-                    "reviews_count": 500,
-                    "sales_estimate": 100,
-                    "platform": "amazon",
-                    "category": "ofertas 40%+",
-                    "price_score": 90.0,
-                    "demand_score": 85.0,
-                    "trend_score": 80.0,
-                    "opportunity_score": 92.0,
-                })
-    except Exception as exc:
-        print(f"[telegram-bot] top amazon error: {exc}")
-
-    try:
-        ae_items = search_aliexpress("hot deals sale promotion 50% off", limit // 2 + 1)
-        ae_tag = os.getenv("ALIEXPRESS_AFFILIATE_TAG", "").strip()
-        for item in ae_items:
-            url = item.get("product_url")
-            if ae_tag and url:
-                url = url + ("&" if "?" in url else "?") + f"aff_fcid={ae_tag}"
-            live_results.append({
-                "title": item.get("title"),
-                "current_price": item.get("price"),
-                "currency": "USD",
-                "product_url": url,
-                "image_url": item.get("image_url"),
-                "rating": 4.7,
-                "reviews_count": 300,
-                "sales_estimate": 80,
-                "platform": "aliexpress",
-                "category": "ofertas 40%+",
-                "price_score": 88.0,
-                "demand_score": 80.0,
-                "trend_score": 75.0,
-                "opportunity_score": 89.0,
-            })
-    except Exception as exc:
-        print(f"[telegram-bot] top aliexpress error: {exc}")
-
-    return live_results[:limit]
-
+    return []
 
 def _search_products(term, limit=8):
     conn = get_connection()
@@ -206,7 +178,7 @@ def _search_products(term, limit=8):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.title, p.current_price, p.currency, p.product_url, p.image_url,
+                SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -230,84 +202,41 @@ def _search_products(term, limit=8):
     finally:
         conn.close()
 
-    live_results = []
-    try:
-        from amazon_api import search_products, _map_item, _map_fallback_item
-        items = search_products(term, limit // 2 + 1)
-        tag = os.getenv("AMAZON_PARTNER_TAG", "").strip()
-        for item in items:
-            prod = _map_item(item, "general") or _map_fallback_item(item, "general")
-            if prod:
-                price = prod.get("price")
-                curr = prod.get("currency") or "USD"
-                url = prod.get("product_url")
-                if tag and url:
-                    url = url + ("&" if "?" in url else "?") + f"tag={tag}"
-                live_results.append({
-                    "title": prod.get("title"),
-                    "current_price": price,
-                    "currency": curr,
-                    "product_url": url,
-                    "image_url": prod.get("image_url"),
-                    "rating": prod.get("rating"),
-                    "reviews_count": prod.get("reviews_count", 0),
-                    "sales_estimate": None,
-                    "platform": "amazon",
-                    "category": "general",
-                    "price_score": 75.0,
-                    "demand_score": 75.0,
-                    "trend_score": 50.0,
-                    "opportunity_score": 80.0,
-                })
-    except Exception as exc:
-        print(f"[telegram-bot] live amazon search error: {exc}")
-
-    try:
-        ae_items = search_aliexpress(term, limit // 2 + 1)
-        ae_tag = os.getenv("ALIEXPRESS_AFFILIATE_TAG", "").strip()
-        for item in ae_items:
-            url = item.get("product_url")
-            if ae_tag and url:
-                url = url + ("&" if "?" in url else "?") + f"aff_fcid={ae_tag}"
-            live_results.append({
-                "title": item.get("title"),
-                "current_price": item.get("price"),
-                "currency": "USD",
-                "product_url": url,
-                "image_url": item.get("image_url"),
-                "rating": None,
-                "reviews_count": 0,
-                "sales_estimate": None,
-                "platform": "aliexpress",
-                "category": "general",
-                "price_score": 75.0,
-                "demand_score": 70.0,
-                "trend_score": 50.0,
-                "opportunity_score": 78.0,
-            })
-    except Exception as exc:
-        print(f"[telegram-bot] live aliexpress search error: {exc}")
-
-    return live_results
-
+    return []
 
 def _add_url(argument):
-    parts = [part.strip() for part in argument.split("|")]
-    if len(parts) < 2:
-        return None, "Uso: /agregar categoría|url|precio|título|imagen", None
+    parts = [part.strip() for part in (argument or "").split("|")]
+    if not parts or not parts[0]:
+        return None, (
+            "Uso: /agregar URL\n"
+            "Opcional: /agregar categoría|URL|precio|título|imagen|moneda"
+        ), None
 
-    category, url = parts[0].lower(), parts[1]
+    if parts[0].lower() in ALLOWED_CATEGORIES:
+        category = parts[0].lower()
+        if len(parts) < 2 or not parts[1]:
+            return None, "Incluye la URL después de la categoría.", None
+        url = parts[1]
+        details = parts[2:]
+    else:
+        category = "accesorios"
+        url = parts[0]
+        details = parts[1:]
+
     if category not in ALLOWED_CATEGORIES:
         return None, "Categoría no válida.", None
 
     try:
-        price = float(parts[2]) if len(parts) > 2 and parts[2] else None
+        price = float(details[0]) if details and details[0] else None
+        if price is not None and (not math.isfinite(price) or price <= 0):
+            return None, "El precio debe ser un número mayor que cero.", None
         product = import_url(
             url,
             category,
-            title=parts[3] if len(parts) > 3 and parts[3] else None,
+            title=details[1] if len(details) > 1 and details[1] else None,
             price=price,
-            image_url=parts[4] if len(parts) > 4 and parts[4] else None,
+            image_url=details[2] if len(details) > 2 and details[2] else None,
+            currency=details[3] if len(details) > 3 and details[3] else "USD",
         )
         if product["platform"] not in ALLOWED_PLATFORMS:
             return None, "Plataforma no habilitada para importación.", None
@@ -334,7 +263,7 @@ def _add_url(argument):
         finally:
             conn.close()
     except Exception as exc:
-        print(f"[telegram-bot] url import error: {exc}")
+        print(f"[telegram-bot] url import error: {type(exc).__name__}")
         return None, "No fue posible agregar el producto desde la URL.", None
 
 
@@ -346,11 +275,14 @@ def _model_product(argument):
     if platform not in ALLOWED_PLATFORMS or category not in ALLOWED_CATEGORIES:
         return None, "Plataforma o categoría no permitida."
     try:
+        price = float(parts[4])
+        if not math.isfinite(price) or price <= 0:
+            return None, "El precio debe ser un número mayor que cero."
         product = {
             "external_id": parts[2],
             "title": parts[3],
-            "price": float(parts[4]),
-            "currency": "COP" if platform == "mercadolibre" else "USD",
+            "price": price,
+            "currency": "USD",
             "product_url": parts[5],
             "rating": float(parts[6]) if parts[6] else None,
             "reviews_count": int(parts[7] or 0),
@@ -377,41 +309,47 @@ def _model_product(argument):
         finally:
             conn.close()
     except Exception as exc:
-        return None, str(exc)
+        print(f"[telegram-bot] product modeling error: {type(exc).__name__}")
+        return None, "No fue posible guardar el producto. Verifica los datos e inténtalo de nuevo."
 
 
 def _handle(token, chat_id, text):
     command, _, argument = text.partition(" ")
-    command = command.lower().strip()
+    command = command.split("@", 1)[0].lower().strip()
 
     if not command.startswith("/"):
-        for part in text.split():
+        for candidate in text.split():
+            candidate = candidate.strip().rstrip(".,;)")
             try:
-                if detect_platform(part) != "amazon":
-                    continue
+                detect_platform(candidate)
             except ValueError:
                 continue
-            try:
-                product = import_url(part, "accesorios")
-            except Exception as exc:
-                print(f"[telegram-bot] amazon url error: {exc}")
-                return _send(token, chat_id, "No pude leer ese enlace de Amazon.")
-            return _send_product(token, chat_id, {
-                "title": product["title"],
-                "current_price": product.get("price"),
-                "currency": product.get("currency"),
-                "product_url": product["product_url"],
-                "image_url": product.get("image_url"),
-                "platform": product["platform"],
-            })
+            result, payload, score = _add_url("accesorios|" + candidate)
+            if result is None:
+                return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
+            score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score pendiente: envía precio con /agregar"
+            message = (
+                "<b>URL recibida e importada</b>\n"
+                + html.escape(str(payload["title"])[:250]) + "\n"
+                + "Plataforma: " + html.escape(payload["platform"]) + "\n"
+                + score_text + "\n"
+                + (
+                    '<a href="' + html.escape(link, quote=True) + '">Abrir producto original</a>'
+                    if (link := _product_link(payload.get("affiliate_url") or payload["product_url"]))
+                    else "Enlace original no disponible"
+                )
+            )
+            return _send(token, chat_id, message)
+        return _send(token, chat_id, "Envía una URL válida de Amazon o AliExpress, o usa /help.")
 
     if command in ("/start", "/help"):
         return _send(token, chat_id, (
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
             "/buscar producto — buscar en los datos modelados\n"
-            "/modelar — registrar y puntuar un producto\n"
-            "/agregar — importar un producto desde Amazon o Mercado Libre por URL\n"
+            "/modelar plataforma|categoría|id|título|precio|url|rating|reseñas|ventas|imagen\n"
+            "/agregar URL — importar Amazon o AliExpress (categoría predeterminada: accesorios)\n"
+            "/agregar categoría|URL|precio|título|imagen|moneda\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda"
         ))
@@ -422,40 +360,71 @@ def _handle(token, chat_id, text):
             limit = min(max(int(argument.strip()), 1), 100)
         products = _top_products(limit=limit)
         if not products:
-            return _send(token, chat_id, "No hay oportunidades de 40%+ disponibles en este momento.")
-        _send(token, chat_id, f"🔥 <b>Top Oportunidades 40%+ (Mostrando {len(products)})</b>")
+            return _send(token, chat_id, "No hay oportunidades con score 60+ disponibles en este momento.")
+        if not _send(token, chat_id, f"<b>Top oportunidades (score 60+, mostrando {len(products)})</b>"):
+            return False
         for i, product in enumerate(products, 1):
             product["title"] = f"{i}. {product['title']}"
-            _send_product(token, chat_id, product)
+            if not _send_product(token, chat_id, product):
+                return False
         return True
 
     if command == "/buscar":
         term = argument.strip()
         if not term:
             return _send(token, chat_id, "Uso: /buscar zapatillas")
+        term = term[:100]
         products = _search_products(term)
         if not products:
-            return _send(token, chat_id, f"No encontré productos modelados para: {html.escape(term)}")
-        _send(token, chat_id, f"<b>Resultados: {html.escape(term)}</b>")
+            return _send(
+                token,
+                chat_id,
+                f"No encontré productos modelados para: {html.escape(term)}\n"
+                "Puedes agregar uno con /agregar URL.",
+            )
+        if not _send(token, chat_id, f"<b>Resultados: {html.escape(term)}</b>"):
+            return False
         for product in products:
-            _send_product(token, chat_id, product)
+            if not _send_product(token, chat_id, product):
+                return False
         return True
 
     if command == "/agregar":
+        if not argument.strip():
+            return _send(
+                token,
+                chat_id,
+                "Uso: /agregar URL\n"
+                "Opcional: /agregar categoría|URL|precio|título|imagen|moneda",
+            )
         result, payload, score = _add_url(argument.strip())
         if result is None:
             return _send(token, chat_id, f"<b>Error de importación</b>\n{html.escape(str(payload))}")
         score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score: pendiente (sin precio)"
+        link = _product_link(payload.get("affiliate_url") or payload["product_url"])
         message = (
-            f"<b>Producto agregado</b>\n{html.escape(payload['title'])}\n"
+            f"<b>Producto agregado</b>\n{html.escape(str(payload['title'])[:250])}\n"
             f"Plataforma: {html.escape(payload['platform'])}\n{score_text}\n"
-            f'<a href="{html.escape(payload["product_url"], quote=True)}">Abrir producto original</a>'
+            + (
+                f'<a href="{html.escape(link, quote=True)}">Abrir producto original</a>'
+                if link
+                else "Enlace original no disponible"
+            )
         )
-        if payload.get("image_url"):
-            message += f'\nImagen: <a href="{html.escape(payload["image_url"], quote=True)}">ver imagen</a>'
+        if not link:
+            message += "\nAfiliación pendiente: revisa las credenciales de la tienda."
+        image = _product_link(payload.get("image_url"))
+        if image:
+            message += f'\nImagen: <a href="{html.escape(image, quote=True)}">ver imagen</a>'
         return _send(token, chat_id, message)
 
     if command == "/modelar":
+        if not argument.strip():
+            return _send(
+                token,
+                chat_id,
+                "Uso: /modelar plataforma|categoría|id|título|precio|url|rating|reseñas|ventas|imagen",
+            )
         result, error = _model_product(argument.strip())
         if result is None:
             return _send(token, chat_id, f"<b>Error de modelado</b>\n{html.escape(str(error))}")
@@ -476,7 +445,13 @@ def _handle(token, chat_id, text):
                     """
                 )
                 modeled = cur.fetchone()["modeled"]
-            return _send(token, chat_id, f"<b>Estado del catálogo</b>\nProductos activos: {total}\nProductos modelados: {modeled}")
+            message = (
+                f"<b>Estado del catálogo</b>\nProductos activos: {total}\n"
+                f"Productos modelados: {modeled}"
+            )
+            if not total:
+                message += "\nAgrega el primer producto con /agregar URL."
+            return _send(token, chat_id, message)
         finally:
             conn.close()
 
@@ -491,12 +466,12 @@ def _clear_webhook(token):
             timeout=10,
         )
         payload = response.json()
-        if not response.ok or not payload.get("ok"):
-            print(f"[telegram-bot] no se pudo limpiar webhook: {payload.get('description', 'respuesta inválida')}")
+        if not response.ok or not isinstance(payload, dict) or payload.get("ok") is not True:
+            print(f"[telegram-bot] no se pudo limpiar webhook: HTTP {response.status_code}")
             return False
         return True
     except (requests.RequestException, ValueError) as exc:
-        print(f"[telegram-bot] error limpiando webhook: {exc}")
+        print(f"[telegram-bot] error limpiando webhook: {type(exc).__name__}")
         return False
 
 
@@ -520,19 +495,21 @@ def run_bot():
     if not token:
         print("[telegram-bot] Bot deshabilitado: falta TELEGRAM_BOT_TOKEN.")
         return
-    if not (os.getenv("TELEGRAM_CHAT_ID") or os.getenv("CHAT_ID")):
+    if not (_env("TELEGRAM_CHAT_ID") or _env("CHAT_ID")):
         print("[telegram-bot] Bot deshabilitado: falta TELEGRAM_CHAT_ID.")
         return
 
-    try:
-        lock_conn = _acquire_polling_lock()
-    except Exception as exc:
-        print(f"[telegram-bot] Bot deshabilitado: no se pudo obtener el bloqueo de polling ({type(exc).__name__}).")
-        return
-
-    if lock_conn is None:
-        print("[telegram-bot] Otra instancia ya posee el consumidor de Telegram; esta instancia se detiene.")
-        return
+    lock_conn = None
+    while lock_conn is None:
+        try:
+            lock_conn = _acquire_polling_lock()
+        except Exception as exc:
+            # El detalle de la excepción SQL permite diagnosticar el bloqueo sin imprimir credenciales.
+            detail = " ".join(str(exc).split())[:240]
+            print(f"[telegram-bot] No se pudo obtener el bloqueo de polling ({type(exc).__name__}: {detail}); se reintentará.")
+        if lock_conn is None:
+            print("[telegram-bot] Bloqueo de polling ocupado; se reintentará sin detener el servicio.")
+            time.sleep(max(POLL_INTERVAL, 10))
 
     try:
         _clear_webhook(token)
@@ -551,17 +528,25 @@ def run_bot():
                 )
                 response.raise_for_status()
                 payload = response.json()
-                if not payload.get("ok"):
-                    raise RuntimeError(payload.get("description", "respuesta inválida"))
+                if not isinstance(payload, dict) or payload.get("ok") is not True:
+                    raise RuntimeError("Respuesta inválida de Telegram")
                 for update in payload.get("result", []):
-                    offset = update["update_id"] + 1
-                    message = update.get("message") or {}
-                    chat = message.get("chat") or {}
-                    text = message.get("text") or ""
-                    chat_id = chat.get("id")
-                    if chat_id is None or not _allowed_chat(chat_id) or not text:
+                    if not isinstance(update, dict) or not isinstance(update.get("update_id"), int):
+                        print("[telegram-bot] update inválido recibido; se ignora.")
                         continue
-                    _handle(token, chat_id, text)
+                    offset = update["update_id"] + 1
+                    chat_id = None
+                    try:
+                        message = update.get("message") or {}
+                        chat = message.get("chat") or {}
+                        text = message.get("text") or ""
+                        chat_id = chat.get("id")
+                        if chat_id is not None and _allowed_chat(chat_id) and text:
+                            _handle(token, chat_id, text)
+                    except Exception as exc:
+                        print(f"[telegram-bot] error procesando mensaje: {type(exc).__name__}")
+                        if chat_id is not None:
+                            _send(token, chat_id, "No pude procesar el mensaje. Usa /help para ver los comandos.")
             except requests.HTTPError as exc:
                 response = getattr(exc, "response", None)
                 status = response.status_code if response is not None else "?"

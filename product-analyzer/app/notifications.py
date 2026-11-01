@@ -1,13 +1,58 @@
 import html
 import os
+from urllib.parse import urlsplit
 
 import requests
 
 
+def _env_value(*names):
+    for name in names:
+        normalized_name = name.replace("\u00a0", "").strip().casefold()
+        for key, value in os.environ.items():
+            normalized_key = key.replace("\u00a0", "").strip().casefold()
+            if normalized_key == normalized_name and value and value.strip():
+                return value.strip()
+    return ""
+
+
 def _config():
-    token = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID") or os.getenv("CHAT_ID")
-    return token, chat_id
+    return (
+        _env_value("TELEGRAM_BOT_TOKEN", "BOT_TOKEN", "TELEGRAM_TOKEN"),
+        _env_value("TELEGRAM_CHAT_ID", "CHAT_ID"),
+    )
+
+
+def _http_url(value):
+    url = str(value or "").strip()
+    try:
+        parsed = urlsplit(url)
+        if parsed.scheme in ("http", "https") and parsed.hostname:
+            return url
+    except ValueError:
+        pass
+    return None
+
+
+def _post_telegram(token, method, payload, timeout):
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{token}/{method}",
+            json=payload,
+            timeout=timeout,
+        )
+    except requests.RequestException as exc:
+        print(f"[telegram] connection error: {type(exc).__name__}")
+        return False
+
+    try:
+        result = response.json()
+    except ValueError:
+        result = {}
+
+    if not response.ok or not isinstance(result, dict) or result.get("ok") is not True:
+        print(f"[telegram] {method} rejected: HTTP {response.status_code}")
+        return False
+    return True
 
 
 def send_telegram_alert(product_info):
@@ -16,12 +61,12 @@ def send_telegram_alert(product_info):
         print("[telegram] Variables TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID no configuradas.")
         return False
 
-    title = html.escape(str(product_info.get("title", "Producto"))[:120])
-    price = html.escape(str(product_info.get("price", product_info.get("current_price", "N/D"))))
-    score = html.escape(str(product_info.get("score", product_info.get("opportunity_score", "N/D"))))
-    category = html.escape(str(product_info.get("category", "N/D")))
-    platform = html.escape(str(product_info.get("platform", "Mercado Libre")))
-    url = product_info.get("url") or product_info.get("product_url")
+    title = html.escape(str(product_info.get("title") or "Producto")[:120])
+    price = html.escape(str(product_info.get("price", product_info.get("current_price", "N/D")))[:80])
+    score = html.escape(str(product_info.get("score", product_info.get("opportunity_score", "N/D")))[:40])
+    category = html.escape(str(product_info.get("category") or "N/D")[:100])
+    platform = html.escape(str(product_info.get("platform") or "Central")[:80])
+    url = _http_url(product_info.get("url") or product_info.get("product_url"))
 
     lines = [
         "<b>Oportunidad detectada</b>",
@@ -31,55 +76,51 @@ def send_telegram_alert(product_info):
         f"<b>Plataforma:</b> {platform}",
         f"<b>Categoría:</b> {category}",
     ]
+    if product_info.get("affiliate_link_generated") is False:
+        lines.append("<b>Afiliación:</b> pendiente de configurar o generar.")
     if url:
-        safe_url = html.escape(str(url), quote=True)
-        lines.append(f'<a href="{safe_url}">Ver producto</a>')
+        lines.append(f'<a href="{html.escape(url, quote=True)}">Ver producto</a>')
 
-    return _send(token, chat_id, "\n".join(lines))
-
-
-def _send(token, chat_id, message):
-    try:
-        response = requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={
-                "chat_id": chat_id,
-                "text": message,
-                "parse_mode": "HTML",
-                "disable_web_page_preview": False,
-            },
-            timeout=10,
-        )
-        if response.ok:
-            return True
-        print(f"[telegram] API error: {response.status_code}")
-        return False
-    except requests.RequestException as exc:
-        print(f"[telegram] connection error: {exc}")
-        return False
+    return _post_telegram(
+        token,
+        "sendMessage",
+        {
+            "chat_id": chat_id,
+            "text": "\n".join(lines),
+            "parse_mode": "HTML",
+            "disable_web_page_preview": False,
+        },
+        timeout=10,
+    )
 
 
 def send_telegram_publication(publication):
     token, chat_id = _config()
     if not token or not chat_id:
         raise RuntimeError("Configura TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID")
-    title = html.escape(str(publication.get("title","Producto"))[:180])
+
+    title = html.escape(str(publication.get("title") or "Producto")[:180])
     subtitle = html.escape(str(publication.get("subtitle") or "")[:300])
-    price = html.escape(str(publication.get("price_display") or "Consultar"))
-    url = publication.get("store_url") or publication.get("product_url")
-    lines=[f"<b>{title}</b>"]
-    if subtitle: lines.append(subtitle)
+    price = html.escape(str(publication.get("price_display") or "Consultar")[:100])
+    url = _http_url(publication.get("store_url") or publication.get("product_url"))
+    lines = [f"<b>{title}</b>"]
+    if subtitle:
+        lines.append(subtitle)
     lines.append(f"<b>Precio:</b> {price}")
-    if url: lines.append(f'<a href="{html.escape(str(url), quote=True)}">Ver producto</a>')
-    caption="\n".join(lines)
-    try:
-        if publication.get("image_url"):
-            response=requests.post(f"https://api.telegram.org/bot{token}/sendPhoto",
-                json={"chat_id":chat_id,"photo":publication["image_url"],"caption":caption,"parse_mode":"HTML"},timeout=15)
-        else:
-            response=requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id":chat_id,"text":caption,"parse_mode":"HTML","disable_web_page_preview":False},timeout=15)
-        response.raise_for_status()
-        return True
-    except requests.RequestException as exc:
-        raise RuntimeError(f"Telegram rechazó la publicación: {exc}") from exc
+    if url:
+        lines.append(f'<a href="{html.escape(url, quote=True)}">Ver producto</a>')
+    caption = "\n".join(lines)
+
+    image_url = _http_url(publication.get("image_url"))
+    method = "sendPhoto" if image_url else "sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "parse_mode": "HTML",
+    }
+    if image_url:
+        payload.update({"photo": image_url, "caption": caption})
+    else:
+        payload.update({"text": caption, "disable_web_page_preview": False})
+
+    if not _post_telegram(token, method, payload, timeout=15):
+        raise RuntimeError("Telegram no pudo enviar la publicación.")

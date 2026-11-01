@@ -1,53 +1,32 @@
 # Central
 
-Central es un radar de oportunidades de productos reales. El sistema ingiere fuentes comerciales, persiste los productos en PostgreSQL, calcula una señal de oportunidad y expone el catálogo mediante una interfaz web.
+Central es un catálogo de productos reales con importación autorizada por URL,
+análisis de oportunidades, publicación web y herramientas de monetización.
 
 ## Arquitectura
 
-- Vercel: frontend estático.
-- Railway: API, worker y bot de Telegram.
-- PostgreSQL: persistencia del catálogo, histórico y monetización.
-- Amazon: importación por URL y lote inicial configurado.
-- TikTok Shop Creator: integración preparada para productos del Showcase.
-- Telegram: alertas y bot interactivo.
-- Wompi: checkout y recepción de eventos preparados.
+- Frontend estático: `product-analyzer/frontend`, desplegado en Vercel.
+- API, worker y bot: `product-analyzer/app`, desplegados en Railway.
+- Persistencia: PostgreSQL.
+- Fuentes de producto admitidas: Amazon y AliExpress.
+- Notificaciones e interacción: Telegram.
+- Pagos: Wompi.
 
-## Ciclo del catálogo
+## Importación de productos
 
-El worker ejecuta una ingesta al iniciar y después cada 2 horas. Los productos activos caducan a las 48 horas. Cuando un producto vuelve a detectarse, su registro se actualiza y su vigencia se renueva otras 48 horas.
+Amazon y AliExpress se importan exclusivamente mediante enlaces proporcionados
+por el usuario o por los CLI autorizados. No se buscan productos ni se extraen
+datos automáticamente de páginas de marketplaces. Los CLI pueden enviar título,
+precio, moneda e imagen junto con el enlace.
 
-## Frontend
+Los enlaces afiliados se generan cuando están configuradas las credenciales de
+la plataforma. Si no existen, el producto conserva su URL original.
 
-El frontend se sirve desde `product-analyzer/frontend` mediante Vercel. Consume la API versionada a través de `/api`, que Vercel redirige al servicio Railway.
+## Telegram
 
-Funciones disponibles:
-
-- Oportunidades ordenadas por score.
-- Catálogo de productos reales.
-- Importación de Amazon y Mercado Libre mediante URL.
-- Imágenes reales cuando la fuente las proporciona.
-- Soporte de modelo 3D real dentro de la misma tarjeta cuando `model_url` está configurado.
-- Estado de fuentes y vigencia del catálogo.
-
-No existe fallback de productos ficticios en producción.
-
-### Tarjetas de producto
-
-La tarjeta es el contenedor único del producto. Si existe `model_url` válido, la zona multimedia usa un visor 3D interactivo con rotación y zoom dentro de la propia tarjeta. Si no existe modelo 3D, conserva las imágenes reales disponibles y permite recorrerlas dentro de la tarjeta. No se fabrica un modelo 3D cuando la fuente no lo proporciona.
-
-## API
-
-- `GET /api/v1/health`
-- `GET /api/v1/pipeline/summary`
-- `GET /api/v1/products`
-- `POST /api/v1/products/import-url`
-- `GET /api/v1/products/{id}`
-- `PATCH /api/v1/products/{id}/model`
-- `GET /api/v1/comparison`
-- `GET /api/v1/opportunities/top`
-- `GET /api/v1/monetize/plans`
-- `POST /api/v1/wompi/checkout/subscription`
-- `POST /api/v1/wompi/events`
+El bot ofrece `/top`, `/buscar`, `/modelar`, `/estado` y `/agregar URL`.
+La importación por URL admite Amazon y AliExpress. Configura
+`TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` en Railway para habilitarlo.
 
 ## Desarrollo local
 
@@ -58,15 +37,8 @@ Copy-Item .env.example .env
 docker compose up -d --build
 ```
 
-Servicios locales:
+Frontend: <http://localhost:3000> · API: <http://localhost:8000> ·
+Adminer: <http://localhost:8080> · PostgreSQL: `localhost:5435`.
 
-- Frontend: http://localhost:3000
-- API: http://localhost:8000
-- Adminer: http://localhost:8080
-- PostgreSQL: localhost:5435
-
-Si Docker Desktop no está ejecutando el motor Linux, `docker compose` no podrá iniciar los servicios.
-
-## Seguridad
-
-Las credenciales se cargan mediante variables de entorno y no se guardan en Git. No colocar tokens, secretos de Wompi, claves privadas de plataformas ni credenciales de base de datos en archivos versionados.
+Las credenciales deben configurarse como variables de entorno y no guardarse en
+Git.

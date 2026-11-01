@@ -1,38 +1,78 @@
 import os
-from urllib.parse import quote
+import re
+
+import requests
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
+from affiliate_links import generate_aliexpress_affiliate_url
 
-def get_connection(max_retries: int = 3, delay: float = 1.0):
-    db_url = os.getenv("DATABASE_URL", "").strip()
+def _database_url() -> str:
+    db_url = (os.getenv("DATABASE_URL") or "").strip()
     if not db_url:
         raise RuntimeError("DATABASE_URL es obligatoria; Central usa PostgreSQL de Railway como unica base de datos.")
 
-    last_error = None
-    for attempt in range(1, max_retries + 1):
+    # psycopg2 expects a PostgreSQL URL, not SQLAlchemy's driver-qualified URL.
+    for prefix in ("postgresql+psycopg://", "postgres+psycopg://"):
+        if db_url.startswith(prefix):
+            db_url = "postgresql://" + db_url[len(prefix):]
+            break
+
+    parsed = urlsplit(db_url)
+    if not parsed.scheme.startswith("postgres") or not parsed.hostname:
+        raise RuntimeError("DATABASE_URL no es una URL PostgreSQL válida. Configura Railway con la referencia ${{Postgres.DATABASE_URL}}.")
+    if parsed.hostname.lower() in {"un_host_publico", "localhost_placeholder"} or ":puerto" in db_url:
+        raise RuntimeError("DATABASE_URL contiene un host/puerto de ejemplo. Configura la referencia ${{Postgres.DATABASE_URL}} en Railway.")
+    return db_url
+
+
+def get_connection():
+    return psycopg2.connect(_database_url(), cursor_factory=RealDictCursor)
+
+
+def _env_value(name: str, default: str = "") -> str:
+    value = os.getenv(name)
+    if value and value.strip():
+        return value.strip()
+    target = name.strip().replace("\u00a0", "").casefold()
+    for key, candidate in os.environ.items():
+        if key.strip().replace("\u00a0", "").casefold() == target and candidate and str(candidate).strip():
+            return str(candidate).strip()
+    return default
+
+def _affiliate_url(product: dict, platform_name: str | None = None) -> str | None:
+    url = (product.get("product_url") or "").strip()
+    platform = str(platform_name or product.get("platform") or "").strip().lower()
+    if not url:
+        return None
+    if platform == "amazon":
+        tag = (_env_value("AMAZON_PARTNER_TAG") or _env_value("AMAZON_ASSOCIATE_TAG")).strip()
+        if not tag:
+            return None
+        parts = urlsplit(url)
+        query = dict(parse_qsl(parts.query, keep_blank_values=True))
+        if "tag" in query and query["tag"]:
+            return url
+        if not re.search(r"/(?:dp|gp/product|gp/aw/d)/([A-Z0-9]{10})(?:[/?]|$)", parts.path, re.I):
+            return None
+        query["tag"] = tag
+        tracking = _env_value("AMAZON_TRACKING_ID")
+        if tracking:
+            query["ascsubtag"] = tracking
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+    if platform == "aliexpress":
         try:
-            return psycopg2.connect(db_url, cursor_factory=RealDictCursor)
-        except Exception as e:
-            last_error = e
-            if attempt < max_retries:
-                time.sleep(delay * attempt)
-            else:
-                raise RuntimeError(f"No se pudo conectar a la base de datos tras {max_retries} intentos: {last_error}")
-
-
-def _affiliate_url(product: dict) -> str | None:
-    url=(product.get("product_url") or "").strip()
-    if product.get("platform")!="amazon" or not url: return None
-    tag=(os.getenv("AMAZON_PARTNER_TAG") or os.getenv("AMAZON_ASSOCIATE_TAG") or "").strip()
-    if not tag: return None
-    result=url+("&" if "?" in url else "?")+"tag="+quote(tag,safe="")
-    tracking=os.getenv("AMAZON_TRACKING_ID","").strip()
-    if tracking: result+="&ascsubtag="+quote(tracking,safe="")
-    return result
-
+            return generate_aliexpress_affiliate_url(url)
+        except (requests.RequestException, ValueError, RuntimeError) as exc:
+            print(f"[aliexpress] enlace afiliado no generado: {type(exc).__name__}")
+            return None
+    return None
 def upsert_product(conn, platform_name: str, category_name: str, product: dict):
+    # Generar el enlace fuera del cursor para no mantener una consulta abierta durante la llamada externa.
+    affiliate_url = _affiliate_url(product, platform_name)
+    product["affiliate_url"] = affiliate_url
     with conn.cursor() as cur:
         cur.execute("SELECT id FROM platforms WHERE name = %s", (platform_name,))
         platform = cur.fetchone()
@@ -104,7 +144,7 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
                 product.get("image_url"),
                 Json(product.get("gallery_urls") or ([product.get("image_url")] if product.get("image_url") else [])),
                 product.get("product_url"),
-                _affiliate_url(product),
+                affiliate_url,
                 product.get("price"),
                 product.get("currency") or "COP",
                 product.get("rating"),

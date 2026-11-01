@@ -72,34 +72,52 @@ class OrderCreate(BaseModel):
 @router.post("/orders")
 def create_order(order: OrderCreate, _: None = Depends(require_admin_key)):
     conn = get_connection()
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO orders (user_id, product_id, quantity, sale_price, supplier_cost)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id, margin
-            """,
-            (order.user_id, order.product_id, order.quantity,
-                order.sale_price, order.supplier_cost),
-        )
-        result = cur.fetchone()
-    conn.commit()
-    conn.close()
-    return {"order_id": result["id"], "margin": result["margin"]}
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO orders (
+                    user_id, product_id, quantity, sale_price, supplier_cost,
+                    product_title_snapshot
+                )
+                SELECT %s, p.id, %s, %s, %s, p.title
+                FROM products p WHERE p.id = %s
+                RETURNING id, margin
+                """,
+                (
+                    order.user_id,
+                    order.quantity,
+                    order.sale_price,
+                    order.supplier_cost,
+                    order.product_id,
+                ),
+            )
+            result = cur.fetchone()
+            if not result:
+                raise HTTPException(404, "Producto no encontrado")
+        conn.commit()
+        return {"order_id": result["id"], "margin": result["margin"]}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 @router.get("/orders/{user_id}")
 def list_orders(user_id: int, _: None = Depends(require_admin_key)):
     conn = get_connection()
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT o.*, p.title FROM orders o JOIN products p ON p.id = o.product_id "
-            "WHERE o.user_id = %s ORDER BY o.created_at DESC",
-            (user_id,),
-        )
-        results = cur.fetchall()
-    conn.close()
-    return results
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT o.*, COALESCE(o.product_title_snapshot, p.title) AS title "
+                "FROM orders o LEFT JOIN products p ON p.id = o.product_id "
+                "WHERE o.user_id = %s ORDER BY o.created_at DESC",
+                (user_id,),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
 
 class SubscribeRequest(BaseModel):
     user_id: int
@@ -151,4 +169,3 @@ def revenue_summary(_: None = Depends(require_admin_key)):
         results = cur.fetchall()
     conn.close()
     return results
-
