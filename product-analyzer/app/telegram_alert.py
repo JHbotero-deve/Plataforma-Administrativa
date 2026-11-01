@@ -224,10 +224,10 @@ def _add_url(argument):
         details = parts[1:]
 
     if category not in ALLOWED_CATEGORIES:
-        return None, "Categoría no válida.", None
+        return None, "Categoría no válida. Usa ropa, calzado o accesorios.", None
 
     try:
-        price = float(details[0]) if details and details[0] else None
+        price = float(details[0].replace(",", ".")) if details and details[0] else None
         if price is not None and (not math.isfinite(price) or price <= 0):
             return None, "El precio debe ser un número mayor que cero.", None
         product = import_url(
@@ -251,9 +251,8 @@ def _add_url(argument):
                         """
                         SELECT AVG(p.current_price) AS category_avg
                         FROM products p
-                        JOIN categories c ON c.id = p.category_id
-                        WHERE c.name = %s AND p.currency = %s
-                          AND p.current_price IS NOT NULL AND p.is_active = TRUE
+                        WHERE p.category_id = (SELECT id FROM categories WHERE name = %s)
+                          AND p.currency = %s AND p.current_price IS NOT NULL AND p.is_active = TRUE
                         """,
                         (category, product["currency"]),
                     )
@@ -262,6 +261,8 @@ def _add_url(argument):
             return product_id, product, score
         finally:
             conn.close()
+    except (TypeError, ValueError) as exc:
+        return None, str(exc) or "Precio no válido. Usa un número, por ejemplo 29.99.", None
     except Exception as exc:
         print(f"[telegram-bot] url import error: {type(exc).__name__}")
         return None, "No fue posible agregar el producto desde la URL.", None
@@ -313,9 +314,72 @@ def _model_product(argument):
         return None, "No fue posible guardar el producto. Verifica los datos e inténtalo de nuevo."
 
 
+def _model_active_products():
+    """Puntúa en lote productos activos con precio y categoría."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.id, p.current_price,
+                       COALESCE((
+                           SELECT AVG(p2.current_price)
+                           FROM products p2
+                           WHERE p2.category_id = p.category_id
+                             AND p2.currency = p.currency
+                             AND p2.is_active = TRUE
+                             AND p2.current_price IS NOT NULL
+                       ), p.current_price) AS category_avg
+                FROM products p
+                WHERE p.is_active = TRUE
+                  AND p.current_price IS NOT NULL
+                  AND p.current_price > 0
+                  AND p.category_id IS NOT NULL
+                ORDER BY p.updated_at DESC
+                LIMIT 500
+                """
+            )
+            products = cur.fetchall()
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE current_price IS NOT NULL
+                          AND current_price > 0
+                          AND category_id IS NOT NULL
+                    ) AS eligible,
+                    COUNT(*) AS active_total
+                FROM products
+                WHERE is_active = TRUE
+                """
+            )
+            counts = cur.fetchone()
+            eligible_total = int(counts["eligible"] or 0)
+            active_total = int(counts["active_total"] or 0)
+        scored = 0
+        errors = 0
+        for product in products:
+            try:
+                score_product(conn, product["id"], float(product["category_avg"] or product["current_price"]))
+                scored += 1
+            except Exception as exc:
+                errors += 1
+                print(f"[telegram-bot] modelado fallido para producto {product['id']}: {type(exc).__name__}")
+        missing_data = max(active_total - eligible_total, 0)
+        remaining = max(eligible_total - len(products), 0)
+        return scored, missing_data, errors, remaining
+    finally:
+        conn.close()
+
+
 def _handle(token, chat_id, text):
-    command, _, argument = text.partition(" ")
-    command = command.split("@", 1)[0].lower().strip()
+    match = re.match(r"^\s*/\s*([a-zA-Z_]+)(?:@\w+)?(?:\s+(.*))?$", text or "")
+    if match:
+        command = "/" + match.group(1).lower()
+        argument = (match.group(2) or "").strip()
+    else:
+        command, _, argument = (text or "").partition(" ")
+        command = command.lower().strip()
 
     if not command.startswith("/"):
         for candidate in text.split():
@@ -346,10 +410,9 @@ def _handle(token, chat_id, text):
         return _send(token, chat_id, (
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
-            "/buscar producto — buscar en los datos modelados\n"
-            "/modelar plataforma|categoría|id|título|precio|url|rating|reseñas|ventas|imagen\n"
-            "/agregar URL — importar Amazon o AliExpress (categoría predeterminada: accesorios)\n"
-            "/agregar categoría|URL|precio|título|imagen|moneda\n"
+            "/buscar producto — buscar en todo el catálogo activo\n"
+            "/modelar — puntuar en lote productos activos con precio; admite datos manuales\n"
+            "/agregar URL — importar Amazon o AliExpress; también categoría|url|precio|título|imagen|moneda\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda"
         ))
@@ -420,11 +483,20 @@ def _handle(token, chat_id, text):
 
     if command == "/modelar":
         if not argument.strip():
-            return _send(
-                token,
-                chat_id,
-                "Uso: /modelar plataforma|categoría|id|título|precio|url|rating|reseñas|ventas|imagen",
-            )
+            try:
+                scored, missing_price, errors, remaining = _model_active_products()
+                return _send(
+                    token, chat_id,
+                    "<b>Modelado del catálogo</b>\n"
+                    f"Productos puntuados: {scored}\n"
+                    f"Sin precio/categoría: {missing_price}\n"
+                    f"Pendientes por límite de lote: {remaining}\n"
+                    f"Errores: {errors}\n"
+                    "Usa /agregar URL|precio|título|imagen|moneda para completar datos faltantes."
+                )
+            except Exception as exc:
+                print(f"[telegram-bot] batch modeling error: {type(exc).__name__}: {exc}")
+                return _send(token, chat_id, "No pude modelar el catálogo. Revisa la conexión a PostgreSQL y los logs.")
         result, error = _model_product(argument.strip())
         if result is None:
             return _send(token, chat_id, f"<b>Error de modelado</b>\n{html.escape(str(error))}")
@@ -438,10 +510,10 @@ def _handle(token, chat_id, text):
                 total = cur.fetchone()["total"]
                 cur.execute(
                     """
-                    SELECT COUNT(*) AS modeled
+                    SELECT COUNT(DISTINCT p.id) AS modeled
                     FROM products p
                     JOIN product_scores s ON s.product_id = p.id
-                    WHERE p.is_active = TRUE
+                    WHERE p.is_active = TRUE AND p.current_price IS NOT NULL
                     """
                 )
                 modeled = cur.fetchone()["modeled"]

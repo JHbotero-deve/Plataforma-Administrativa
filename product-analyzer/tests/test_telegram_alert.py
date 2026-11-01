@@ -15,6 +15,23 @@ import url_import
 
 
 class TelegramCommandTests(unittest.TestCase):
+    def test_batch_modeling_reports_missing_data_separately_from_batch_limit(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [
+            {"id": 7, "current_price": 20, "category_avg": 30}
+        ]
+        cursor.fetchone.return_value = {"eligible": 501, "active_total": 510}
+
+        with (
+            patch.object(telegram_alert, "get_connection", return_value=connection),
+            patch.object(telegram_alert, "score_product", return_value=72),
+        ):
+            result = telegram_alert._model_active_products()
+
+        self.assertEqual(result, (1, 9, 0, 500))
+        connection.close.assert_called_once()
+
     def test_add_without_arguments_returns_usage_instead_of_import_error(self):
         send = MagicMock(return_value=True)
 
