@@ -20,15 +20,17 @@ class CatalogBatchCliTests(unittest.TestCase):
             "main_image": "https://img.example/bolso.jpg",
             "images": ["https://img.example/bolso-2.jpg"],
             "review_count": "120",
+            "category_name": "Shoes",
             "sales": "500",
         })
         self.assertEqual(product["url"], "https://www.aliexpress.com/item/123.html")
         self.assertEqual(product["external_id"], "123")
+        self.assertEqual(product["category"], "calzado")
         self.assertEqual(product["price"], 19.9)
         self.assertEqual(product["previous_price"], 29.9)
         self.assertEqual(product["reviews_count"], 120)
         self.assertEqual(product["sales_estimate"], 500)
-        self.assertEqual(product["gallery_urls"], ["https://img.example/bolso-2.jpg"])
+        self.assertEqual(product["gallery_urls"], ["https://img.example/bolso.jpg", "https://img.example/bolso-2.jpg"])
 
     def test_normalize_rejects_rows_without_product_url(self):
         with self.assertRaisesRegex(ValueError, "falta url"):
