@@ -84,7 +84,7 @@ def _category(value, title=""):
         return "calzado"
     if any(word in text for word in ("clothing", "apparel", "shirt", "pants", "dress", "jacket", "hoodie", "sweater", "camisa", "pantalon", "vestido", "chaqueta", "sudadera", "blusa", "falda", "ropa")):
         return "ropa"
-    if any(word in text for word in ("accessories", "accessory", "bag", "backpack", "watch", "jewelry", "phone case", "bolso", "mochila", "reloj", "joya", "funda", "lentes", "gorra", "cinturon", "accesorios")):
+    if any(word in text for word in ("accessories", "accessory", "bag", "backpack", "watch", "jewelry", "phone case", "bolso", "mochila", "reloj", "joya", "funda", "lentes", "gorra", "cinturon", "accesorios", "earbuds", "headphones", "headset")):
         return "accesorios"
     return None
 
@@ -183,6 +183,11 @@ def enrich_product(product):
     if platform not in ALLOWED_HOSTS or not url:
         return product
     metadata = dict(product.get("source_metadata") or {})
+    if not product.get("category"):
+        inferred_category = _category(None, product.get("title"))
+        if inferred_category:
+            product["category"] = inferred_category
+            metadata["category_source"] = "title_inference"
     if product.get("title") and not str(product["title"]).startswith("Producto ") and product.get("price") and product.get("image_url") and product.get("category"):
         return product
     try:
