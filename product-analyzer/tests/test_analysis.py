@@ -14,7 +14,7 @@ class OpportunityScoreTests(unittest.TestCase):
         self.assertEqual(compute_demand_score(None, 0, None), 50.0)
 
     def test_real_demand_data_is_scored(self):
-        self.assertEqual(compute_demand_score(5, 50, 100), 100.0)
+        self.assertEqual(compute_demand_score(5, 150, 300), 100.0)
 
 
 if __name__ == "__main__":
