@@ -319,27 +319,48 @@ export default function App() {
       setFormError("La imagen supera el límite de 10 MB.");
       return;
     }
+    let bitmap: ImageBitmap | undefined;
     try {
-      const bitmap = await createImageBitmap(file);
-      let scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d");
       if (!context) throw new Error("No se pudo procesar la imagen.");
+      let source: CanvasImageSource;
+      let width: number;
+      let height: number;
+      if (typeof createImageBitmap === "function") {
+        bitmap = await createImageBitmap(file);
+        source = bitmap;
+        width = bitmap.width;
+        height = bitmap.height;
+      } else {
+        const url = URL.createObjectURL(file);
+        const loaded = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => reject(new Error("No se pudo leer la imagen."));
+          image.src = url;
+        }).finally(() => URL.revokeObjectURL(url));
+        source = loaded;
+        width = loaded.naturalWidth;
+        height = loaded.naturalHeight;
+      }
+      let scale = Math.min(1, 1400 / Math.max(width, height));
       let image = "";
-      for (let attempt = 0; attempt < 5; attempt++) {
-        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      for (let attempt = 0; attempt < 6; attempt++) {
+        canvas.width = Math.max(1, Math.round(width * scale));
+        canvas.height = Math.max(1, Math.round(height * scale));
         context.clearRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-        image = canvas.toDataURL("image/webp", 0.8 - attempt * 0.06);
+        context.drawImage(source, 0, 0, canvas.width, canvas.height);
+        image = canvas.toDataURL("image/webp", Math.max(0.5, 0.82 - attempt * 0.06));
         if (image.length <= 520000) break;
         scale *= 0.82;
       }
-      bitmap.close();
       if (!image || image.length > 520000) throw new Error("La imagen sigue siendo pesada. Reduce su tamaño e inténtalo de nuevo.");
       setForm(current => ({ ...current, variants: current.variants.map((variant, index) => index === varIdx ? { ...variant, image } : variant) }));
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "No se pudo cargar la imagen.");
+    } finally {
+      bitmap?.close();
     }
   };
 
