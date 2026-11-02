@@ -80,7 +80,7 @@ def list_publications(
                 "NULL::NUMERIC AS cost_price, NULL::NUMERIC AS profit_amount, "
                 "NULL::NUMERIC AS profit_margin_pct"
             )
-            customer_price = "p.current_price" if include_unpublished else "COALESCE(pc.sale_price, p.current_price)"
+            customer_price = "p.current_price" if include_unpublished else "pc.sale_price"
             order_by = (
                 "pc.sort_order ASC, pc.published_at DESC, pc.id DESC"
                 if include_unpublished else
