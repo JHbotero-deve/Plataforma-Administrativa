@@ -10,7 +10,7 @@ import requests
 from analysis import score_product
 from db import get_connection, upsert_product
 from url_import import detect_platform, import_url
-from product_sources import enrich_pending_products, enrich_product, search_marketplaces
+from product_sources import enrich_pending_products, enrich_product
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
@@ -443,9 +443,9 @@ def _handle(token, chat_id, text):
         return _send(token, chat_id, (
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
-            "/buscar [producto] — descubre en catálogo y tiendas; sin término busca novedades\n"
-            "/modelar — recupera datos de enlaces guardados y puntúa productos\n"
-            "/agregar URL — importar enlace concreto; para descubrir usa /buscar palabra clave\n"
+            "/buscar producto — buscar por título o categoría en el catálogo\n"
+            "/modelar — leer metadatos públicos de URLs guardadas y puntuar\n"
+            "/agregar URL — importar Amazon o AliExpress; admite datos manuales\n"
             "Publicación — selecciona productos en Studio y usa «Publicar en Central»\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda"
@@ -468,29 +468,18 @@ def _handle(token, chat_id, text):
 
     if command == "/buscar":
         term = argument.strip()
-        term = term[:100] or "productos populares de moda calzado y accesorios"
-        category = "ropa" if any(word in term.casefold() for word in ("ropa", "vestido", "camisa", "pantal", "chaqueta")) else "calzado" if any(word in term.casefold() for word in ("zapato", "tenis", "zapatilla", "bota")) else "accesorios"
-        discovered, source_errors = search_marketplaces(term, category=category, limit=8)
-        discovered_ids = []
-        conn = get_connection()
-        try:
-            for product in discovered:
-                product_category = product.get("category") or category
-                product_id = upsert_product(conn, product["platform"], product_category, product)
-                discovered_ids.append(product_id)
-                if product.get("price"):
-                    with conn.cursor() as cur:
-                        cur.execute("SELECT AVG(current_price) AS average FROM products WHERE category_id=(SELECT id FROM categories WHERE name=%s) AND currency=%s AND current_price IS NOT NULL AND is_active=TRUE", (product_category, product.get("currency") or "USD"))
-                        average = cur.fetchone()["average"]
-                    score_product(conn, product_id, float(average or product["price"]))
-            conn.commit()
-        finally:
-            conn.close()
-        products = _products_by_ids(discovered_ids) or _search_products(term)
+        if not term:
+            return _send(token, chat_id, "La búsqueda automática por API está desactivada. Envía /agregar URL para importar un producto desde Amazon o AliExpress.")
+        if _is_http_url(term):
+            result, payload, score = _add_url(term)
+            if result is None:
+                return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
+            price_text = "Precio: " + str(payload["price"]) + " " + str(payload["currency"]) if payload.get("price") is not None else "Precio pendiente; puedes completarlo con /agregar categoría|URL|precio|título|imagen|moneda"
+            return _send(token, chat_id, "<b>Producto importado desde URL</b>\n" + html.escape(str(payload["title"])[:250]) + "\n" + html.escape(price_text))
+        products = _search_products(term[:100])
         if not products:
-            detail = "\n".join(source_errors) if source_errors else "Las fuentes no devolvieron productos con datos suficientes."
-            return _send(token, chat_id, f"No encontré productos para: {html.escape(term)}\n{html.escape(detail)}\nPrueba otra palabra clave.")
-        if not _send(token, chat_id, f"<b>Resultados: {html.escape(term)}</b>"):
+            return _send(token, chat_id, f"No encontré productos en el catálogo para: {html.escape(term[:100])}\nImporta un enlace con /agregar URL.")
+        if not _send(token, chat_id, f"<b>Resultados del catálogo: {html.escape(term[:100])}</b>"):
             return False
         for product in products:
             if not _send_product(token, chat_id, product):
@@ -502,8 +491,8 @@ def _handle(token, chat_id, text):
             return _send(
                 token,
                 chat_id,
-                "No necesitas URL para descubrir productos. Usa /buscar palabra clave.\n"
-                "Para importar un enlace concreto: /agregar URL",
+                "Uso: /agregar URL\n"
+                "Opcional: /agregar categoría|URL|precio|título|imagen|moneda",
             )
         result, payload, score = _add_url(argument.strip())
         if result is None:
@@ -546,7 +535,7 @@ def _handle(token, chat_id, text):
                     f"Pendientes por límite de lote: {remaining}\n"
                     f"Datos recuperados desde URLs: {enriched}\n"
                     f"Errores: {errors}\n"
-                    "Usa /buscar palabra clave para descubrir nuevos productos sin URL."
+                    "Importa enlaces con /agregar URL; el sistema lee únicamente los metadatos públicos de esas páginas."
                 )
             except Exception as exc:
                 print(f"[telegram-bot] batch modeling error: {type(exc).__name__}: {exc}")
