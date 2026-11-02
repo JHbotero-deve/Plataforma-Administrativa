@@ -600,7 +600,7 @@ def import_product_from_url(payload: ProductImport):
     try:
         product_id = upsert_product(conn, product["platform"], category, product)
         score = None
-        if product.get("price") is not None and category:
+        if product.get("price") is not None and category and product.get("image_url") and product.get("title") and not product["title"].startswith("Producto "):
             with conn.cursor() as cur:
                 cur.execute(
                     """
