@@ -413,9 +413,9 @@ def _handle(token, chat_id, text):
         return _send(token, chat_id, (
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
-            "/buscar producto — buscar por título o categoría en el catálogo activo\n"
-            "/modelar — puntuar en lote productos activos con precio; admite datos manuales\n"
-            "/agregar URL — importar Amazon o AliExpress; también categoría|url|precio|título|imagen|moneda\n"
+            "/buscar producto — busca en catálogo y tiendas sin pedir URL\n"
+            "/modelar — recupera datos de enlaces guardados y puntúa productos\n"
+            "/agregar URL — importar enlace concreto; para descubrir usa /buscar palabra clave\n"
             "Publicación — selecciona productos en Studio y usa «Publicar en Central»\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda"
@@ -441,11 +441,9 @@ def _handle(token, chat_id, text):
         if not term:
             return _send(token, chat_id, "Uso: /buscar zapatillas")
         term = term[:100]
-        products = _search_products(term)
-        if not products:
-            category = "ropa" if any(word in term.casefold() for word in ("ropa", "vestido", "camisa", "pantal", "chaqueta")) else "calzado" if any(word in term.casefold() for word in ("zapato", "tenis", "zapatilla", "bota")) else "accesorios"
-            discovered, source_errors = search_marketplaces(term, category=category, limit=8)
-            conn = get_connection()
+        category = "ropa" if any(word in term.casefold() for word in ("ropa", "vestido", "camisa", "pantal", "chaqueta")) else "calzado" if any(word in term.casefold() for word in ("zapato", "tenis", "zapatilla", "bota")) else "accesorios"
+        discovered, source_errors = search_marketplaces(term, category=category, limit=8)
+        conn = get_connection()
             try:
                 for product in discovered:
                     product_category = product.get("category") or category
@@ -458,10 +456,10 @@ def _handle(token, chat_id, text):
                 conn.commit()
             finally:
                 conn.close()
-            products = _search_products(term)
-            if not products:
-                detail = "\n".join(source_errors) if source_errors else "Las fuentes no devolvieron productos con datos suficientes."
-                return _send(token, chat_id, f"No encontré productos para: {html.escape(term)}\n{html.escape(detail)}\nPrueba otra palabra clave.")
+        products = _search_products(term)
+        if not products:
+            detail = "\n".join(source_errors) if source_errors else "Las fuentes no devolvieron productos con datos suficientes."
+            return _send(token, chat_id, f"No encontré productos para: {html.escape(term)}\n{html.escape(detail)}\nPrueba otra palabra clave.")
         if not _send(token, chat_id, f"<b>Resultados: {html.escape(term)}</b>"):
             return False
         for product in products:
@@ -516,8 +514,9 @@ def _handle(token, chat_id, text):
                     f"Productos puntuados: {scored}\n"
                     f"Sin precio/categoría: {missing_price}\n"
                     f"Pendientes por límite de lote: {remaining}\n"
+                    f"Datos recuperados desde URLs: {enriched}\n"
                     f"Errores: {errors}\n"
-                    "Usa /agregar URL|precio|título|imagen|moneda para completar datos faltantes."
+                    "Usa /buscar palabra clave para descubrir nuevos productos sin URL."
                 )
             except Exception as exc:
                 print(f"[telegram-bot] batch modeling error: {type(exc).__name__}: {exc}")
