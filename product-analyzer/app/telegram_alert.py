@@ -10,7 +10,7 @@ import requests
 from analysis import score_product
 from db import get_connection, upsert_product
 from url_import import detect_platform, import_url
-from product_sources import enrich_pending_products, search_marketplaces
+from product_sources import enrich_pending_products, enrich_product, search_marketplaces
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
@@ -239,6 +239,7 @@ def _add_url(argument):
             image_url=details[2] if len(details) > 2 and details[2] else None,
             currency=details[3] if len(details) > 3 and details[3] else "USD",
         )
+        product = enrich_product(product)
         if product["platform"] not in ALLOWED_PLATFORMS:
             return None, "Plataforma no habilitada para importación.", None
 
