@@ -205,6 +205,36 @@ def _search_products(term, limit=8):
 
     return []
 
+def _products_by_ids(product_ids, limit=8):
+    if not product_ids:
+        return []
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url,
+                       p.rating, p.reviews_count, p.sales_estimate,
+                       pl.name AS platform, c.name AS category,
+                       COALESCE(s.price_score, 0) AS price_score,
+                       COALESCE(s.demand_score, 0) AS demand_score,
+                       COALESCE(s.trend_score, 0) AS trend_score,
+                       COALESCE(s.opportunity_score, 0) AS opportunity_score
+                FROM products p
+                JOIN platforms pl ON pl.id = p.platform_id
+                LEFT JOIN categories c ON c.id = p.category_id
+                LEFT JOIN product_scores s ON s.product_id = p.id
+                WHERE p.is_active = TRUE AND p.id = ANY(%s)
+                ORDER BY COALESCE(s.opportunity_score, 0) DESC
+                LIMIT %s
+                """,
+                (product_ids, limit),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
 def _add_url(argument):
     parts = [part.strip() for part in (argument or "").split("|")]
     if not parts or not parts[0]:
@@ -441,11 +471,13 @@ def _handle(token, chat_id, text):
         term = term[:100] or "productos populares de moda calzado y accesorios"
         category = "ropa" if any(word in term.casefold() for word in ("ropa", "vestido", "camisa", "pantal", "chaqueta")) else "calzado" if any(word in term.casefold() for word in ("zapato", "tenis", "zapatilla", "bota")) else "accesorios"
         discovered, source_errors = search_marketplaces(term, category=category, limit=8)
+        discovered_ids = []
         conn = get_connection()
         try:
             for product in discovered:
                 product_category = product.get("category") or category
                 product_id = upsert_product(conn, product["platform"], product_category, product)
+                discovered_ids.append(product_id)
                 if product.get("price"):
                     with conn.cursor() as cur:
                         cur.execute("SELECT AVG(current_price) AS average FROM products WHERE category_id=(SELECT id FROM categories WHERE name=%s) AND currency=%s AND current_price IS NOT NULL AND is_active=TRUE", (product_category, product.get("currency") or "USD"))
@@ -454,7 +486,7 @@ def _handle(token, chat_id, text):
             conn.commit()
         finally:
             conn.close()
-        products = _search_products(term)
+        products = _products_by_ids(discovered_ids) or _search_products(term)
         if not products:
             detail = "\n".join(source_errors) if source_errors else "Las fuentes no devolvieron productos con datos suficientes."
             return _send(token, chat_id, f"No encontré productos para: {html.escape(term)}\n{html.escape(detail)}\nPrueba otra palabra clave.")
