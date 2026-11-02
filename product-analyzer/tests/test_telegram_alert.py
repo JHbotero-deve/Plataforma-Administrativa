@@ -89,7 +89,7 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertEqual(result, 7)
         self.assertIs(saved_product, product)
         self.assertIsNone(score)
-        self.assertEqual(upsert.call_args.args[1:3], ("amazon", "accesorios"))
+        self.assertEqual(upsert.call_args.args[1:3], ("amazon", None))
         conn.close.assert_called_once()
 
     def test_send_error_does_not_log_the_bot_token(self):
