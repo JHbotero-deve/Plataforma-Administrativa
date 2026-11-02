@@ -60,6 +60,17 @@ def images(value):
     return list(dict.fromkeys(str(item).strip() for item in values if str(item).strip()))[:10]
 
 
+def category_name(value):
+    text = str(value or "").lower()
+    if any(word in text for word in ("shoe", "footwear", "sneaker", "boot", "sandals", "calzado", "zapato", "tenis", "bota")):
+        return "calzado"
+    if any(word in text for word in ("clothing", "apparel", "shirt", "pants", "dress", "jacket", "ropa", "camisa", "pantalon", "vestido")):
+        return "ropa"
+    if any(word in text for word in ("accessor", "bag", "backpack", "watch", "jewelry", "phone case", "accesorio", "bolso", "mochila", "reloj", "funda", "gorra")):
+        return "accesorios"
+    return None
+
+
 def normalize(row):
     url = first(row, "url", "product_url", "link", "original_url", "product_link")
     if not url:
@@ -67,7 +78,7 @@ def normalize(row):
     item = {
         "url": str(url).strip(),
         "external_id": first(row, "external_id", "item_id", "asin", "sku", "product_id"),
-        "category": first(row, "category", "category_name"),
+        "category": category_name(first(row, "category", "category_name")),
         "title": first(row, "title", "name", "product_name"),
         "description": first(row, "description"),
         "price": number(first(row, "price", "current_price", "sale_price")),
@@ -79,6 +90,8 @@ def normalize(row):
         "reviews_count": int(number(first(row, "reviews_count", "review_count", "reviews")) or 0),
         "sales_estimate": int(number(first(row, "sales_estimate", "sales", "sold_count")) or 0) or None,
     }
+    if item["image_url"] and item["image_url"] not in item["gallery_urls"]:
+        item["gallery_urls"].insert(0, item["image_url"])
     return {key: value for key, value in item.items() if value is not None and value != []}
 
 
