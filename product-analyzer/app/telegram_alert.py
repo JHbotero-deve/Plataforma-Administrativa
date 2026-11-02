@@ -444,18 +444,18 @@ def _handle(token, chat_id, text):
         category = "ropa" if any(word in term.casefold() for word in ("ropa", "vestido", "camisa", "pantal", "chaqueta")) else "calzado" if any(word in term.casefold() for word in ("zapato", "tenis", "zapatilla", "bota")) else "accesorios"
         discovered, source_errors = search_marketplaces(term, category=category, limit=8)
         conn = get_connection()
-            try:
-                for product in discovered:
-                    product_category = product.get("category") or category
-                    product_id = upsert_product(conn, product["platform"], product_category, product)
-                    if product.get("price"):
-                        with conn.cursor() as cur:
-                            cur.execute("SELECT AVG(current_price) AS average FROM products WHERE category_id=(SELECT id FROM categories WHERE name=%s) AND currency=%s AND current_price IS NOT NULL AND is_active=TRUE", (product_category, product.get("currency") or "USD"))
-                            average = cur.fetchone()["average"]
-                        score_product(conn, product_id, float(average or product["price"]))
-                conn.commit()
-            finally:
-                conn.close()
+        try:
+            for product in discovered:
+                product_category = product.get("category") or category
+                product_id = upsert_product(conn, product["platform"], product_category, product)
+                if product.get("price"):
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT AVG(current_price) AS average FROM products WHERE category_id=(SELECT id FROM categories WHERE name=%s) AND currency=%s AND current_price IS NOT NULL AND is_active=TRUE", (product_category, product.get("currency") or "USD"))
+                        average = cur.fetchone()["average"]
+                    score_product(conn, product_id, float(average or product["price"]))
+            conn.commit()
+        finally:
+            conn.close()
         products = _search_products(term)
         if not products:
             detail = "\n".join(source_errors) if source_errors else "Las fuentes no devolvieron productos con datos suficientes."
