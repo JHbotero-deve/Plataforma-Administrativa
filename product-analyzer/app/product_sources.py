@@ -7,6 +7,7 @@ from urllib.parse import urljoin, urlsplit
 
 import requests
 
+MAX_REDIRECTS = 12
 ALLOWED_HOSTS = {
     "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amzn.to", "amzn.com", "a.co"),
     "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub"),
@@ -76,13 +77,15 @@ def _number(value):
 
 def _public_product_page(url, platform):
     current = url
-    for _ in range(6):
+    redirect_hosts = []
+    for _ in range(MAX_REDIRECTS):
         parsed = urlsplit(current)
         host = (parsed.hostname or "").lower().rstrip(".")
         if platform not in ALLOWED_HOSTS or parsed.scheme not in ("http", "https") or not _allowed_host(host, platform):
             raise ValueError("La URL redirigió fuera de los dominios permitidos de la tienda.")
         response = requests.get(current, headers={"User-Agent": "Mozilla/5.0 (compatible; CentralRadar/1.0)", "Accept": "text/html,application/xhtml+xml"}, timeout=15, allow_redirects=False)
         if response.status_code in (301, 302, 303, 307, 308):
+            redirect_hosts.append(host)
             location = response.headers.get("Location")
             response.close()
             if not location:
@@ -97,7 +100,8 @@ def _public_product_page(url, platform):
             response.close()
         break
     else:
-        raise RuntimeError("La tienda excedió el límite de redirecciones.")
+        chain = " -> ".join(redirect_hosts[-6:])
+        raise RuntimeError(f"La tienda excedió el límite de {MAX_REDIRECTS} redirecciones ({chain}).")
     metadata = parser.meta
     title = metadata.get("og:title") or metadata.get("twitter:title") or ""
     image = metadata.get("og:image") or metadata.get("twitter:image")
