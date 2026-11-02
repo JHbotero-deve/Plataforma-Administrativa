@@ -147,7 +147,7 @@ def enrich_pending_products(conn, limit=80):
     with conn.cursor() as cur:
         cur.execute("""SELECT p.id,p.title,p.current_price,p.currency,p.image_url,p.product_url,pl.name AS platform,c.name AS category,p.source_metadata
             FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id
-            WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %' OR p.category_id IS NULL)
+            WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL)
             ORDER BY p.updated_at DESC LIMIT %s""", (limit,))
         rows = cur.fetchall()
     updated = 0
