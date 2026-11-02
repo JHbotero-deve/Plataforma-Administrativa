@@ -10,6 +10,7 @@ import requests
 from analysis import score_product
 from db import get_connection, upsert_product
 from url_import import detect_platform, import_url
+from product_sources import enrich_pending_products, search_marketplaces
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
@@ -315,9 +316,10 @@ def _model_product(argument):
 
 
 def _model_active_products():
-    """Puntúa en lote productos activos con precio y categoría."""
+    """Enriquece enlaces existentes y puntúa productos activos."""
     conn = get_connection()
     try:
+        enriched = enrich_pending_products(conn)
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -367,7 +369,7 @@ def _model_active_products():
                 print(f"[telegram-bot] modelado fallido para producto {product['id']}: {type(exc).__name__}")
         missing_data = max(active_total - eligible_total, 0)
         remaining = max(eligible_total - len(products), 0)
-        return scored, missing_data, errors, remaining
+        return scored, missing_data, errors, remaining, enriched
     finally:
         conn.close()
 
@@ -440,13 +442,25 @@ def _handle(token, chat_id, text):
         term = term[:100]
         products = _search_products(term)
         if not products:
-            return _send(
-                token,
-                chat_id,
-                f"No encontré productos por título o categoría para: {html.escape(term)}\n"
-                "Los enlaces importados sin título real no se pueden buscar por nombre; "
-                "completa los datos con /agregar categoría|URL|precio|título|imagen|moneda.",
-            )
+            category = "ropa" if any(word in term.casefold() for word in ("ropa", "vestido", "camisa", "pantal", "chaqueta")) else "calzado" if any(word in term.casefold() for word in ("zapato", "tenis", "zapatilla", "bota")) else "accesorios"
+            discovered, source_errors = search_marketplaces(term, category=category, limit=8)
+            conn = get_connection()
+            try:
+                for product in discovered:
+                    product_category = product.get("category") or category
+                    product_id = upsert_product(conn, product["platform"], product_category, product)
+                    if product.get("price"):
+                        with conn.cursor() as cur:
+                            cur.execute("SELECT AVG(current_price) AS average FROM products WHERE category_id=(SELECT id FROM categories WHERE name=%s) AND currency=%s AND current_price IS NOT NULL AND is_active=TRUE", (product_category, product.get("currency") or "USD"))
+                            average = cur.fetchone()["average"]
+                        score_product(conn, product_id, float(average or product["price"]))
+                conn.commit()
+            finally:
+                conn.close()
+            products = _search_products(term)
+            if not products:
+                detail = "\n".join(source_errors) if source_errors else "Las fuentes no devolvieron productos con datos suficientes."
+                return _send(token, chat_id, f"No encontré productos para: {html.escape(term)}\n{html.escape(detail)}\nPrueba otra palabra clave.")
         if not _send(token, chat_id, f"<b>Resultados: {html.escape(term)}</b>"):
             return False
         for product in products:
@@ -459,8 +473,8 @@ def _handle(token, chat_id, text):
             return _send(
                 token,
                 chat_id,
-                "Uso: /agregar URL\n"
-                "Opcional: /agregar categoría|URL|precio|título|imagen|moneda",
+                "No necesitas URL para descubrir productos. Usa /buscar palabra clave.\n"
+                "Para importar un enlace concreto: /agregar URL",
             )
         result, payload, score = _add_url(argument.strip())
         if result is None:
@@ -494,7 +508,7 @@ def _handle(token, chat_id, text):
     if command == "/modelar":
         if not argument.strip():
             try:
-                scored, missing_price, errors, remaining = _model_active_products()
+                scored, missing_price, errors, remaining, enriched = _model_active_products()
                 return _send(
                     token, chat_id,
                     "<b>Modelado del catálogo</b>\n"
