@@ -39,6 +39,7 @@ def import_url(
     price: float | None = None,
     currency: str = "USD",
     image_url: str | None = None,
+    external_id: str | None = None,
 ) -> dict:
     """Registra enlaces suministrados por el usuario o por los CLI autorizados.
 
@@ -51,7 +52,7 @@ def import_url(
         raise ValueError("La URL debe comenzar con http:// o https://.")
 
     platform = detect_platform(url)
-    external_id = _external_id(url, platform)
+    external_id = str(external_id).strip()[:150] if external_id else _external_id(url, platform)
     final_title = (title or "").strip() or f"Producto {platform.title()} {external_id}"
     final_image = (image_url or "").strip() or None
     final_price = price if price is not None else None
@@ -71,12 +72,14 @@ def import_url(
         "platform": platform,
         "external_id": external_id,
         "title": final_title[:500],
+        "category": category if category in {"ropa", "calzado", "accesorios"} else None,
         "image_url": final_image,
         "product_url": url,
         "price": final_price,
         "currency": final_currency or "USD",
         "rating": None,
         "reviews_count": 0,
+        "gallery_urls": [final_image] if final_image else [],
         "sales_estimate": None,
         "source_metadata": {
             "import_method": "authorized_cli_url",
