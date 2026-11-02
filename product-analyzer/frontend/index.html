@@ -512,11 +512,9 @@ function renderPublicationRows(rows,drafts={},offline=false){
   const draft=useLocal?localDraft:(serverDraft||row),personal=String(row.platform||"").toLowerCase()==="personal";
   serverDraftRevisions.set(id,Number(draft.revision)||0);
   const restored=Boolean(serverDraft||localDraft);
-  const profitLabel=personal
-   ?(row.profit_margin_pct==null
-     ?"Falta registrar el costo interno para calcular el margen."
-     :"Margen bruto "+Number(row.profit_margin_pct).toLocaleString("es-CO")+"% · utilidad estimada "+money(row.profit_amount,row.currency))
-   :"Producto externo · compra mediante su enlace; margen no disponible en Central.";
+  const profitLabel=row.profit_margin_pct==null
+   ?"Sin oferta rentable con descuento mínimo del 40%."
+   :"Margen bruto "+Number(row.profit_margin_pct).toLocaleString("es-CO")+"% · utilidad estimada "+money(row.profit_amount,row.currency);
   return `<article class="pub-row" data-publication-card="${row.id}">
    <div class="pub-row-order"><span class="pub-meta" data-publication-position>${String(index+1).padStart(2,"0")}</span><div class="pub-actions"><button class="btn small" type="button" data-move-publication="${row.id}" data-direction="-1" aria-label="Subir ${esc(row.title)}" ${index===0?"disabled":""}>↑</button><button class="btn small" type="button" data-move-publication="${row.id}" data-direction="1" aria-label="Bajar ${esc(row.title)}" ${index===visibleRows.length-1?"disabled":""}>↓</button></div></div>
    <div class="pub-row-main"><div class="pub-meta">${personal?"Producto personal · checkout Wompi":esc(row.platform||"Producto")+" · compra por URL"}</div><h3>${esc(row.title)}</h3><div class="pub-row-state ${row.is_published?"is-live":""}">${row.is_published?"Publicado en tienda":"Borrador · no visible"}</div></div>
@@ -628,7 +626,7 @@ async function load(){
 async function submitImport(e){
   e.preventDefault();
   const btn=$("importBtn"),out=$("importResult");
-  const body={url:$("url").value.trim(),category:$("category").value};
+  const body={url:$("url").value.trim(),category:$("category").value||null};
   btn.disabled=true;
   btn.textContent="Importando…";
   out.textContent=navigator.onLine?"Leyendo el producto y guardando sus datos reales…":"Guardando la importación en la cola local…";
