@@ -84,6 +84,7 @@ def import_url(
         "source_metadata": {
             "import_method": "authorized_cli_url",
             "metadata_source": "cli" if title or price is not None or image_url else "url_only",
+            "category_source": "user" if category in {"ropa", "calzado", "accesorios"} else None,
             "original_url": url,
             "resolved_url": url,
             "gallery_urls": [final_image] if final_image else [],
