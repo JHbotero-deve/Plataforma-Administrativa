@@ -160,6 +160,8 @@ def _top_products(limit=25):
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
                   AND COALESCE(s.opportunity_score, 0) >= 60
+                  AND p.current_price > 0 AND p.category_id IS NOT NULL
+                  AND p.title NOT LIKE 'Producto %%' AND p.image_url IS NOT NULL
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
                 """,
@@ -250,12 +252,10 @@ def _add_url(argument):
         url = parts[1]
         details = parts[2:]
     else:
-        category = "accesorios"
+        category = None
         url = parts[0]
         details = parts[1:]
 
-    if category not in ALLOWED_CATEGORIES:
-        return None, "Categoría no válida. Usa ropa, calzado o accesorios.", None
 
     try:
         price = float(details[0].replace(",", ".")) if details and details[0] else None
@@ -270,6 +270,7 @@ def _add_url(argument):
             currency=details[3] if len(details) > 3 and details[3] else "USD",
         )
         product = enrich_product(product)
+        category = category or product.get("category")
         if product["platform"] not in ALLOWED_PLATFORMS:
             return None, "Plataforma no habilitada para importación.", None
 
@@ -277,7 +278,7 @@ def _add_url(argument):
         try:
             product_id = upsert_product(conn, product["platform"], category, product)
             score = None
-            if product.get("price") is not None:
+            if product.get("price") is not None and category and product.get("image_url") and product.get("title") and not product["title"].startswith("Producto "):
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -311,6 +312,8 @@ def _model_product(argument):
         price = float(parts[4])
         if not math.isfinite(price) or price <= 0:
             return None, "El precio debe ser un número mayor que cero."
+        if not parts[3] or parts[3].startswith("Producto ") or not parts[9]:
+            return None, "Para modelar se requiere título real e imagen del producto.", None
         product = {
             "external_id": parts[2],
             "title": parts[3],
@@ -368,6 +371,10 @@ def _model_active_products():
                   AND p.current_price IS NOT NULL
                   AND p.current_price > 0
                   AND p.category_id IS NOT NULL
+                  AND p.title IS NOT NULL
+                  AND p.title NOT LIKE 'Producto %%'
+                  AND p.image_url IS NOT NULL
+                  AND p.image_url <> ''
                 ORDER BY p.updated_at DESC
                 LIMIT 500
                 """
@@ -380,6 +387,10 @@ def _model_active_products():
                         WHERE current_price IS NOT NULL
                           AND current_price > 0
                           AND category_id IS NOT NULL
+                          AND title IS NOT NULL
+                          AND title NOT LIKE 'Producto %%'
+                          AND image_url IS NOT NULL
+                          AND image_url <> ''
                     ) AS eligible,
                     COUNT(*) AS active_total
                 FROM products
@@ -421,10 +432,10 @@ def _handle(token, chat_id, text):
                 detect_platform(candidate)
             except ValueError:
                 continue
-            result, payload, score = _add_url("accesorios|" + candidate)
+            result, payload, score = _add_url(candidate)
             if result is None:
                 return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
-            score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score pendiente: envía precio con /agregar"
+            score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score pendiente: completa precio y categoría con /agregar"
             message = (
                 "<b>URL recibida e importada</b>\n"
                 + html.escape(str(payload["title"])[:250]) + "\n"

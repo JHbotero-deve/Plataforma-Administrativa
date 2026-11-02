@@ -79,6 +79,10 @@ def run_pipeline():
                   AND p.current_price IS NOT NULL
                   AND p.current_price > 0
                   AND p.category_id IS NOT NULL
+                  AND p.title IS NOT NULL
+                  AND p.title NOT LIKE 'Producto %%'
+                  AND p.image_url IS NOT NULL
+                  AND p.image_url <> ''
                 ORDER BY p.updated_at DESC
                 LIMIT 500
             """)
