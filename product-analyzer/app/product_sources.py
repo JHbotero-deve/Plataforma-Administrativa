@@ -1,6 +1,7 @@
 """Enriquecimiento de productos desde las páginas públicas de sus URLs."""
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
 
@@ -139,21 +140,29 @@ def enrich_product(product):
         product["product_url"] = fresh["resolved_url"]
         product["source_metadata"] = {**(product.get("source_metadata") or {}), "metadata_source": "public_product_page", "resolved_url": fresh["resolved_url"]}
     except Exception as exc:
-        print(f"[catalog] product URL enrichment unavailable ({platform}): {type(exc).__name__}")
+        detail = str(exc)[:140] if isinstance(exc, RuntimeError) else type(exc).__name__
+        print(f"[catalog] product URL enrichment unavailable ({platform}): {detail}")
     return product
 
 
-def enrich_pending_products(conn, limit=80):
+def _enrich_pending_row(row):
+    product = {"platform": row["platform"], "product_url": row["product_url"], "title": row["title"], "price": row["current_price"], "currency": row["currency"], "image_url": row["image_url"], "category": row["category"] or "accesorios", "source_metadata": row["source_metadata"] or {}}
+    return enrich_product(product)
+
+
+def enrich_pending_products(conn, limit=80, max_workers=4):
     with conn.cursor() as cur:
         cur.execute("""SELECT p.id,p.title,p.current_price,p.currency,p.image_url,p.product_url,pl.name AS platform,c.name AS category,p.source_metadata
             FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id
             WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL)
             ORDER BY p.updated_at DESC LIMIT %s""", (limit,))
         rows = cur.fetchall()
+    if not rows:
+        return 0
+    with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(rows)))) as executor:
+        enriched_rows = list(executor.map(_enrich_pending_row, rows))
     updated = 0
-    for row in rows:
-        product = {"platform": row["platform"], "product_url": row["product_url"], "title": row["title"], "price": row["current_price"], "currency": row["currency"], "image_url": row["image_url"], "category": row["category"] or "accesorios", "source_metadata": row["source_metadata"] or {}}
-        enriched = enrich_product(product)
+    for row, enriched in zip(rows, enriched_rows):
         if enriched.get("title") == row["title"] and enriched.get("price") == row["current_price"] and enriched.get("image_url") == row["image_url"] and enriched.get("product_url") == row["product_url"] and enriched.get("category") == row["category"]:
             continue
         with conn.cursor() as cur:
