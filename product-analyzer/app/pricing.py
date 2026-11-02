@@ -33,7 +33,7 @@ def publish_discounted_offer(conn, product_id, product, opportunity_score=None):
     if not offer or not product.get("title") or not product.get("image_url"):
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE published_cards SET is_published = FALSE, updated_at = NOW() WHERE product_id = %s",
+                "UPDATE published_cards SET is_published = FALSE, sale_price = NULL, cost_price = NULL, profit_amount = NULL, profit_margin_pct = NULL, price_display = NULL, updated_at = NOW() WHERE product_id = %s",
                 (product_id,),
             )
         conn.commit()
