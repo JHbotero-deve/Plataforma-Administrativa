@@ -786,7 +786,7 @@ export default function App() {
                     <input
                       value={form.name}
                       onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                      placeholder="Nombre del producto"
+                      placeholder="Nombre del producto" maxLength={120}
                       className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                     />
                   </div>
@@ -796,7 +796,7 @@ export default function App() {
                       <input
                         value={form.brand}
                         onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}
-                        placeholder="Marca"
+                        placeholder="Marca" maxLength={80}
                         className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                       />
                     </div>
@@ -820,7 +820,7 @@ export default function App() {
                     <textarea
                       value={form.description}
                       onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                      placeholder="Descripción del producto"
+                      placeholder="Descripción del producto" maxLength={600}
                       rows={2}
                       className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none resize-none transition-all"
                     />
@@ -832,7 +832,7 @@ export default function App() {
                     <input
                       value={form.badge}
                       onChange={e => setForm(f => ({ ...f, badge: e.target.value }))}
-                      placeholder="Etiqueta"
+                      placeholder="Etiqueta" maxLength={40}
                       className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                     />
                   </div>
@@ -886,7 +886,7 @@ export default function App() {
                         <input
                           key={i} value={f}
                           onChange={e => setForm(fm => ({ ...fm, features: fm.features.map((x, j) => j === i ? e.target.value : x) }))}
-                          placeholder={`Característica ${i + 1}`}
+                          placeholder={`Característica ${i + 1}`} maxLength={80}
                           className="bg-white/5 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                         />
                       ))}
@@ -923,7 +923,7 @@ export default function App() {
                         <input
                           value={v.name}
                           onChange={e => setForm(f => ({ ...f, variants: f.variants.map((x, j) => j === vi ? { ...x, name: e.target.value } : x) }))}
-                          placeholder="Nombre del color"
+                          placeholder="Nombre del color" maxLength={40}
                           className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:border-white/30 outline-none"
                         />
                         {/* Image: upload or URL */}
@@ -1029,6 +1029,8 @@ export default function App() {
                       <button
                         key={t.id}
                         onClick={() => setBgTheme(t.id)}
+                        aria-pressed={bgTheme === t.id}
+                        aria-label={`Fondo ${t.label}`}
                         className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
                           bgTheme === t.id
                             ? "border-white/60 bg-white/10 text-white"
