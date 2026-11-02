@@ -189,6 +189,7 @@ def enrich_product(product):
             product["category"] = inferred_category
             metadata["category_source"] = "title_inference"
     if product.get("title") and not str(product["title"]).startswith("Producto ") and product.get("price") and product.get("image_url") and product.get("category"):
+        product["source_metadata"] = metadata
         return product
     try:
         fresh = _public_product_page(url, platform)
