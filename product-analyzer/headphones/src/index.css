@@ -6,3 +6,19 @@ body { overflow: hidden; background: #000; font-family: Inter, ui-sans-serif, sy
 button, input, select, textarea { font: inherit; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.studio-app { min-height: 100dvh; }
+
+@media (max-width: 767px) {
+  .studio-app { height: 100dvh; min-height: 100svh; }
+  .studio-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

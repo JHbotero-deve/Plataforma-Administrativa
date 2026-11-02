@@ -117,7 +117,9 @@ export default function App() {
   });
 
   // Panel state
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(
+    () => typeof window === "undefined" || window.matchMedia("(min-width: 768px)").matches,
+  );
   const [panelTab, setPanelTab] = useState<"productos" | "agregar" | "apariencia">("productos");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -252,7 +254,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden text-white" style={{ backgroundColor: bgColor }}>
+    <div className="studio-app flex h-screen overflow-hidden text-white" style={{ backgroundColor: bgColor }}>
       {/* ════════════════ SHOWCASE ════════════════ */}
       <div
         className="flex-1 overflow-y-auto relative min-w-0"
@@ -565,7 +567,7 @@ export default function App() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 420, opacity: 0 }}
             transition={{ type: "spring", damping: 28, stiffness: 220 }}
-            className="w-[380px] shrink-0 bg-gray-950 border-l border-white/10 flex flex-col h-screen overflow-hidden"
+            className="studio-panel w-[380px] shrink-0 bg-gray-950 border-l border-white/10 flex flex-col h-screen overflow-hidden"
           >
             {/* Panel header */}
             <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
