@@ -44,6 +44,11 @@ jobs:
               Path("/tmp/central-frontend.js").write_text(inline_code, encoding="utf-8")
               import subprocess
               subprocess.run(["node", "--check", "/tmp/central-frontend.js"], check=True)
+              store_html = Path("product-analyzer/frontend/tienda.html").read_text(encoding="utf-8")
+              store_scripts = re.findall(r"<script(?:\\s[^>]*)?>([\\s\\S]*?)</script>", store_html)
+              store_code = "\\n".join([script for script in store_scripts if script.strip()])
+              Path("/tmp/central-store.js").write_text(store_code, encoding="utf-8")
+              subprocess.run(["node", "--check", "/tmp/central-store.js"], check=True)
           PY
 
       - name: Build Figma showcase
