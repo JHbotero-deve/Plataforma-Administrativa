@@ -587,6 +587,8 @@ def import_product_from_url(payload: ProductImport):
             "sales_estimate": payload.sales_estimate,
             "gallery_urls": list(dict.fromkeys((product.get("gallery_urls") or []) + payload.gallery_urls))[:10],
         })
+        if not product.get("image_url") and product.get("gallery_urls"):
+            product["image_url"] = product["gallery_urls"][0]
         product = enrich_product(product)
         category = category or product.get("category")
     except ValueError as exc:
