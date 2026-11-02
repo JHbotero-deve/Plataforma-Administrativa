@@ -49,6 +49,23 @@ jobs:
           npm --prefix product-analyzer/headphones run build
           test -f product-analyzer/frontend/headphones/index.html
 
+      - name: Upload Headphones static build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: headphones-static-build
+          path: product-analyzer/frontend/headphones
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Verify committed Headphones build
+        shell: bash
+        run: |
+          if [ -n "$(git status --porcelain -- product-analyzer/frontend/headphones)" ]; then
+            git status --short -- product-analyzer/frontend/headphones
+            echo "Headphones source and committed static build are out of sync."
+            exit 1
+          fi
+
       - name: Validate admin routes and API proxy
         shell: bash
         run: |
