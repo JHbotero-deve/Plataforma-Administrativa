@@ -68,10 +68,13 @@ const CATEGORIES: Category[] = [
 ];
 
 const BG_THEMES = [
-  { id: "navy", label: "Azul noche", color: "#101720" },
-  { id: "slate", label: "Grafito", color: "#171f29" },
-  { id: "black", label: "Negro", color: "#080b10" },
-  { id: "charcoal", label: "Pizarra", color: "#202a35" },
+  { id: "black",    label: "Negro",    color: "#000000" },
+  { id: "slate",    label: "Pizarra",  color: "#0f172a" },
+  { id: "navy",     label: "Marino",   color: "#070d1a" },
+  { id: "violet",   label: "Violeta",  color: "#0e0818" },
+  { id: "forest",   label: "Bosque",   color: "#051409" },
+  { id: "charcoal", label: "Carbón",   color: "#121212" },
+  { id: "wine",     label: "Vino",     color: "#180510" },
 ];
 
 const GRAD_PRESETS = [
@@ -96,10 +99,6 @@ function isSafeExternalUrl(value: string) {
   }
 }
 
-function isSafeImageSource(value: string) {
-  return /^data:image\/(?:png|jpeg|webp);base64,/i.test(value) || isSafeExternalUrl(value);
-}
-
 function readStoredProducts(): Product[] {
   try {
     const raw = window.localStorage.getItem("sp-products");
@@ -113,7 +112,7 @@ function readStoredProducts(): Product[] {
       const variants = item.variants.flatMap((entry, index): ColorVariant[] => {
         if (!entry || typeof entry !== "object") return [];
         const variant = entry as Record<string, unknown>;
-        if (typeof variant.image !== "string" || !isSafeImageSource(variant.image)) return [];
+        if (typeof variant.image !== "string" || !variant.image) return [];
         return [{
           id: typeof variant.id === "string" ? variant.id : `${item.id}-${index}`,
           name: typeof variant.name === "string" ? variant.name : "Variante",
@@ -140,9 +139,9 @@ function readStoredProducts(): Product[] {
         badge: typeof item.badge === "string" ? item.badge : undefined,
         categoryId: CATEGORIES.some(category => category.id === item.categoryId) ? item.categoryId as string : "otros",
         variants,
-        amazon: typeof item.amazon === "string" && isSafeExternalUrl(item.amazon) ? item.amazon : undefined,
-        aliexpress: typeof item.aliexpress === "string" && isSafeExternalUrl(item.aliexpress) ? item.aliexpress : undefined,
-        wompi: typeof item.wompi === "string" && isSafeExternalUrl(item.wompi) ? item.wompi : undefined,
+        amazon: typeof item.amazon === "string" ? item.amazon : undefined,
+        aliexpress: typeof item.aliexpress === "string" ? item.aliexpress : undefined,
+        wompi: typeof item.wompi === "string" ? item.wompi : undefined,
         published: item.published === true,
       }];
     });
@@ -171,7 +170,7 @@ export default function App() {
   const [activeProdId, setActiveProdId] = useState("");
   const [activeVarIdx, setActiveVarIdx] = useState(0);
   const [bgTheme, setBgTheme] = useState(() => {
-    try { const stored = localStorage.getItem("sp-bg"); return BG_THEMES.some(theme => theme.id === stored) ? stored as string : "navy"; } catch { return "navy"; }
+    try { return localStorage.getItem("sp-bg") || "navy"; } catch { return "navy"; }
   });
 
   // Panel state
@@ -235,23 +234,26 @@ export default function App() {
 
   // Manejadores de productos
   const togglePublished = (id: string) => {
-    const product = products.find(p => p.id === id);
-    if (!product) return;
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, published: !p.published } : p));
-    if (product.published && id === activeProdId) {
-      const fallback = products.find(p => p.id !== id && p.published);
-      if (fallback) { setActiveCatId(fallback.categoryId); setActiveProdId(fallback.id); setActiveVarIdx(0); }
-    }
+    setProducts(prev => {
+      const next = prev.map(p => p.id === id ? { ...p, published: !p.published } : p);
+      const nowPub = next.filter(p => p.published);
+      if (id === activeProdId && !next.find(p => p.id === id)?.published) {
+        const fallback = nowPub[0];
+        if (fallback) { setActiveCatId(fallback.categoryId); setActiveProdId(fallback.id); setActiveVarIdx(0); }
+      }
+      return next;
+    });
   };
 
   const deleteProduct = (id: string) => {
-    const fallback = products.find(p => p.id !== id && p.published);
-    setProducts(prev => prev.filter(p => p.id !== id));
-    if (id === activeProdId && fallback) {
-      setActiveCatId(fallback.categoryId);
-      setActiveProdId(fallback.id);
-      setActiveVarIdx(0);
-    }
+    setProducts(prev => {
+      const next = prev.filter(p => p.id !== id);
+      if (id === activeProdId) {
+        const fallback = next.find(p => p.published);
+        if (fallback) { setActiveCatId(fallback.categoryId); setActiveProdId(fallback.id); setActiveVarIdx(0); }
+      }
+      return next;
+    });
   };
 
   const startEditing = (p: Product) => {
@@ -273,7 +275,7 @@ export default function App() {
 
   const submitForm = () => {
     setFormError("");
-    const variants = form.variants.filter(variant => variant.name.trim() && isSafeImageSource(variant.image));
+    const variants = form.variants.filter(variant => variant.name.trim() && (variant.image.startsWith("data:image/") || isSafeExternalUrl(variant.image)));
     const basePrice = Number(form.basePrice);
     const originalPrice = form.originalPrice.trim() ? Number(form.originalPrice) : 0;
     const rating = form.rating.trim() ? Number(form.rating) : 4.5;
@@ -283,7 +285,7 @@ export default function App() {
     if (!form.name.trim()) return setFormError("Escribe el nombre del producto.");
     if (!variants.length) return setFormError("Agrega al menos una variante con imagen válida.");
     if (!Number.isFinite(basePrice) || basePrice <= 0) return setFormError("El precio debe ser un número mayor que cero.");
-    if (!Number.isFinite(originalPrice) || originalPrice < 0 || (originalPrice > 0 && originalPrice < basePrice)) return setFormError("El precio original debe ser cero o igual/superior al precio actual.");
+    if (!Number.isFinite(originalPrice) || (originalPrice > 0 && originalPrice < basePrice)) return setFormError("El precio original debe ser igual o superior al precio actual.");
     if (!Number.isFinite(rating) || rating < 0 || rating > 5) return setFormError("La calificación debe estar entre 0 y 5.");
     if (!Number.isInteger(reviews) || reviews < 0) return setFormError("El número de reseñas debe ser un entero igual o mayor que cero.");
     if (links.some(link => !isSafeExternalUrl(link))) return setFormError("Los enlaces de compra deben comenzar con http:// o https://.");
@@ -319,48 +321,27 @@ export default function App() {
       setFormError("La imagen supera el límite de 10 MB.");
       return;
     }
-    let bitmap: ImageBitmap | undefined;
     try {
+      const bitmap = await createImageBitmap(file);
+      let scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d");
       if (!context) throw new Error("No se pudo procesar la imagen.");
-      let source: CanvasImageSource;
-      let width: number;
-      let height: number;
-      if (typeof createImageBitmap === "function") {
-        bitmap = await createImageBitmap(file);
-        source = bitmap;
-        width = bitmap.width;
-        height = bitmap.height;
-      } else {
-        const url = URL.createObjectURL(file);
-        const loaded = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const image = new Image();
-          image.onload = () => resolve(image);
-          image.onerror = () => reject(new Error("No se pudo leer la imagen."));
-          image.src = url;
-        }).finally(() => URL.revokeObjectURL(url));
-        source = loaded;
-        width = loaded.naturalWidth;
-        height = loaded.naturalHeight;
-      }
-      let scale = Math.min(1, 1400 / Math.max(width, height));
       let image = "";
-      for (let attempt = 0; attempt < 6; attempt++) {
-        canvas.width = Math.max(1, Math.round(width * scale));
-        canvas.height = Math.max(1, Math.round(height * scale));
+      for (let attempt = 0; attempt < 5; attempt++) {
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
         context.clearRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(source, 0, 0, canvas.width, canvas.height);
-        image = canvas.toDataURL("image/webp", Math.max(0.5, 0.82 - attempt * 0.06));
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        image = canvas.toDataURL("image/webp", 0.8 - attempt * 0.06);
         if (image.length <= 520000) break;
         scale *= 0.82;
       }
+      bitmap.close();
       if (!image || image.length > 520000) throw new Error("La imagen sigue siendo pesada. Reduce su tamaño e inténtalo de nuevo.");
       setForm(current => ({ ...current, variants: current.variants.map((variant, index) => index === varIdx ? { ...variant, image } : variant) }));
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "No se pudo cargar la imagen.");
-    } finally {
-      bitmap?.close();
     }
   };
 
@@ -391,7 +372,21 @@ export default function App() {
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
       >
-        <div className="studio-ambient" aria-hidden="true" />
+        {/* Ambient glow */}
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <motion.div
+            key={`ambient-${activeCatId}`}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.5 }}
+            className="absolute inset-0"
+            style={{ background: `radial-gradient(ellipse at 50% 20%, ${activeCat.glowColor} 0%, transparent 65%)` }}
+          />
+          <motion.div
+            animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.15, 1] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-1/3 left-1/4 w-96 h-96 rounded-full blur-3xl"
+            style={{ background: activeCat.glowColor }}
+          />
+        </div>
 
         {/* Drop overlay */}
         <AnimatePresence>
@@ -409,7 +404,7 @@ export default function App() {
 
         {/* Nav */}
         <motion.nav
-          initial={{ opacity: 0, transform: "translateY(-12px)" }} animate={{ opacity: 1, transform: "translateY(0)" }} transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+          initial={{ opacity: 0, y: -40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}
           className="studio-nav sticky top-0 z-40 bg-black/40 backdrop-blur-xl border-b border-white/10"
         >
           <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
@@ -507,8 +502,8 @@ export default function App() {
                 {/* Info */}
                 <motion.div
                   key={`info-${activeProdId}`}
-                  initial={{ opacity: 0, transform: "translateX(12px)" }} animate={{ opacity: 1, transform: "translateX(0)" }}
-                  transition={{ duration: 0.32, delay: 0.04, ease: [0.23, 1, 0.32, 1] }}
+                  initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.7, delay: 0.1 }}
                   className="studio-product-info flex flex-col gap-4"
                 >
                   <div className="flex items-center gap-3 flex-wrap">
@@ -687,9 +682,7 @@ export default function App() {
               {(["productos", "agregar", "apariencia"] as const).map(tab => (
                 <button
                   key={tab}
-                  onClick={() => { if (tab !== "agregar") { setEditingId(null); setForm(newEmptyForm()); setFormError(""); } setPanelTab(tab); }}
-                  aria-pressed={panelTab === tab}
-                  aria-label={tab === "productos" ? "Productos" : tab === "agregar" ? "Agregar producto" : "Apariencia"}
+                  onClick={() => { if (tab !== "agregar") { setEditingId(null); setForm(newEmptyForm()); } setPanelTab(tab); }}
                   className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${
                     panelTab === tab
                       ? "text-white border-b-2 border-white"
@@ -786,7 +779,7 @@ export default function App() {
                     <input
                       value={form.name}
                       onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                      placeholder="Nombre del producto" maxLength={120}
+                      placeholder="Nombre del producto"
                       className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                     />
                   </div>
@@ -796,7 +789,7 @@ export default function App() {
                       <input
                         value={form.brand}
                         onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}
-                        placeholder="Marca" maxLength={80}
+                        placeholder="Marca"
                         className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                       />
                     </div>
@@ -820,7 +813,7 @@ export default function App() {
                     <textarea
                       value={form.description}
                       onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                      placeholder="Descripción del producto" maxLength={600}
+                      placeholder="Descripción del producto"
                       rows={2}
                       className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none resize-none transition-all"
                     />
@@ -832,7 +825,7 @@ export default function App() {
                     <input
                       value={form.badge}
                       onChange={e => setForm(f => ({ ...f, badge: e.target.value }))}
-                      placeholder="Etiqueta" maxLength={40}
+                      placeholder="Etiqueta"
                       className="w-full bg-white/5 border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                     />
                   </div>
@@ -886,7 +879,7 @@ export default function App() {
                         <input
                           key={i} value={f}
                           onChange={e => setForm(fm => ({ ...fm, features: fm.features.map((x, j) => j === i ? e.target.value : x) }))}
-                          placeholder={`Característica ${i + 1}`} maxLength={80}
+                          placeholder={`Característica ${i + 1}`}
                           className="bg-white/5 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:border-white/40 outline-none transition-all"
                         />
                       ))}
@@ -923,7 +916,7 @@ export default function App() {
                         <input
                           value={v.name}
                           onChange={e => setForm(f => ({ ...f, variants: f.variants.map((x, j) => j === vi ? { ...x, name: e.target.value } : x) }))}
-                          placeholder="Nombre del color" maxLength={40}
+                          placeholder="Nombre del color"
                           className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/30 focus:border-white/30 outline-none"
                         />
                         {/* Image: upload or URL */}
@@ -1029,8 +1022,6 @@ export default function App() {
                       <button
                         key={t.id}
                         onClick={() => setBgTheme(t.id)}
-                        aria-pressed={bgTheme === t.id}
-                        aria-label={`Fondo ${t.label}`}
                         className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
                           bgTheme === t.id
                             ? "border-white/60 bg-white/10 text-white"

@@ -10,7 +10,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .no-scrollbar::-webkit-scrollbar{display:none}
 .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
 .studio-app{height:100dvh;min-height:100svh;background-image:radial-gradient(ellipse at 48% 32%,rgba(190,211,224,.055),transparent 54%)}
-.studio-ambient{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse at 50% 28%,rgba(205,220,229,.035),transparent 56%)}
 .studio-main{min-width:0;scrollbar-width:thin;scrollbar-color:rgba(202,216,226,.2) transparent}
 .studio-nav{background:rgba(10,16,23,.82)!important;border-color:var(--studio-line)!important;backdrop-filter:blur(18px)}
 .studio-nav>div{min-height:66px;padding:14px clamp(18px,3vw,42px)!important}
