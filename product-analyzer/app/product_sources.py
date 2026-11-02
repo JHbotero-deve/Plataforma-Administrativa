@@ -151,7 +151,8 @@ def _walk_products(value):
 
 def _public_aliexpress_page(url):
     allowed = ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub")
-    current = url
+    parsed_url = urlsplit(url)
+    current = parsed_url._replace(scheme="https").geturl() if parsed_url.scheme == "http" else url
     response = None
     for _ in range(5):
         parsed = urlsplit(current)
