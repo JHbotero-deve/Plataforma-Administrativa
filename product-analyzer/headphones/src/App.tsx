@@ -68,13 +68,10 @@ const CATEGORIES: Category[] = [
 ];
 
 const BG_THEMES = [
-  { id: "black",    label: "Negro",    color: "#000000" },
-  { id: "slate",    label: "Pizarra",  color: "#0f172a" },
-  { id: "navy",     label: "Marino",   color: "#070d1a" },
-  { id: "violet",   label: "Violeta",  color: "#0e0818" },
-  { id: "forest",   label: "Bosque",   color: "#051409" },
-  { id: "charcoal", label: "Carbón",   color: "#121212" },
-  { id: "wine",     label: "Vino",     color: "#180510" },
+  { id: "navy", label: "Azul noche", color: "#101720" },
+  { id: "slate", label: "Grafito", color: "#171f29" },
+  { id: "black", label: "Negro", color: "#080b10" },
+  { id: "charcoal", label: "Pizarra", color: "#202a35" },
 ];
 
 const GRAD_PRESETS = [
@@ -170,7 +167,7 @@ export default function App() {
   const [activeProdId, setActiveProdId] = useState("");
   const [activeVarIdx, setActiveVarIdx] = useState(0);
   const [bgTheme, setBgTheme] = useState(() => {
-    try { return localStorage.getItem("sp-bg") || "navy"; } catch { return "navy"; }
+    try { const stored = localStorage.getItem("sp-bg"); return BG_THEMES.some(theme => theme.id === stored) ? stored as string : "navy"; } catch { return "navy"; }
   });
 
   // Panel state
@@ -372,21 +369,7 @@ export default function App() {
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
       >
-        {/* Ambient glow */}
-        <div className="fixed inset-0 pointer-events-none z-0">
-          <motion.div
-            key={`ambient-${activeCatId}`}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.5 }}
-            className="absolute inset-0"
-            style={{ background: `radial-gradient(ellipse at 50% 20%, ${activeCat.glowColor} 0%, transparent 65%)` }}
-          />
-          <motion.div
-            animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.15, 1] }}
-            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-            className="absolute top-1/3 left-1/4 w-96 h-96 rounded-full blur-3xl"
-            style={{ background: activeCat.glowColor }}
-          />
-        </div>
+        <div className="studio-ambient" aria-hidden="true" />
 
         {/* Drop overlay */}
         <AnimatePresence>
@@ -404,7 +387,7 @@ export default function App() {
 
         {/* Nav */}
         <motion.nav
-          initial={{ opacity: 0, y: -40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}
+          initial={{ opacity: 0, transform: "translateY(-12px)" }} animate={{ opacity: 1, transform: "translateY(0)" }} transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
           className="studio-nav sticky top-0 z-40 bg-black/40 backdrop-blur-xl border-b border-white/10"
         >
           <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
@@ -502,8 +485,8 @@ export default function App() {
                 {/* Info */}
                 <motion.div
                   key={`info-${activeProdId}`}
-                  initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.7, delay: 0.1 }}
+                  initial={{ opacity: 0, transform: "translateX(12px)" }} animate={{ opacity: 1, transform: "translateX(0)" }}
+                  transition={{ duration: 0.32, delay: 0.04, ease: [0.23, 1, 0.32, 1] }}
                   className="studio-product-info flex flex-col gap-4"
                 >
                   <div className="flex items-center gap-3 flex-wrap">
@@ -682,7 +665,9 @@ export default function App() {
               {(["productos", "agregar", "apariencia"] as const).map(tab => (
                 <button
                   key={tab}
-                  onClick={() => { if (tab !== "agregar") { setEditingId(null); setForm(newEmptyForm()); } setPanelTab(tab); }}
+                  onClick={() => { if (tab !== "agregar") { setEditingId(null); setForm(newEmptyForm()); setFormError(""); } setPanelTab(tab); }}
+                  aria-pressed={panelTab === tab}
+                  aria-label={tab === "productos" ? "Productos" : tab === "agregar" ? "Agregar producto" : "Apariencia"}
                   className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wider transition-all ${
                     panelTab === tab
                       ? "text-white border-b-2 border-white"
