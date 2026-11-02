@@ -51,7 +51,7 @@ def _amazon_token():
 
 
 def _amazon_request(operation, marketplace, payload):
-    _, _, _, _, partner_tag, = (*_amazon_config(),)
+    _, _, _, partner_tag, _ = _amazon_config()
     response = requests.post("https://creatorsapi.amazon/catalog/v1/" + operation, headers={"Authorization": "Bearer " + _amazon_token(), "Content-Type": "application/json", "x-marketplace": marketplace}, json={**payload, "marketplace": marketplace, "partnerTag": partner_tag}, timeout=20)
     response.raise_for_status()
     data = response.json()
@@ -99,7 +99,6 @@ def _amazon_items(items, marketplace="www.amazon.com", category="accesorios"):
 
 
 def search_amazon(term, category="accesorios", limit=10):
-    _, _, _, _, partner_tag, = (*_amazon_config(),)
     payload = _amazon_request("searchItems", "www.amazon.com", {"keywords": term[:100], "searchIndex": "All", "itemCount": min(max(int(limit), 1), 10), "resources": ["images.primary.large", "itemInfo.title", "offersV2.listings.price"]})
     items = (payload.get("searchResult") or {}).get("items") or []
     return [product for item in items if (product := _amazon_product(item, category))]
@@ -208,26 +207,25 @@ def _public_aliexpress_page(url):
 def enrich_product(product):
     url = str(product.get("product_url") or "")
     platform = product.get("platform")
-    if platform == "amazon":
-        asin = _amazon_asin(url)
-        if not asin:
-            return product
-        items = _amazon_items([asin], category=product.get("category") or "accesorios")
-        if items:
-            fresh = items[0]
-            for key in ("title", "image_url", "price", "currency"):
-                if fresh.get(key) is not None:
-                    product[key] = fresh[key]
-            product["source_metadata"] = {**(product.get("source_metadata") or {}), **fresh["source_metadata"]}
-    elif platform == "aliexpress":
-        try:
+    try:
+        if platform == "amazon":
+            asin = _amazon_asin(url)
+            if asin:
+                items = _amazon_items([asin], category=product.get("category") or "accesorios")
+                if items:
+                    fresh = items[0]
+                    for key in ("title", "image_url", "price", "currency"):
+                        if fresh.get(key) is not None:
+                            product[key] = fresh[key]
+                    product["source_metadata"] = {**(product.get("source_metadata") or {}), **fresh["source_metadata"]}
+        elif platform == "aliexpress":
             fresh = _public_aliexpress_page(url)
             for key in ("title", "image_url", "price", "currency", "rating"):
                 if fresh.get(key) is not None:
                     product[key] = fresh[key]
             product["source_metadata"] = {**(product.get("source_metadata") or {}), "metadata_source": "public_product_metadata", "resolved_url": fresh["resolved_url"]}
-        except (requests.RequestException, ValueError, RuntimeError) as exc:
-            print(f"[aliexpress] no se pudo enriquecer URL: {type(exc).__name__}")
+    except Exception as exc:
+        print(f"[catalog] product enrichment unavailable ({platform}): {type(exc).__name__}")
     return product
 
 
@@ -267,7 +265,7 @@ def enrich_pending_products(conn, limit=80):
         if enriched.get("title") == row["title"] and enriched.get("price") == row["current_price"] and enriched.get("image_url") == row["image_url"]:
             continue
         with conn.cursor() as cur:
-            cur.execute("""UPDATE products SET title=%s,current_price=COALESCE(%s,current_price),currency=COALESCE(%s,currency),image_url=COALESCE(%s,image_url),source_metadata=%s,updated_at=NOW() WHERE id=%s""", (enriched.get("title") or row["title"], enriched.get("price"), enriched.get("currency"), enriched.get("image_url"), json.dumps(enriched.get("source_metadata") or {}), row["id"]))
+            cur.execute("""UPDATE products SET title=%s,current_price=COALESCE(%s,current_price),currency=COALESCE(%s,currency),image_url=COALESCE(%s,image_url),source_metadata=%s::jsonb,updated_at=NOW() WHERE id=%s""", (enriched.get("title") or row["title"], enriched.get("price"), enriched.get("currency"), enriched.get("image_url"), json.dumps(enriched.get("source_metadata") or {}), row["id"]))
         conn.commit()
         updated += 1
     return updated
