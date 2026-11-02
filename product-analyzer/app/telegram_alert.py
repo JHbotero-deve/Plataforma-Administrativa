@@ -160,6 +160,8 @@ def _top_products(limit=25):
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
                   AND COALESCE(s.opportunity_score, 0) >= 60
+                  AND p.current_price > 0 AND p.category_id IS NOT NULL
+                  AND p.title NOT LIKE 'Producto %%' AND p.image_url IS NOT NULL
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
                 """,
@@ -276,7 +278,7 @@ def _add_url(argument):
         try:
             product_id = upsert_product(conn, product["platform"], category, product)
             score = None
-            if product.get("price") is not None and category:
+            if product.get("price") is not None and category and product.get("image_url") and product.get("title") and not product["title"].startswith("Producto "):
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -310,6 +312,8 @@ def _model_product(argument):
         price = float(parts[4])
         if not math.isfinite(price) or price <= 0:
             return None, "El precio debe ser un número mayor que cero."
+        if not parts[3] or parts[3].startswith("Producto ") or not parts[9]:
+            return None, "Para modelar se requiere título real e imagen del producto.", None
         product = {
             "external_id": parts[2],
             "title": parts[3],
