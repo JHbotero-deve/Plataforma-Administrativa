@@ -45,6 +45,25 @@ class ProductSourcesTests(unittest.TestCase):
         first.close.assert_called_once()
         second.close.assert_called_once()
 
+    def test_aliexpress_short_link_resolves_after_more_than_six_redirects(self):
+        redirects = []
+        for index in range(7):
+            response = MagicMock()
+            response.status_code = 302
+            response.headers = {"Location": f"https://www.aliexpress.com/redirect/{index}"}
+            redirects.append(response)
+        final = MagicMock()
+        final.status_code = 200
+        final.text = '''<html><script type="application/ld+json">{"@type":"Product","name":"Producto AliExpress","offers":{"price":"19.90","priceCurrency":"USD"}}</script></html>'''
+        with patch.object(product_sources.requests, "get", side_effect=redirects + [final]) as request:
+            result = product_sources._public_product_page("https://s.click.aliexpress.com/e/_mOOSCcP", "aliexpress")
+        self.assertEqual(result["title"], "Producto AliExpress")
+        self.assertEqual(result["price"], 19.9)
+        self.assertEqual(request.call_count, 8)
+        for response in redirects:
+            response.close.assert_called_once()
+        final.close.assert_called_once()
+
     def test_price_parser_handles_common_formats(self):
         self.assertEqual(product_sources._number("$1,299.00"), 1299.0)
         self.assertEqual(product_sources._number("1.299,00 €"), 1299.0)
