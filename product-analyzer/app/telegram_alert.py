@@ -10,6 +10,7 @@ import requests
 from analysis import score_product
 from db import get_connection, upsert_product
 from url_import import detect_platform, import_url
+from product_sources import enrich_pending_products, enrich_product, search_marketplaces
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
@@ -204,6 +205,36 @@ def _search_products(term, limit=8):
 
     return []
 
+def _products_by_ids(product_ids, limit=8):
+    if not product_ids:
+        return []
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url,
+                       p.rating, p.reviews_count, p.sales_estimate,
+                       pl.name AS platform, c.name AS category,
+                       COALESCE(s.price_score, 0) AS price_score,
+                       COALESCE(s.demand_score, 0) AS demand_score,
+                       COALESCE(s.trend_score, 0) AS trend_score,
+                       COALESCE(s.opportunity_score, 0) AS opportunity_score
+                FROM products p
+                JOIN platforms pl ON pl.id = p.platform_id
+                LEFT JOIN categories c ON c.id = p.category_id
+                LEFT JOIN product_scores s ON s.product_id = p.id
+                WHERE p.is_active = TRUE AND p.id = ANY(%s)
+                ORDER BY COALESCE(s.opportunity_score, 0) DESC
+                LIMIT %s
+                """,
+                (product_ids, limit),
+            )
+            return cur.fetchall()
+    finally:
+        conn.close()
+
+
 def _add_url(argument):
     parts = [part.strip() for part in (argument or "").split("|")]
     if not parts or not parts[0]:
@@ -238,6 +269,7 @@ def _add_url(argument):
             image_url=details[2] if len(details) > 2 and details[2] else None,
             currency=details[3] if len(details) > 3 and details[3] else "USD",
         )
+        product = enrich_product(product)
         if product["platform"] not in ALLOWED_PLATFORMS:
             return None, "Plataforma no habilitada para importación.", None
 
@@ -315,9 +347,10 @@ def _model_product(argument):
 
 
 def _model_active_products():
-    """Puntúa en lote productos activos con precio y categoría."""
+    """Enriquece enlaces existentes y puntúa productos activos."""
     conn = get_connection()
     try:
+        enriched = enrich_pending_products(conn)
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -367,7 +400,7 @@ def _model_active_products():
                 print(f"[telegram-bot] modelado fallido para producto {product['id']}: {type(exc).__name__}")
         missing_data = max(active_total - eligible_total, 0)
         remaining = max(eligible_total - len(products), 0)
-        return scored, missing_data, errors, remaining
+        return scored, missing_data, errors, remaining, enriched
     finally:
         conn.close()
 
@@ -410,9 +443,9 @@ def _handle(token, chat_id, text):
         return _send(token, chat_id, (
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
-            "/buscar producto — buscar por título o categoría en el catálogo activo\n"
-            "/modelar — puntuar en lote productos activos con precio; admite datos manuales\n"
-            "/agregar URL — importar Amazon o AliExpress; también categoría|url|precio|título|imagen|moneda\n"
+            "/buscar [producto] — descubre en catálogo y tiendas; sin término busca novedades\n"
+            "/modelar — recupera datos de enlaces guardados y puntúa productos\n"
+            "/agregar URL — importar enlace concreto; para descubrir usa /buscar palabra clave\n"
             "Publicación — selecciona productos en Studio y usa «Publicar en Central»\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda"
@@ -435,18 +468,28 @@ def _handle(token, chat_id, text):
 
     if command == "/buscar":
         term = argument.strip()
-        if not term:
-            return _send(token, chat_id, "Uso: /buscar zapatillas")
-        term = term[:100]
-        products = _search_products(term)
+        term = term[:100] or "productos populares de moda calzado y accesorios"
+        category = "ropa" if any(word in term.casefold() for word in ("ropa", "vestido", "camisa", "pantal", "chaqueta")) else "calzado" if any(word in term.casefold() for word in ("zapato", "tenis", "zapatilla", "bota")) else "accesorios"
+        discovered, source_errors = search_marketplaces(term, category=category, limit=8)
+        discovered_ids = []
+        conn = get_connection()
+        try:
+            for product in discovered:
+                product_category = product.get("category") or category
+                product_id = upsert_product(conn, product["platform"], product_category, product)
+                discovered_ids.append(product_id)
+                if product.get("price"):
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT AVG(current_price) AS average FROM products WHERE category_id=(SELECT id FROM categories WHERE name=%s) AND currency=%s AND current_price IS NOT NULL AND is_active=TRUE", (product_category, product.get("currency") or "USD"))
+                        average = cur.fetchone()["average"]
+                    score_product(conn, product_id, float(average or product["price"]))
+            conn.commit()
+        finally:
+            conn.close()
+        products = _products_by_ids(discovered_ids) or _search_products(term)
         if not products:
-            return _send(
-                token,
-                chat_id,
-                f"No encontré productos por título o categoría para: {html.escape(term)}\n"
-                "Los enlaces importados sin título real no se pueden buscar por nombre; "
-                "completa los datos con /agregar categoría|URL|precio|título|imagen|moneda.",
-            )
+            detail = "\n".join(source_errors) if source_errors else "Las fuentes no devolvieron productos con datos suficientes."
+            return _send(token, chat_id, f"No encontré productos para: {html.escape(term)}\n{html.escape(detail)}\nPrueba otra palabra clave.")
         if not _send(token, chat_id, f"<b>Resultados: {html.escape(term)}</b>"):
             return False
         for product in products:
@@ -459,8 +502,8 @@ def _handle(token, chat_id, text):
             return _send(
                 token,
                 chat_id,
-                "Uso: /agregar URL\n"
-                "Opcional: /agregar categoría|URL|precio|título|imagen|moneda",
+                "No necesitas URL para descubrir productos. Usa /buscar palabra clave.\n"
+                "Para importar un enlace concreto: /agregar URL",
             )
         result, payload, score = _add_url(argument.strip())
         if result is None:
@@ -494,15 +537,16 @@ def _handle(token, chat_id, text):
     if command == "/modelar":
         if not argument.strip():
             try:
-                scored, missing_price, errors, remaining = _model_active_products()
+                scored, missing_price, errors, remaining, enriched = _model_active_products()
                 return _send(
                     token, chat_id,
                     "<b>Modelado del catálogo</b>\n"
                     f"Productos puntuados: {scored}\n"
                     f"Sin precio/categoría: {missing_price}\n"
                     f"Pendientes por límite de lote: {remaining}\n"
+                    f"Datos recuperados desde URLs: {enriched}\n"
                     f"Errores: {errors}\n"
-                    "Usa /agregar URL|precio|título|imagen|moneda para completar datos faltantes."
+                    "Usa /buscar palabra clave para descubrir nuevos productos sin URL."
                 )
             except Exception as exc:
                 print(f"[telegram-bot] batch modeling error: {type(exc).__name__}: {exc}")
