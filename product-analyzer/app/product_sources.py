@@ -14,9 +14,9 @@ ASIN_RE = re.compile(r"/(?:dp|gp/product|gp/aw/d)/([A-Z0-9]{10})(?:[/?]|$)", re.
 
 
 def _env(name, default=""):
-    target = name.replace("\\u00a0", "").strip().casefold()
+    target = name.strip().casefold()
     for key, value in os.environ.items():
-        if key.replace("\\u00a0", "").strip().casefold() == target and str(value or "").strip():
+        if key.strip().casefold() == target and str(value or "").strip():
             return str(value).strip()
     return default
 
