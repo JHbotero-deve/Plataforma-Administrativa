@@ -9,7 +9,7 @@ import secrets
 import time
 import requests
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import Response
@@ -538,60 +538,83 @@ def public_sitemap():
 
 class ProductImport(BaseModel):
     url: str = Field(min_length=10, max_length=2000)
-    category: str = Field(default="accesorios", min_length=2, max_length=100)
+    category: Optional[str] = Field(default=None, min_length=2, max_length=100)
+    external_id: Optional[str] = Field(default=None, max_length=150)
     title: Optional[str] = Field(default=None, max_length=500)
+    description: Optional[str] = Field(default=None, max_length=5000)
     price: Optional[float] = Field(default=None, gt=0)
+    previous_price: Optional[float] = Field(default=None, gt=0)
     currency: str = Field(default="USD", min_length=3, max_length=10)
-    image_url: Optional[str] = Field(default=None, max_length=2_000_000)
+    image_url: Optional[str] = Field(default=None, max_length=2000)
+    gallery_urls: list[str] = Field(default_factory=list, max_length=10)
+    rating: Optional[float] = Field(default=None, ge=0, le=5)
+    reviews_count: int = Field(default=0, ge=0)
+    sales_estimate: Optional[int] = Field(default=None, ge=0)
 
 
 @core_router.post(
     "/products/import-url", dependencies=[Depends(require_admin)]
 )
 def import_product_from_url(payload: ProductImport):
+    category = (payload.category or "").strip().lower() or None
+    if category and category not in {"ropa", "calzado", "accesorios"}:
+        raise HTTPException(status_code=400, detail="Categoría no permitida.")
+    if payload.previous_price is not None and payload.price is not None and payload.previous_price < payload.price:
+        raise HTTPException(status_code=400, detail="El precio anterior debe ser igual o superior al precio actual.")
+    for image in payload.gallery_urls:
+        parsed_image = urlsplit(image)
+        if parsed_image.scheme not in ("http", "https") or not parsed_image.hostname:
+            raise HTTPException(status_code=400, detail="Todas las imágenes deben usar URLs HTTP o HTTPS válidas.")
     try:
         product = import_url(
             payload.url,
-            payload.category,
+            category,
             title=payload.title,
             price=payload.price,
             currency=payload.currency,
             image_url=payload.image_url,
+            external_id=payload.external_id,
         )
+        product.update({
+            "description": payload.description,
+            "previous_price": payload.previous_price,
+            "rating": payload.rating,
+            "reviews_count": payload.reviews_count,
+            "sales_estimate": payload.sales_estimate,
+            "gallery_urls": list(dict.fromkeys((product.get("gallery_urls") or []) + payload.gallery_urls))[:10],
+        })
         product = enrich_product(product)
+        category = category or product.get("category")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
-        raise HTTPException(status_code=502, detail="No fue posible leer la URL")
+        raise HTTPException(status_code=502, detail="No fue posible procesar la URL")
 
     conn = get_connection()
     try:
-        product_id = upsert_product(conn, product["platform"], payload.category, product)
+        product_id = upsert_product(conn, product["platform"], category, product)
         score = None
-
-        if product.get("price") is not None:
+        if product.get("price") is not None and category:
             with conn.cursor() as cur:
                 cur.execute(
                     """
                     SELECT AVG(p.current_price) AS avg_price
                     FROM products p
                     JOIN categories c ON c.id = p.category_id
-                    WHERE p.is_active = TRUE
-                      AND c.name = %s
-                      AND p.currency = %s
-                      AND p.current_price IS NOT NULL
+                    WHERE p.is_active = TRUE AND c.name = %s
+                      AND p.currency = %s AND p.current_price IS NOT NULL
                     """,
-                    (payload.category, product.get("currency") or "USD"),
+                    (category, product.get("currency") or "USD"),
                 )
                 average = cur.fetchone()["avg_price"]
             score = score_product(conn, product_id, float(average or 0))
-
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.id, p.title, pl.name AS platform, c.name AS category,
-                       p.current_price, p.currency, p.image_url, p.product_url, p.affiliate_url,
-                       p.updated_at, p.catalog_expires_at, p.model_url, p.model_shape
+                SELECT p.id, p.title, p.description, pl.name AS platform, c.name AS category,
+                       p.current_price, p.previous_price, p.currency, p.image_url, p.image_gallery,
+                       p.rating, p.reviews_count, p.sales_estimate, p.product_url, p.affiliate_url,
+                       p.source_metadata, p.updated_at, p.catalog_expires_at, p.model_url, p.model_shape
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
