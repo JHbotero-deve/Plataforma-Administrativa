@@ -90,6 +90,66 @@ const GRAD_PRESETS = [
 
 const mkId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
+function isSafeExternalUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function readStoredProducts(): Product[] {
+  try {
+    const raw = window.localStorage.getItem("sp-products");
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((value): Product[] => {
+      if (!value || typeof value !== "object") return [];
+      const item = value as Record<string, unknown>;
+      if (typeof item.id !== "string" || typeof item.name !== "string" || !Array.isArray(item.variants)) return [];
+      const variants = item.variants.flatMap((entry, index): ColorVariant[] => {
+        if (!entry || typeof entry !== "object") return [];
+        const variant = entry as Record<string, unknown>;
+        if (typeof variant.image !== "string" || !variant.image) return [];
+        return [{
+          id: typeof variant.id === "string" ? variant.id : `${item.id}-${index}`,
+          name: typeof variant.name === "string" ? variant.name : "Variante",
+          image: variant.image,
+          gradient: typeof variant.gradient === "string" ? variant.gradient : GRAD_PRESETS[0].value,
+          glow: typeof variant.glow === "string" ? variant.glow : GRAD_PRESETS[0].glow,
+        }];
+      });
+      if (!variants.length) return [];
+      const numberOr = (candidate: unknown, fallback: number) => {
+        const number = Number(candidate);
+        return Number.isFinite(number) ? number : fallback;
+      };
+      return [{
+        id: item.id,
+        name: item.name,
+        brand: typeof item.brand === "string" ? item.brand : "",
+        description: typeof item.description === "string" ? item.description : "",
+        features: Array.isArray(item.features) ? item.features.filter((feature): feature is string => typeof feature === "string").slice(0, 4) : [],
+        basePrice: numberOr(item.basePrice, 0),
+        originalPrice: numberOr(item.originalPrice, 0),
+        rating: Math.min(5, Math.max(0, numberOr(item.rating, 4.5))),
+        reviews: Math.max(0, Math.floor(numberOr(item.reviews, 0))),
+        badge: typeof item.badge === "string" ? item.badge : undefined,
+        categoryId: CATEGORIES.some(category => category.id === item.categoryId) ? item.categoryId as string : "otros",
+        variants,
+        amazon: typeof item.amazon === "string" ? item.amazon : undefined,
+        aliexpress: typeof item.aliexpress === "string" ? item.aliexpress : undefined,
+        wompi: typeof item.wompi === "string" ? item.wompi : undefined,
+        published: item.published === true,
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
 function newEmptyForm() {
   return {
     name: "", brand: "", description: "",
@@ -105,15 +165,12 @@ function newEmptyForm() {
 // ─── Main App ───────────────────────────────────────────────────
 export default function App() {
   // Showcase state
-  const [products, setProducts] = useState<Product[]>(() => {
-    try { const s = localStorage.getItem("sp-products"); return s ? JSON.parse(s) : []; }
-    catch { return []; }
-  });
+  const [products, setProducts] = useState<Product[]>(readStoredProducts);
   const [activeCatId, setActiveCatId] = useState("otros");
   const [activeProdId, setActiveProdId] = useState("");
   const [activeVarIdx, setActiveVarIdx] = useState(0);
   const [bgTheme, setBgTheme] = useState(() => {
-    try { return localStorage.getItem("sp-bg") || "black"; } catch { return "black"; }
+    try { return localStorage.getItem("sp-bg") || "navy"; } catch { return "navy"; }
   });
 
   // Panel state
@@ -124,10 +181,17 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [form, setForm] = useState(newEmptyForm);
+  const [storageStatus, setStorageStatus] = useState<"saved" | "error">("saved");
+  const [formError, setFormError] = useState("");
 
   // Persistence
   useEffect(() => {
-    try { localStorage.setItem("sp-products", JSON.stringify(products)); } catch {}
+    try {
+      localStorage.setItem("sp-products", JSON.stringify(products));
+      setStorageStatus("saved");
+    } catch {
+      setStorageStatus("error");
+    }
   }, [products]);
   useEffect(() => {
     try { localStorage.setItem("sp-bg", bgTheme); } catch {}
@@ -141,9 +205,17 @@ export default function App() {
   const activeProd = catProducts.find(p => p.id === activeProdId) ?? catProducts[0];
   const activeVar = activeProd?.variants[activeVarIdx] ?? activeProd?.variants[0];
   const bgColor = BG_THEMES.find(t => t.id === bgTheme)?.color ?? "#000000";
-  const discount = activeProd
+  const discount = activeProd && activeProd.originalPrice > 0 && activeProd.originalPrice > activeProd.basePrice
     ? Math.round(((activeProd.originalPrice - activeProd.basePrice) / activeProd.originalPrice) * 100)
     : 0;
+
+  useEffect(() => {
+    if (published.length && !published.some(product => product.categoryId === activeCatId)) {
+      setActiveCatId(published[0].categoryId);
+      setActiveProdId(published[0].id);
+      setActiveVarIdx(0);
+    }
+  }, [products, activeCatId]);
 
   // Manejadores de la tienda
   const goCat = (catId: string) => {
@@ -185,6 +257,7 @@ export default function App() {
   };
 
   const startEditing = (p: Product) => {
+    setFormError("");
     setForm({
       name: p.name, brand: p.brand, description: p.description,
       features: [...p.features, "", "", ""].slice(0, 4),
@@ -198,21 +271,33 @@ export default function App() {
     setPanelTab("agregar");
   };
 
-  const cancelForm = () => { setForm(newEmptyForm()); setEditingId(null); setPanelTab("productos"); };
+  const cancelForm = () => { setForm(newEmptyForm()); setEditingId(null); setPanelTab("productos"); setFormError(""); };
 
   const submitForm = () => {
-    if (!form.name.trim() || !form.variants.some(v => v.name && v.image)) return;
+    setFormError("");
+    const variants = form.variants.filter(variant => variant.name.trim() && (variant.image.startsWith("data:image/") || isSafeExternalUrl(variant.image)));
+    const basePrice = Number(form.basePrice);
+    const originalPrice = form.originalPrice.trim() ? Number(form.originalPrice) : 0;
+    const rating = form.rating.trim() ? Number(form.rating) : 4.5;
+    const reviews = form.reviews.trim() ? Number(form.reviews) : 0;
+    const links = [form.amazon, form.aliexpress, form.wompi].filter(Boolean);
+
+    if (!form.name.trim()) return setFormError("Escribe el nombre del producto.");
+    if (!variants.length) return setFormError("Agrega al menos una variante con imagen válida.");
+    if (!Number.isFinite(basePrice) || basePrice <= 0) return setFormError("El precio debe ser un número mayor que cero.");
+    if (!Number.isFinite(originalPrice) || (originalPrice > 0 && originalPrice < basePrice)) return setFormError("El precio original debe ser igual o superior al precio actual.");
+    if (!Number.isFinite(rating) || rating < 0 || rating > 5) return setFormError("La calificación debe estar entre 0 y 5.");
+    if (!Number.isInteger(reviews) || reviews < 0) return setFormError("El número de reseñas debe ser un entero igual o mayor que cero.");
+    if (links.some(link => !isSafeExternalUrl(link))) return setFormError("Los enlaces de compra deben comenzar con http:// o https://.");
+
     const prod: Product = {
       id: editingId ?? mkId(),
       name: form.name.trim(), brand: form.brand.trim(), description: form.description.trim(),
       features: form.features.filter(f => f.trim()),
-      basePrice: parseFloat(form.basePrice) || 0,
-      originalPrice: parseFloat(form.originalPrice) || 0,
-      rating: parseFloat(form.rating) || 4.5,
-      reviews: parseInt(form.reviews) || 0,
+      basePrice, originalPrice, rating, reviews,
       badge: form.badge.trim() || undefined,
       categoryId: form.categoryId,
-      variants: form.variants.filter(v => v.name && v.image),
+      variants,
       amazon: form.amazon.trim() || undefined,
       aliexpress: form.aliexpress.trim() || undefined,
       wompi: form.wompi.trim() || undefined,
@@ -226,13 +311,38 @@ export default function App() {
   };
 
   // Manejadores de carga de imágenes
-  const handleImageFile = (file: File, varIdx: number) => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const src = e.target?.result as string;
-      setForm(f => ({ ...f, variants: f.variants.map((v, i) => i === varIdx ? { ...v, image: src } : v) }));
-    };
-    reader.readAsDataURL(file);
+  const handleImageFile = async (file: File, varIdx: number) => {
+    setFormError("");
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setFormError("Usa una imagen JPG, PNG o WebP.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setFormError("La imagen supera el límite de 10 MB.");
+      return;
+    }
+    try {
+      const bitmap = await createImageBitmap(file);
+      let scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("No se pudo procesar la imagen.");
+      let image = "";
+      for (let attempt = 0; attempt < 5; attempt++) {
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        image = canvas.toDataURL("image/webp", 0.8 - attempt * 0.06);
+        if (image.length <= 520000) break;
+        scale *= 0.82;
+      }
+      bitmap.close();
+      if (!image || image.length > 520000) throw new Error("La imagen sigue siendo pesada. Reduce su tamaño e inténtalo de nuevo.");
+      setForm(current => ({ ...current, variants: current.variants.map((variant, index) => index === varIdx ? { ...variant, image } : variant) }));
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "No se pudo cargar la imagen.");
+    }
   };
 
   // Manejadores de arrastre desde el panel hacia la tienda
@@ -257,7 +367,7 @@ export default function App() {
     <div className="studio-app flex h-screen overflow-hidden text-white" style={{ backgroundColor: bgColor }}>
       {/* ════════════════ SHOWCASE ════════════════ */}
       <div
-        className="flex-1 overflow-y-auto relative min-w-0"
+        className="studio-main flex-1 overflow-y-auto relative min-w-0"
         onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
@@ -295,7 +405,7 @@ export default function App() {
         {/* Nav */}
         <motion.nav
           initial={{ opacity: 0, y: -40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}
-          className="sticky top-0 z-40 bg-black/40 backdrop-blur-xl border-b border-white/10"
+          className="studio-nav sticky top-0 z-40 bg-black/40 backdrop-blur-xl border-b border-white/10"
         >
           <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
             <motion.span
@@ -313,6 +423,8 @@ export default function App() {
                   key={cat.id}
                   whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                   onClick={() => goCat(cat.id)}
+                  aria-pressed={activeCatId === cat.id}
+                  aria-label={cat.label}
                   className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-300 ${
                     activeCatId === cat.id
                       ? `bg-gradient-to-r ${cat.accentGradient} text-white shadow-lg`
@@ -328,6 +440,7 @@ export default function App() {
             <motion.button
               whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
               onClick={() => setPanelOpen(o => !o)}
+              aria-label={panelOpen ? "Cerrar editor" : "Abrir editor"}
               className="p-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 transition-all shrink-0"
               title={panelOpen ? "Cerrar panel" : "Abrir panel de edición"}
             >
@@ -337,7 +450,7 @@ export default function App() {
         </motion.nav>
 
         {/* Contenido de la tienda */}
-        <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="studio-content relative z-10 max-w-5xl mx-auto px-4 sm:px-6">
           {catProducts.length === 0 ? (
             /* Empty state */
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
@@ -358,52 +471,32 @@ export default function App() {
               <motion.div
                 key={`hero-${activeCatId}-${activeProdId}`}
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}
-                className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center py-8 lg:py-12"
+                className="studio-showcase grid lg:grid-cols-2 gap-8 lg:gap-12 items-center py-8 lg:py-12"
               >
                 {/* Image */}
-                <div className="relative flex justify-center items-center">
-                  <motion.div
-                    key={`glow-${activeProdId}-${activeVarIdx}`}
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }}
-                    className="absolute inset-0 rounded-full"
-                    style={{
-                      background: `radial-gradient(circle at 50% 55%, ${activeVar?.glow ?? "#888"}55 0%, transparent 68%)`,
-                      filter: "blur(20px)", transform: "scale(1.6)",
-                    }}
-                  />
-                  <motion.div
-                    animate={{ rotate: [0, 360] }}
-                    transition={{ duration: 14, repeat: Infinity, ease: "linear" }}
-                    className="absolute w-64 h-64 lg:w-80 lg:h-80 rounded-full"
-                    style={{
-                      background: `conic-gradient(from 0deg, transparent 60%, ${activeVar?.glow ?? "#888"}35 80%, transparent 100%)`,
-                      filter: "blur(3px)",
-                    }}
-                  />
+                <div className="product-stage">
+                  <div className="product-stage-grid" aria-hidden="true" />
+                  <div className="product-stage-light" aria-hidden="true" />
                   <motion.div
                     key={`img-${activeProdId}-${activeVarIdx}`}
-                    initial={{ opacity: 0, scale: 0.8, y: 30 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    transition={{ duration: 0.8, ease: "easeOut" }}
-                    className="relative z-10"
+                    initial={{ opacity: 0, transform: "translateY(12px) scale(.985)" }}
+                    animate={{ opacity: 1, transform: "translateY(0) scale(1)" }}
+                    transition={{ duration: 0.42, ease: [0.23, 1, 0.32, 1] }}
+                    className="product-stage-media"
                   >
-                    <motion.img
-                      animate={{ y: [0, -12, 0], rotateZ: [0, 1, -1, 0] }}
-                      transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+                    <img
                       src={activeVar?.image}
-                      alt={`${activeProd.name} – ${activeVar?.name}`}
-                      className="w-64 h-64 sm:w-72 sm:h-72 lg:w-[380px] lg:h-[380px] object-cover rounded-3xl"
-                      style={{ boxShadow: `0 40px 90px ${activeVar?.glow ?? "#888"}50, 0 12px 40px rgba(0,0,0,0.7)` }}
+                      alt={activeProd.name + " – " + (activeVar?.name ?? "")}
+                      className="product-image"
+                      loading="eager"
+                      decoding="async"
+                      draggable={false}
                     />
                   </motion.div>
-                  <motion.div
-                    key={`dot-${activeVarIdx}`}
-                    initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }}
-                    transition={{ delay: 0.4, type: "spring" }}
-                    className="absolute -top-2 left-1/2 -translate-x-1/2 z-20"
-                  >
-                    <div className={`w-5 h-5 rounded-full bg-gradient-to-br ${activeVar?.gradient ?? ""} border-2 border-white/70 shadow-lg`} />
-                  </motion.div>
+                  <div className="product-stage-caption">
+                    <span>Vista de producto</span>
+                    <span>{activeVar?.name ?? "Variante"}</span>
+                  </div>
                 </div>
 
                 {/* Info */}
@@ -411,10 +504,10 @@ export default function App() {
                   key={`info-${activeProdId}`}
                   initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.7, delay: 0.1 }}
-                  className="flex flex-col gap-4"
+                  className="studio-product-info flex flex-col gap-4"
                 >
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-white/40 text-xs uppercase tracking-widest font-semibold">{activeProd.brand}</span>
+                    <span className="studio-brand text-white/40 text-xs uppercase tracking-widest font-semibold">{activeProd.brand}</span>
                     {activeProd.badge && (
                       <span className={`text-xs font-bold px-3 py-1 rounded-full bg-gradient-to-r ${activeCat.accentGradient} text-white`}>
                         {activeProd.badge}
@@ -422,11 +515,11 @@ export default function App() {
                     )}
                   </div>
 
-                  <h1 className="text-4xl sm:text-5xl font-black text-white leading-none tracking-tight">
+                  <h1 className="studio-product-title text-4xl sm:text-5xl font-black text-white leading-none tracking-tight">
                     {activeProd.name}
                   </h1>
 
-                  <div className="flex items-center gap-2">
+                  <div className="studio-rating flex items-center gap-2">
                     <div className="flex items-center gap-0.5">
                       {[...Array(5)].map((_, i) => (
                         <Star key={i} size={14} className={i < Math.floor(activeProd.rating) ? "fill-amber-400 text-amber-400" : "text-white/20"} />
@@ -436,9 +529,9 @@ export default function App() {
                     <span className="text-white/35 text-sm">({activeProd.reviews.toLocaleString()} reseñas)</span>
                   </div>
 
-                  <p className="text-white/65 text-sm lg:text-base leading-relaxed">{activeProd.description}</p>
+                  <p className="studio-description text-white/65 text-sm lg:text-base leading-relaxed">{activeProd.description}</p>
 
-                  <div className="grid grid-cols-2 gap-1.5">
+                  <div className="studio-features grid grid-cols-2 gap-1.5">
                     {activeProd.features.map(f => (
                       <div key={f} className="flex items-center gap-2 text-white/55 text-xs">
                         <Check size={11} className="text-emerald-400 shrink-0" /> {f}
@@ -447,7 +540,7 @@ export default function App() {
                   </div>
 
                   {/* Variants */}
-                  <div>
+                  <div className="studio-variants">
                     <p className="text-white/40 text-xs uppercase tracking-wider mb-2">
                       Color: <span className="text-white font-semibold normal-case tracking-normal">{activeVar?.name}</span>
                     </p>
@@ -457,6 +550,8 @@ export default function App() {
                           key={`${v.id}-${idx}`}
                           whileHover={{ scale: 1.2 }} whileTap={{ scale: 0.9 }}
                           onClick={() => setActiveVarIdx(idx)}
+                          aria-label={`Seleccionar color ${v.name}`}
+                          aria-pressed={activeVarIdx === idx}
                           className={`w-9 h-9 rounded-full bg-gradient-to-br ${v.gradient} transition-all duration-300 ${
                             activeVarIdx === idx
                               ? "ring-2 ring-white ring-offset-2 ring-offset-black"
@@ -469,7 +564,7 @@ export default function App() {
                   </div>
 
                   {/* Price */}
-                  <div className="flex items-baseline gap-3 flex-wrap">
+                  <div className="studio-price flex items-baseline gap-3 flex-wrap">
                     <span className="text-4xl font-black text-white">${activeProd.basePrice.toFixed(2)}</span>
                     {activeProd.originalPrice > activeProd.basePrice && (
                       <span className="text-white/35 line-through text-lg">${activeProd.originalPrice.toFixed(2)}</span>
@@ -482,12 +577,12 @@ export default function App() {
                   </div>
 
                   {/* Buy buttons */}
-                  <div className="flex flex-wrap gap-2 pt-1">
+                  <div className="studio-buy-actions flex flex-wrap gap-2 pt-1">
                     {activeProd.amazon && (
                       <motion.a
                         href={activeProd.amazon} target="_blank" rel="noopener noreferrer"
                         whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }}
-                        className="flex items-center gap-2 bg-gradient-to-r from-amber-400 to-orange-500 text-black font-black px-5 py-3 rounded-2xl hover:shadow-xl hover:shadow-orange-500/30 transition-all text-sm"
+                        className="studio-buy-link studio-buy-link--amazon flex items-center gap-2 bg-gradient-to-r from-amber-400 to-orange-500 text-black font-black px-5 py-3 rounded-2xl hover:shadow-xl hover:shadow-orange-500/30 transition-all text-sm"
                       >
                         Ver en <strong>Amazon</strong> <ExternalLink size={13} />
                       </motion.a>
@@ -496,7 +591,7 @@ export default function App() {
                       <motion.a
                         href={activeProd.aliexpress} target="_blank" rel="noopener noreferrer"
                         whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }}
-                        className="flex items-center gap-2 bg-gradient-to-r from-yellow-300 to-yellow-500 text-black font-black px-5 py-3 rounded-2xl hover:shadow-xl hover:shadow-yellow-400/30 transition-all text-sm"
+                        className="studio-buy-link studio-buy-link--aliexpress flex items-center gap-2 bg-gradient-to-r from-yellow-300 to-yellow-500 text-black font-black px-5 py-3 rounded-2xl hover:shadow-xl hover:shadow-yellow-400/30 transition-all text-sm"
                       >
                         Ver en <strong>AliExpress</strong> <ExternalLink size={13} />
                       </motion.a>
@@ -505,7 +600,7 @@ export default function App() {
                       <motion.a
                         href={activeProd.wompi} target="_blank" rel="noopener noreferrer"
                         whileHover={{ scale: 1.03, y: -2 }} whileTap={{ scale: 0.97 }}
-                        className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black px-5 py-3 rounded-2xl hover:shadow-xl hover:shadow-blue-500/30 transition-all text-sm"
+                        className="studio-buy-link studio-buy-link--wompi flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black px-5 py-3 rounded-2xl hover:shadow-xl hover:shadow-blue-500/30 transition-all text-sm"
                       >
                         Pagar con <strong>Wompi</strong> <ExternalLink size={13} />
                       </motion.a>
@@ -516,7 +611,7 @@ export default function App() {
 
               {/* Product grid */}
               {catProducts.length > 1 && (
-                <div className="pb-16">
+                <div className="studio-related pb-16">
                   <div className="flex items-center gap-2 mb-4">
                     <div className={`w-1 h-5 rounded-full bg-gradient-to-b ${activeCat.accentGradient}`} />
                     <h2 className="text-base font-bold text-white/60">
@@ -529,14 +624,14 @@ export default function App() {
                         key={p.id}
                         whileHover={{ scale: 1.03, y: -4 }} whileTap={{ scale: 0.97 }}
                         onClick={() => goProd(p.id)}
-                        className={`relative text-left rounded-2xl overflow-hidden border transition-all duration-300 ${
+                        className={`studio-product-card relative text-left rounded-2xl overflow-hidden border transition-all duration-300 ${
                           activeProdId === p.id ? "border-white/40 bg-white/10" : "border-white/10 bg-white/5 hover:border-white/25"
                         }`}
                       >
                         {activeProdId === p.id && (
                           <div className={`absolute inset-0 bg-gradient-to-br ${activeCat.accentGradient} opacity-10 pointer-events-none`} />
                         )}
-                        <img src={p.variants[0]?.image} alt={p.name} className="w-full h-32 object-cover" />
+                        <img src={p.variants[0]?.image} alt={p.name} className="studio-product-card-image w-full h-32 object-cover" />
                         <div className="p-2.5">
                           <p className="text-white/40 text-xs font-semibold uppercase">{p.brand}</p>
                           <p className="text-white font-bold text-sm truncate">{p.name}</p>
@@ -563,17 +658,19 @@ export default function App() {
       <AnimatePresence>
         {panelOpen && (
           <motion.aside
-            initial={{ x: 420, opacity: 0 }}
+            initial={{ x: "100%", opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
-            exit={{ x: 420, opacity: 0 }}
+            exit={{ x: "100%", opacity: 0 }}
             transition={{ type: "spring", damping: 28, stiffness: 220 }}
             className="studio-panel w-[380px] shrink-0 bg-gray-950 border-l border-white/10 flex flex-col h-screen overflow-hidden"
           >
             {/* Panel header */}
-            <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
-              <h2 className="text-sm font-black text-white/80 uppercase tracking-widest">Panel de Edición</h2>
+            <div className="studio-panel-header px-4 py-3 border-b border-white/10 flex items-center justify-between">
+              <div><h2 className="text-sm font-black text-white/80 uppercase tracking-widest">Studio de producto</h2><p className="studio-local-note">Los cambios se guardan en este navegador</p></div>
+              <span className={`studio-storage-status ${storageStatus === "saved" ? "is-saved" : "is-error"}`} role="status" aria-live="polite">{storageStatus === "saved" ? "Guardado" : "Error al guardar"}</span>
               <button
                 onClick={() => setPanelOpen(false)}
+                aria-label="Cerrar editor"
                 className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-all"
               >
                 <X size={15} />
@@ -581,7 +678,7 @@ export default function App() {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-white/10">
+            <div className="studio-panel-tabs flex border-b border-white/10">
               {(["productos", "agregar", "apariencia"] as const).map(tab => (
                 <button
                   key={tab}
@@ -598,7 +695,7 @@ export default function App() {
             </div>
 
             {/* Panel content */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="studio-panel-content flex-1 overflow-y-auto">
 
               {/* ── TAB: PRODUCTOS ── */}
               {panelTab === "productos" && (
@@ -613,8 +710,8 @@ export default function App() {
                     </button>
                   </div>
 
-                  <p className="text-white/30 text-xs text-center py-1 flex items-center justify-center gap-1">
-                    <GripVertical size={11} /> Arrastra al showcase para publicar
+                  <p className="studio-editor-hint text-white/30 text-xs text-center py-1 flex items-center justify-center gap-1">
+                    <GripVertical size={11} /> Arrastra un producto o usa el control de publicación
                   </p>
 
                   {CATEGORIES.filter(c => products.some(p => p.categoryId === c.id)).map(cat => (
@@ -649,12 +746,14 @@ export default function App() {
                             </button>
                             <button
                               onClick={() => startEditing(prod)}
+                              aria-label={`Editar ${prod.name}`}
                               className="p-1.5 rounded-lg text-white/30 hover:text-white hover:bg-white/10 transition-all"
                             >
                               <Edit3 size={13} />
                             </button>
                             <button
                               onClick={() => deleteProduct(prod.id)}
+                              aria-label={`Eliminar ${prod.name}`}
                               className="p-1.5 rounded-lg text-white/30 hover:text-red-400 hover:bg-red-400/10 transition-all"
                             >
                               <Trash2 size={13} />
@@ -831,14 +930,14 @@ export default function App() {
                           <label className="flex items-center gap-1 px-2.5 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg cursor-pointer transition-all text-white/60 hover:text-white text-xs" title="Subir imagen">
                             <Upload size={12} />
                             <input
-                              type="file" accept="image/*" className="hidden"
+                              type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
                               onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f, vi); }}
                             />
                           </label>
                         </div>
                         {/* Preview */}
                         {v.image && (
-                          <img src={v.image} alt="Vista previa" className="w-full h-20 object-cover rounded-lg opacity-80" />
+                          <img src={v.image} alt="Vista previa" className="w-full h-20 object-contain rounded-lg opacity-90 bg-black/20" />
                         )}
                         {/* Gradient picker */}
                         <div>
@@ -892,11 +991,12 @@ export default function App() {
                     </div>
                   </div>
 
+                  {formError && <p className="studio-form-error" role="alert">{formError}</p>}
                   {/* Actions */}
                   <div className="flex gap-2 pt-1 pb-4">
                     <button
                       onClick={submitForm}
-                      disabled={!form.name.trim()}
+                      disabled={!form.name.trim() || !form.variants.some(variant => variant.name.trim() && variant.image)}
                       className="flex-1 bg-white text-black font-black text-sm py-3 rounded-2xl hover:bg-white/90 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                     >
                       {editingId ? "Guardar cambios" : "Publicar producto"}
