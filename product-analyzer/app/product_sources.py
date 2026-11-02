@@ -14,7 +14,7 @@ ALLOWED_HOSTS = {
     "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amzn.to", "amzn.com", "a.co"),
     "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub"),
 }
-ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios"}
+ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"}
 
 
 class _ProductHTML(HTMLParser):
@@ -80,15 +80,27 @@ def _number(value):
 
 def _category(value, title=""):
     text = unicodedata.normalize("NFKD", f"{value or ''} {title or ''}").encode("ascii", "ignore").decode().lower()
+    if any(word in text for word in ("smartphone", "iphone", "android", "laptop", "notebook", "computer", "tablet", "monitor", "keyboard", "mouse", "technology", "electronics", "electronica", "tecnologia", "celular")):
+        return "tecnologia"
+    if any(word in text for word in ("home decor", "kitchen", "furniture", "household", "decoracion", "cocina", "muebles", "hogar", "lampara")):
+        return "hogar"
+    if any(word in text for word in ("sports", "fitness", "gym", "exercise", "deportes", "gimnasio", "entrenamiento")):
+        return "deportes"
+    if any(word in text for word in ("beauty", "makeup", "cosmetic", "skincare", "maquillaje", "belleza", "cuidado de la piel")):
+        return "belleza"
+    if any(word in text for word in ("personal care", "wellness", "self care", "bienestar", "cuidado personal")):
+        return "bienestar"
+    if any(word in text for word in ("toy", "toys", "game", "juguete", "juegos")):
+        return "juguetes"
+    if any(word in text for word in ("office", "stationery", "school supplies", "papeleria", "oficina", "estudio")):
+        return "oficina"
     if any(word in text for word in ("footwear", "shoes", "sneaker", "boots", "sandals", "zapato", "tenis", "botas", "sandalia", "calzado")):
         return "calzado"
-    if any(word in text for word in ("clothing", "apparel", "shirt", "pants", "dress", "jacket", "hoodie", "sweater", "camisa", "pantalon", "vestido", "chaqueta", "sudadera", "blusa", "falda", "ropa")):
-        return "ropa"
+    if any(word in text for word in ("clothing", "apparel", "shirt", "pants", "dress", "jacket", "hoodie", "sweater", "camisa", "pantalon", "vestido", "chaqueta", "sudadera", "blusa", "falda", "ropa", "fashion", "moda")):
+        return "moda"
     if any(word in text for word in ("accessories", "accessory", "bag", "backpack", "watch", "jewelry", "phone case", "bolso", "mochila", "reloj", "joya", "funda", "lentes", "gorra", "cinturon", "accesorios", "earbuds", "headphones", "headset")):
         return "accesorios"
     return None
-
-
 def _normalized_url(url):
     parsed = urlsplit(url)
     return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), parsed.path or "/", parsed.query, ""))

@@ -65,7 +65,7 @@ def _profit_metrics(sale_price, cost_price):
 @router.get("/publications")
 def list_publications(
     request: Request,
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=5000),
     include_unpublished: bool = False,
 ):
     if include_unpublished:

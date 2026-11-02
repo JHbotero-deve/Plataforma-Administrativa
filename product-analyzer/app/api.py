@@ -32,6 +32,7 @@ from db import get_connection, upsert_product
 from notifications import send_telegram_alert
 from monetization import router as monetization_router
 from publications import ensure_draft_storage, router as publication_router
+from storefront_sections import ensure_storefront_section_storage, router as storefront_sections_router
 from store_orders import ensure_commerce_storage, router as store_orders_router
 from store_notifications import process_pending_notifications
 from tiktok_api import router as tiktok_creator_router
@@ -58,6 +59,7 @@ notification_worker_task = None
 async def ensure_admin_draft_storage():
     global notification_worker_task
     ensure_draft_storage()
+    ensure_storefront_section_storage()
     ensure_commerce_storage()
     ensure_aliexpress_oauth_storage()
     notification_worker_task = asyncio.create_task(notification_delivery_loop())
@@ -90,6 +92,7 @@ app.include_router(monetization_router, prefix="/api/v1")
 app.include_router(wompi_router, prefix="/api/v1")
 app.include_router(tiktok_creator_router, prefix="/api/v1")
 app.include_router(publication_router, prefix="/api/v1")
+app.include_router(storefront_sections_router, prefix="/api/v1")
 app.include_router(store_orders_router, prefix="/api/v1")
 app.include_router(aliexpress_oauth_router, prefix="/api/v1")
 
@@ -562,7 +565,7 @@ class ProductImportBatch(BaseModel):
 )
 def import_product_from_url(payload: ProductImport):
     category = (payload.category or "").strip().lower() or None
-    if category and category not in {"ropa", "calzado", "accesorios"}:
+    if category and category not in {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"}:
         raise HTTPException(status_code=400, detail="Categoría no permitida.")
     if payload.previous_price is not None and payload.price is not None and payload.previous_price < payload.price:
         raise HTTPException(status_code=400, detail="El precio anterior debe ser igual o superior al precio actual.")
