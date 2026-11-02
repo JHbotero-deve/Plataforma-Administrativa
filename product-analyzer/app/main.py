@@ -12,6 +12,7 @@ from seed_catalog import seed_catalog
 from tiktok_creator import creator_configured, sync_showcase
 
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
+PROMOTION_API_ENABLED = os.getenv("ENABLE_ALIEXPRESS_PROMOTION_API", "false").strip().lower() in {"1", "true", "yes"}
 def build_url(title: str, product_url: str | None) -> str:
     if product_url and product_url != "#":
         return product_url
@@ -41,14 +42,17 @@ def expire_catalog():
 def run_pipeline():
     print("== Iniciando ciclo de análisis de catálogo y promociones AliExpress ==")
     expire_catalog()
-    try:
-        promotions = run_promotion_cycle()
-        print(
-            "[promotions] consultados={queried} aprobados={approved} "
-            "nuevos_avisos={alerts}".format(**promotions)
-        )
-    except Exception as exc:
-        print(f"[promotions] ciclo falló: {type(exc).__name__}: {exc}")
+    if PROMOTION_API_ENABLED:
+        try:
+            promotions = run_promotion_cycle()
+            print(
+                "[promotions] consultados={queried} aprobados={approved} "
+                "nuevos_avisos={alerts}".format(**promotions)
+            )
+        except Exception as exc:
+            print(f"[promotions] ciclo falló: {type(exc).__name__}: {exc}")
+    else:
+        print("[promotions] búsqueda por API desactivada; se mantienen las importaciones por URL.")
 
     conn = get_connection()
     product_ids = []
