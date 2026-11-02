@@ -69,8 +69,9 @@ jobs:
         run: |
           set -euo pipefail
           build_status="$(git status --porcelain -- product-analyzer/frontend/headphones)"
-          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" && "${PR_HEAD_REPO}" == "${GITHUB_REPOSITORY}" && -n "${build_status}" ]]; then
-            mkdir -p /tmp/headphones-static-build
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" && "${PR_HEAD_REPO}" == "${GITHUB_REPOSITORY}" ]]; then
+            if [[ -n "${build_status}" ]]; then
+              mkdir -p /tmp/headphones-static-build
             cp -a product-analyzer/frontend/headphones/. /tmp/headphones-static-build/
             git fetch origin "${PR_HEAD_REF}"
             git checkout -B "${PR_HEAD_REF}" FETCH_HEAD
@@ -86,7 +87,9 @@ jobs:
             git add product-analyzer/frontend/headphones
             git commit -m "build: sync Headphones static assets"
             git push origin "HEAD:${PR_HEAD_REF}"
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/dispatches" -f ref="${PR_HEAD_REF}"
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/dispatches" -f ref="${PR_HEAD_REF}"
+            fi
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref="${PR_HEAD_REF}"
           elif [[ -n "${build_status}" ]]; then
             git status --short -- product-analyzer/frontend/headphones
             echo "Headphones static build differs from committed assets; update the build before merging."
