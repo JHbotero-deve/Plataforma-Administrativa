@@ -131,9 +131,11 @@ def enrich_product(product):
         return product
     try:
         fresh = _public_product_page(url, platform)
-        for key in ("title", "image_url", "price", "currency", "rating"):
-            if fresh.get(key) is not None and (key == "currency" or not product.get(key) or key == "title" and str(product.get(key)).startswith("Producto ")):
+        for key in ("title", "image_url", "price", "rating"):
+            if fresh.get(key) is not None and (not product.get(key) or key == "title" and str(product.get(key)).startswith("Producto ")):
                 product[key] = fresh[key]
+        if fresh.get("price") is not None and fresh.get("currency"):
+            product["currency"] = fresh["currency"]
         product["product_url"] = fresh["resolved_url"]
         product["source_metadata"] = {**(product.get("source_metadata") or {}), "metadata_source": "public_product_page", "resolved_url": fresh["resolved_url"]}
     except Exception as exc:
