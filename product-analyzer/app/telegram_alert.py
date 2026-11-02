@@ -413,7 +413,7 @@ def _handle(token, chat_id, text):
         return _send(token, chat_id, (
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
-            "/buscar producto — busca en catálogo y tiendas sin pedir URL\n"
+            "/buscar [producto] — descubre en catálogo y tiendas; sin término busca novedades\n"
             "/modelar — recupera datos de enlaces guardados y puntúa productos\n"
             "/agregar URL — importar enlace concreto; para descubrir usa /buscar palabra clave\n"
             "Publicación — selecciona productos en Studio y usa «Publicar en Central»\n"
@@ -438,9 +438,7 @@ def _handle(token, chat_id, text):
 
     if command == "/buscar":
         term = argument.strip()
-        if not term:
-            return _send(token, chat_id, "Uso: /buscar zapatillas")
-        term = term[:100]
+        term = term[:100] or "productos populares de moda calzado y accesorios"
         category = "ropa" if any(word in term.casefold() for word in ("ropa", "vestido", "camisa", "pantal", "chaqueta")) else "calzado" if any(word in term.casefold() for word in ("zapato", "tenis", "zapatilla", "bota")) else "accesorios"
         discovered, source_errors = search_marketplaces(term, category=category, limit=8)
         conn = get_connection()
