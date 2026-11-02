@@ -9,7 +9,7 @@ button, input, select, textarea { font: inherit; }
 
 .studio-app { min-height: 100dvh; }
 
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .studio-app { height: 100dvh; min-height: 100svh; }
   .studio-panel {
     position: fixed;

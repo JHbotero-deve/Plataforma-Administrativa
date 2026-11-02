@@ -118,7 +118,7 @@ export default function App() {
 
   // Panel state
   const [panelOpen, setPanelOpen] = useState(
-    () => typeof window === "undefined" || window.matchMedia("(min-width: 768px)").matches,
+    () => typeof window === "undefined" || window.matchMedia("(min-width: 1024px)").matches,
   );
   const [panelTab, setPanelTab] = useState<"productos" | "agregar" | "apariencia">("productos");
   const [editingId, setEditingId] = useState<string | null>(null);
