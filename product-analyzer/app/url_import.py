@@ -34,7 +34,7 @@ def _external_id(url: str, platform: str) -> str:
 
 def import_url(
     url: str,
-    category: str,
+    category: str | None,
     title: str | None = None,
     price: float | None = None,
     currency: str = "USD",
