@@ -34,4 +34,10 @@ AE-Dropshipper usa un flujo OAuth separado: iniciar sesión como administrador y
 
 ## CLI autorizados
 
-Usa `python scripts/importar-url-central.py --url "URL_DEL_PRODUCTO" --category accesorios` y añade `--title`, `--price`, `--currency` o `--image` si el CLI origen ya conoce esos datos. Configura `CENTRAL_API_URL` y `CENTRAL_INGEST_API_KEY`; la clave se envía en el encabezado y no debe guardarse en el código del bot.
+Central recibe datos obtenidos legítimamente por tus CLI o exportaciones, sin depender de APIs de marketplace. Configura `CENTRAL_API_URL` y `CENTRAL_INGEST_API_KEY`; la clave se envía por encabezado y nunca debe guardarse en el código.
+
+Para un producto: `python scripts/importar-url-central.py --url "URL_DEL_PRODUCTO" --title "Nombre" --price 19.90 --previous-price 29.90 --currency USD --image "https://..." --category accesorios`. También admite `--external-id`, `--description`, `--rating`, `--reviews-count`, `--sales-estimate` y `--gallery` repetido. No inventes ni completes métricas que el origen no entregue.
+
+Para importar lotes: `python scripts/importar-lote-central.py --file productos.json --dry-run` valida primero el archivo. Después ejecuta el mismo comando sin `--dry-run` para enviar lotes al endpoint autenticado `/api/v1/products/import-cli/batch`. Admite JSON (lista, objeto con `products`/ `items`) y CSV. Campos canónicos: `url`, `external_id`, `category`, `title`, `description`, `price`, `previous_price`, `currency`, `image_url`, `gallery_urls`, `rating`, `reviews_count`, `sales_estimate`. También reconoce nombres comunes como `product_url`, `item_id`, `asin`, `name`, `current_price`, `original_price`, `main_image`, `review_count` y `sales`. Categorías desconocidas quedan sin clasificar; no se fuerza `accesorios`.
+
+El enriquecimiento web solo lee páginas públicas. Si el marketplace exige iniciar sesión, Central registra el bloqueo y aplica espera antes de reintentar; no intenta evadir controles de acceso. Los productos solo se puntúan automáticamente cuando tienen título real, precio, categoría e imagen.

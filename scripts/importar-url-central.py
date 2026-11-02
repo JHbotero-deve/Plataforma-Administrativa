@@ -24,9 +24,16 @@ def main():
     load_env()
     parser = argparse.ArgumentParser(description="Envía un producto de Amazon o AliExpress a Central y Telegram.")
     parser.add_argument("--url", required=True, help="URL del producto, sin credenciales en la URL")
-    parser.add_argument("--category", default="accesorios")
+    parser.add_argument("--category", choices=("ropa", "calzado", "accesorios"))
+    parser.add_argument("--external-id")
     parser.add_argument("--title")
+    parser.add_argument("--description")
     parser.add_argument("--price", type=float)
+    parser.add_argument("--previous-price", type=float)
+    parser.add_argument("--rating", type=float)
+    parser.add_argument("--reviews-count", type=int, default=0)
+    parser.add_argument("--sales-estimate", type=int)
+    parser.add_argument("--gallery", action="append", default=[])
     parser.add_argument("--currency", default="USD")
     parser.add_argument("--image")
     parser.add_argument("--api-url", default=os.getenv("CENTRAL_API_URL", "").strip())
@@ -38,8 +45,12 @@ def main():
     if not endpoint.endswith("/api/v1/products/import-cli"):
         endpoint += "/api/v1/products/import-cli"
     payload = {
-        "url": args.url, "category": args.category, "title": args.title,
-        "price": args.price, "currency": args.currency, "image_url": args.image,
+        "url": args.url, "category": args.category, "external_id": args.external_id,
+        "title": args.title, "description": args.description,
+        "price": args.price, "previous_price": args.previous_price,
+        "rating": args.rating, "reviews_count": args.reviews_count,
+        "sales_estimate": args.sales_estimate, "gallery_urls": args.gallery,
+        "currency": args.currency, "image_url": args.image,
     }
     payload = {key: value for key, value in payload.items() if value is not None}
     response = requests.post(endpoint, json=payload, headers={"X-Central-Ingest-Key": api_key}, timeout=30)

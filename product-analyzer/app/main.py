@@ -7,11 +7,13 @@ from analysis import score_product
 from db import get_connection, upsert_product
 from init_db import init_database
 from notifications import send_telegram_alert
+from product_sources import enrich_pending_products
 from promotion_bots import run_promotion_cycle
 from seed_catalog import seed_catalog
 from tiktok_creator import creator_configured, sync_showcase
 
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
+PROMOTION_API_ENABLED = os.getenv("ENABLE_ALIEXPRESS_PROMOTION_API", "false").strip().lower() in {"1", "true", "yes"}
 def build_url(title: str, product_url: str | None) -> str:
     if product_url and product_url != "#":
         return product_url
@@ -41,19 +43,23 @@ def expire_catalog():
 def run_pipeline():
     print("== Iniciando ciclo de análisis de catálogo y promociones AliExpress ==")
     expire_catalog()
-    try:
-        promotions = run_promotion_cycle()
-        print(
-            "[promotions] consultados={queried} aprobados={approved} "
-            "nuevos_avisos={alerts}".format(**promotions)
-        )
-    except Exception as exc:
-        print(f"[promotions] ciclo falló: {type(exc).__name__}: {exc}")
+    if PROMOTION_API_ENABLED:
+        try:
+            promotions = run_promotion_cycle()
+            print(
+                "[promotions] consultados={queried} aprobados={approved} "
+                "nuevos_avisos={alerts}".format(**promotions)
+            )
+        except Exception as exc:
+            print(f"[promotions] ciclo falló: {type(exc).__name__}: {exc}")
+    else:
+        print("[promotions] búsqueda por API desactivada; se mantienen las importaciones por URL.")
 
     conn = get_connection()
-    product_ids = []
     try:
         print("[ingesta] se conservan las importaciones manuales y por CLI autorizado.")
+        enriched = enrich_pending_products(conn, limit=20)
+        print(f"[catalog] productos enriquecidos desde URLs públicas: {enriched}")
 
         averages = {}
         with conn.cursor() as cur:
@@ -66,6 +72,22 @@ def run_pipeline():
             """)
             for row in cur.fetchall():
                 averages[(row["category"], row["currency"])] = float(row["avg_price"] or 0)
+            cur.execute("""
+                SELECT p.id
+                FROM products p
+                WHERE p.is_active = TRUE
+                  AND p.current_price IS NOT NULL
+                  AND p.current_price > 0
+                  AND p.category_id IS NOT NULL
+                  AND p.title IS NOT NULL
+                  AND p.title NOT LIKE 'Producto %%'
+                  AND p.image_url IS NOT NULL
+                  AND p.image_url <> ''
+                ORDER BY p.updated_at DESC
+                LIMIT 500
+            """)
+            product_ids = [row["id"] for row in cur.fetchall()]
+        print(f"[catalog] productos listos para puntuar: {len(product_ids)}")
 
         for product_id in set(product_ids):
             with conn.cursor() as cur:
