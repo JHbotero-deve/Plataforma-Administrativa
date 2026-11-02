@@ -131,6 +131,10 @@ def _public_product_page(url, platform):
 
     metadata = parser.meta
     title = metadata.get("og:title") or metadata.get("twitter:title") or ""
+    final_host = (urlsplit(current).hostname or "").lower()
+    title_check = title.casefold()
+    if final_host.startswith("login.") or any(term in title_check for term in ("sign in", "log in", "login", "iniciar sesión", "iniciar sesion")):
+        raise RuntimeError("La tienda exige iniciar sesión para mostrar los datos del producto.")
     image = metadata.get("og:image") or metadata.get("twitter:image")
     price = metadata.get("product:price:amount") or metadata.get("og:price:amount") or metadata.get("price")
     currency = metadata.get("product:price:currency") or metadata.get("og:price:currency")
