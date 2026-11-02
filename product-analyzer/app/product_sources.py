@@ -183,6 +183,8 @@ def enrich_product(product):
     if platform not in ALLOWED_HOSTS or not url:
         return product
     metadata = dict(product.get("source_metadata") or {})
+    if product.get("title") and not str(product["title"]).startswith("Producto ") and product.get("price") and product.get("image_url") and product.get("category"):
+        return product
     try:
         fresh = _public_product_page(url, platform)
         if fresh.get("title") and (not product.get("title") or str(product["title"]).startswith("Producto ")):
@@ -194,6 +196,7 @@ def enrich_product(product):
             product["currency"] = fresh["currency"]
         if not product.get("category") and fresh.get("category"):
             product["category"] = fresh["category"]
+            metadata["category_source"] = "public_product_page"
         if fresh.get("gallery_urls"):
             product["gallery_urls"] = list(dict.fromkeys((product.get("gallery_urls") or []) + fresh["gallery_urls"]))[:10]
         metadata.update({
@@ -232,6 +235,10 @@ def _retry_due(metadata):
 
 
 def _enrich_pending_row(row):
+    source_metadata = row["source_metadata"] or {}
+    category = row["category"]
+    if category == "accesorios" and source_metadata.get("metadata_source") == "url_only" and not source_metadata.get("category_source"):
+        category = None
     product = {
         "platform": row["platform"],
         "product_url": row["product_url"],
@@ -242,8 +249,8 @@ def _enrich_pending_row(row):
         "gallery_urls": row.get("image_gallery") or [],
         "rating": row.get("rating"),
         "reviews_count": row.get("reviews_count"),
-        "category": row["category"],
-        "source_metadata": row["source_metadata"] or {},
+        "category": category,
+        "source_metadata": source_metadata,
     }
     return enrich_product(product)
 
@@ -266,7 +273,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4):
         gallery = enriched.get("gallery_urls") or row.get("image_gallery") or []
         with conn.cursor() as cur:
             cur.execute("""UPDATE products SET
-                category_id=COALESCE(category_id,(SELECT id FROM categories WHERE name=%s)),
+                category_id=CASE WHEN %s THEN (SELECT id FROM categories WHERE name=%s) ELSE COALESCE(category_id,(SELECT id FROM categories WHERE name=%s)) END,
                 title=%s,
                 current_price=COALESCE(%s,current_price),
                 currency=COALESCE(%s,currency),
@@ -277,6 +284,8 @@ def enrich_pending_products(conn, limit=80, max_workers=4):
                 source_metadata=%s::jsonb,
                 updated_at=NOW()
                 WHERE id=%s""", (
+                bool(row["category"] == "accesorios" and (row["source_metadata"] or {}).get("metadata_source") == "url_only" and not (row["source_metadata"] or {}).get("category_source")),
+                enriched.get("category") if enriched.get("category") in ALLOWED_CATEGORIES else None,
                 enriched.get("category") if enriched.get("category") in ALLOWED_CATEGORIES else None,
                 enriched.get("title") or row["title"],
                 enriched.get("price"), enriched.get("currency"), enriched.get("image_url"),
