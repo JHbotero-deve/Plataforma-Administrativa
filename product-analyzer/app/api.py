@@ -552,6 +552,10 @@ class ProductImport(BaseModel):
     sales_estimate: Optional[int] = Field(default=None, ge=0)
 
 
+class ProductImportBatch(BaseModel):
+    products: list[ProductImport]
+
+
 @core_router.post(
     "/products/import-url", dependencies=[Depends(require_admin)]
 )
@@ -657,6 +661,55 @@ def import_product_from_cli(
         "opportunity_score": score,
         "telegram_notified": bool(notified),
         "affiliate_link_generated": bool(product.get("affiliate_url")),
+    }
+
+
+@core_router.post("/products/import-cli/batch")
+def import_products_from_cli_batch(
+    payload: ProductImportBatch,
+    x_central_ingest_key: str = Header(default="", alias="X-Central-Ingest-Key"),
+):
+    expected_key = (os.getenv("CENTRAL_INGEST_API_KEY") or "").strip()
+    if not expected_key:
+        raise HTTPException(status_code=503, detail="La importación CLI no está configurada.")
+    if not x_central_ingest_key or not secrets.compare_digest(x_central_ingest_key, expected_key):
+        raise HTTPException(status_code=401, detail="Credencial de ingesta inválida.")
+    if not payload.products or len(payload.products) > 100:
+        raise HTTPException(status_code=400, detail="El lote debe contener entre 1 y 100 productos.")
+    items = []
+    for index, item in enumerate(payload.products):
+        try:
+            result = import_product_from_url(item)
+            product = result["product"]
+            score = result.get("opportunity_score")
+            notified = send_telegram_alert({
+                "title": product.get("title"),
+                "price": product.get("current_price"),
+                "url": product.get("affiliate_url") or product.get("product_url"),
+                "score": score if score is not None else "pendiente",
+                "platform": product.get("platform"),
+                "category": product.get("category"),
+                "affiliate_link_generated": bool(product.get("affiliate_url")),
+            })
+            items.append({
+                "index": index,
+                "ok": True,
+                "product": product,
+                "opportunity_score": score,
+                "telegram_notified": bool(notified),
+            })
+        except HTTPException as exc:
+            items.append({"index": index, "ok": False, "status_code": exc.status_code, "error": exc.detail})
+        except Exception as exc:
+            logger.exception("CLI batch item %s failed", index)
+            items.append({"index": index, "ok": False, "status_code": 500, "error": "No fue posible procesar este producto."})
+    imported = sum(1 for item in items if item["ok"])
+    return {
+        "total": len(items),
+        "imported": imported,
+        "failed": len(items) - imported,
+        "telegram_notified": sum(1 for item in items if item.get("telegram_notified")),
+        "items": items,
     }
 
 
