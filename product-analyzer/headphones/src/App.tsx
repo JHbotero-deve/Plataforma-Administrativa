@@ -96,6 +96,10 @@ function isSafeExternalUrl(value: string) {
   }
 }
 
+function isSafeImageSource(value: string) {
+  return /^data:image\/(?:png|jpeg|webp);base64,/i.test(value) || isSafeExternalUrl(value);
+}
+
 function readStoredProducts(): Product[] {
   try {
     const raw = window.localStorage.getItem("sp-products");
@@ -109,7 +113,7 @@ function readStoredProducts(): Product[] {
       const variants = item.variants.flatMap((entry, index): ColorVariant[] => {
         if (!entry || typeof entry !== "object") return [];
         const variant = entry as Record<string, unknown>;
-        if (typeof variant.image !== "string" || !variant.image) return [];
+        if (typeof variant.image !== "string" || !isSafeImageSource(variant.image)) return [];
         return [{
           id: typeof variant.id === "string" ? variant.id : `${item.id}-${index}`,
           name: typeof variant.name === "string" ? variant.name : "Variante",
@@ -136,9 +140,9 @@ function readStoredProducts(): Product[] {
         badge: typeof item.badge === "string" ? item.badge : undefined,
         categoryId: CATEGORIES.some(category => category.id === item.categoryId) ? item.categoryId as string : "otros",
         variants,
-        amazon: typeof item.amazon === "string" ? item.amazon : undefined,
-        aliexpress: typeof item.aliexpress === "string" ? item.aliexpress : undefined,
-        wompi: typeof item.wompi === "string" ? item.wompi : undefined,
+        amazon: typeof item.amazon === "string" && isSafeExternalUrl(item.amazon) ? item.amazon : undefined,
+        aliexpress: typeof item.aliexpress === "string" && isSafeExternalUrl(item.aliexpress) ? item.aliexpress : undefined,
+        wompi: typeof item.wompi === "string" && isSafeExternalUrl(item.wompi) ? item.wompi : undefined,
         published: item.published === true,
       }];
     });
@@ -231,26 +235,23 @@ export default function App() {
 
   // Manejadores de productos
   const togglePublished = (id: string) => {
-    setProducts(prev => {
-      const next = prev.map(p => p.id === id ? { ...p, published: !p.published } : p);
-      const nowPub = next.filter(p => p.published);
-      if (id === activeProdId && !next.find(p => p.id === id)?.published) {
-        const fallback = nowPub[0];
-        if (fallback) { setActiveCatId(fallback.categoryId); setActiveProdId(fallback.id); setActiveVarIdx(0); }
-      }
-      return next;
-    });
+    const product = products.find(p => p.id === id);
+    if (!product) return;
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, published: !p.published } : p));
+    if (product.published && id === activeProdId) {
+      const fallback = products.find(p => p.id !== id && p.published);
+      if (fallback) { setActiveCatId(fallback.categoryId); setActiveProdId(fallback.id); setActiveVarIdx(0); }
+    }
   };
 
   const deleteProduct = (id: string) => {
-    setProducts(prev => {
-      const next = prev.filter(p => p.id !== id);
-      if (id === activeProdId) {
-        const fallback = next.find(p => p.published);
-        if (fallback) { setActiveCatId(fallback.categoryId); setActiveProdId(fallback.id); setActiveVarIdx(0); }
-      }
-      return next;
-    });
+    const fallback = products.find(p => p.id !== id && p.published);
+    setProducts(prev => prev.filter(p => p.id !== id));
+    if (id === activeProdId && fallback) {
+      setActiveCatId(fallback.categoryId);
+      setActiveProdId(fallback.id);
+      setActiveVarIdx(0);
+    }
   };
 
   const startEditing = (p: Product) => {
@@ -272,7 +273,7 @@ export default function App() {
 
   const submitForm = () => {
     setFormError("");
-    const variants = form.variants.filter(variant => variant.name.trim() && (variant.image.startsWith("data:image/") || isSafeExternalUrl(variant.image)));
+    const variants = form.variants.filter(variant => variant.name.trim() && isSafeImageSource(variant.image));
     const basePrice = Number(form.basePrice);
     const originalPrice = form.originalPrice.trim() ? Number(form.originalPrice) : 0;
     const rating = form.rating.trim() ? Number(form.rating) : 4.5;
@@ -282,7 +283,7 @@ export default function App() {
     if (!form.name.trim()) return setFormError("Escribe el nombre del producto.");
     if (!variants.length) return setFormError("Agrega al menos una variante con imagen válida.");
     if (!Number.isFinite(basePrice) || basePrice <= 0) return setFormError("El precio debe ser un número mayor que cero.");
-    if (!Number.isFinite(originalPrice) || (originalPrice > 0 && originalPrice < basePrice)) return setFormError("El precio original debe ser igual o superior al precio actual.");
+    if (!Number.isFinite(originalPrice) || originalPrice < 0 || (originalPrice > 0 && originalPrice < basePrice)) return setFormError("El precio original debe ser cero o igual/superior al precio actual.");
     if (!Number.isFinite(rating) || rating < 0 || rating > 5) return setFormError("La calificación debe estar entre 0 y 5.");
     if (!Number.isInteger(reviews) || reviews < 0) return setFormError("El número de reseñas debe ser un entero igual o mayor que cero.");
     if (links.some(link => !isSafeExternalUrl(link))) return setFormError("Los enlaces de compra deben comenzar con http:// o https://.");
