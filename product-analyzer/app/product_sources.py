@@ -101,7 +101,7 @@ def _public_product_page(url, platform):
     title = metadata.get("og:title") or metadata.get("twitter:title") or ""
     image = metadata.get("og:image") or metadata.get("twitter:image")
     price = metadata.get("product:price:amount") or metadata.get("og:price:amount") or metadata.get("price")
-    currency = metadata.get("product:price:currency") or metadata.get("og:price:currency") or "USD"
+    currency = metadata.get("product:price:currency") or metadata.get("og:price:currency")
     category = "accesorios"
     rating = None
     for raw in parser.jsonld:
@@ -121,7 +121,7 @@ def _public_product_page(url, platform):
             category = product.get("category") or category
             rating = (product.get("aggregateRating") or {}).get("ratingValue")
             break
-    return {"title": str(title)[:500] or None, "image_url": image if isinstance(image, str) and image.startswith(("http://", "https://")) else None, "price": _number(price), "currency": str(currency).upper()[:10], "rating": rating, "category": category, "resolved_url": current}
+    return {"title": str(title)[:500] or None, "image_url": image if isinstance(image, str) and image.startswith(("http://", "https://")) else None, "price": _number(price), "currency": str(currency).upper()[:10] if currency else None, "rating": rating, "category": category, "resolved_url": current}
 
 
 def enrich_product(product):
