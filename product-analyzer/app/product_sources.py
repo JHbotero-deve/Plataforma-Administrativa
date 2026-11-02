@@ -149,7 +149,11 @@ def _public_product_page(url, platform):
             title = title or product.get("name") or ""
             image_value = product.get("image")
             images = image_value if isinstance(image_value, list) else [image_value]
-            gallery.extend(urljoin(current, item) for item in images if isinstance(item, str) and item)
+            for item in images:
+                if isinstance(item, dict):
+                    item = item.get("url") or item.get("contentUrl")
+                if isinstance(item, str) and item:
+                    gallery.append(urljoin(current, item))
             offers = product.get("offers") or {}
             if isinstance(offers, list):
                 offers = offers[0] if offers else {}
