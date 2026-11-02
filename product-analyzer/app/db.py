@@ -121,24 +121,26 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
         cur.execute(
             """
             INSERT INTO products (
-                platform_id, category_id, seller_id, external_id, title,
-                image_url, image_gallery, product_url, affiliate_url, current_price, currency, rating,
+                platform_id, category_id, seller_id, external_id, title, description,
+                image_url, image_gallery, product_url, affiliate_url, current_price, previous_price, currency, rating,
                 reviews_count, sales_estimate, source_metadata,
                 catalog_batch_id, catalog_expires_at, updated_at
             )
             VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, NOW(), NOW() + INTERVAL '48 hours', NOW()
+                %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW() + INTERVAL '48 hours', NOW()
             )
             ON CONFLICT (platform_id, external_id) DO UPDATE SET
                 category_id = EXCLUDED.category_id,
                 seller_id = COALESCE(EXCLUDED.seller_id, products.seller_id),
                 title = EXCLUDED.title,
+                description = COALESCE(EXCLUDED.description, products.description),
                 image_url = COALESCE(EXCLUDED.image_url, products.image_url),
                 image_gallery = CASE WHEN EXCLUDED.image_gallery <> '[]'::jsonb THEN EXCLUDED.image_gallery ELSE products.image_gallery END,
                 product_url = COALESCE(EXCLUDED.product_url, products.product_url),
                 affiliate_url = COALESCE(EXCLUDED.affiliate_url, products.affiliate_url),
                 current_price = COALESCE(EXCLUDED.current_price, products.current_price),
+                previous_price = COALESCE(EXCLUDED.previous_price, products.previous_price),
                 currency = COALESCE(EXCLUDED.currency, products.currency),
                 rating = COALESCE(EXCLUDED.rating, products.rating),
                 reviews_count = COALESCE(EXCLUDED.reviews_count, products.reviews_count),
@@ -156,11 +158,13 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
                 seller_id,
                 product["external_id"],
                 product["title"],
+                product.get("description"),
                 product.get("image_url"),
                 Json(product.get("gallery_urls") or ([product.get("image_url")] if product.get("image_url") else [])),
                 product.get("product_url"),
                 affiliate_url,
                 product.get("price"),
+                product.get("previous_price"),
                 product.get("currency") or "COP",
                 product.get("rating"),
                 product.get("reviews_count", 0),
