@@ -250,12 +250,10 @@ def _add_url(argument):
         url = parts[1]
         details = parts[2:]
     else:
-        category = "accesorios"
+        category = None
         url = parts[0]
         details = parts[1:]
 
-    if category not in ALLOWED_CATEGORIES:
-        return None, "Categoría no válida. Usa ropa, calzado o accesorios.", None
 
     try:
         price = float(details[0].replace(",", ".")) if details and details[0] else None
@@ -270,6 +268,7 @@ def _add_url(argument):
             currency=details[3] if len(details) > 3 and details[3] else "USD",
         )
         product = enrich_product(product)
+        category = category or product.get("category")
         if product["platform"] not in ALLOWED_PLATFORMS:
             return None, "Plataforma no habilitada para importación.", None
 
@@ -277,7 +276,7 @@ def _add_url(argument):
         try:
             product_id = upsert_product(conn, product["platform"], category, product)
             score = None
-            if product.get("price") is not None:
+            if product.get("price") is not None and category:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -421,10 +420,10 @@ def _handle(token, chat_id, text):
                 detect_platform(candidate)
             except ValueError:
                 continue
-            result, payload, score = _add_url("accesorios|" + candidate)
+            result, payload, score = _add_url(candidate)
             if result is None:
                 return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
-            score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score pendiente: envía precio con /agregar"
+            score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score pendiente: completa precio y categoría con /agregar"
             message = (
                 "<b>URL recibida e importada</b>\n"
                 + html.escape(str(payload["title"])[:250]) + "\n"
