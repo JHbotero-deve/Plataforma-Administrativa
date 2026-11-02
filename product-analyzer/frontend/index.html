@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="/central.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#11151b">
 <title>Central — Radar de oportunidades</title>
 <meta name="description" content="Central analiza productos reales y detecta oportunidades de compra y monetización.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,7 +31,7 @@
 .radar-card .card-body small{color:#69716b;line-height:1.4}
 .radar-card .card-price{color:#30372f!important;font:700 16px/1.2 "Space Grotesk",Inter,sans-serif;margin:10px 0 0!important;white-space:normal;overflow-wrap:anywhere}
 @media(max-width:560px){.radar-card .card-media{aspect-ratio:4/3!important}.radar-card .card-body{padding:11px}.radar-action{font-size:9px;min-height:32px}}
-.pub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}.pub-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:10px;min-width:0}.pub-card h3{margin:0;font-size:15px;overflow-wrap:anywhere}.pub-meta{font-size:12px;color:var(--muted)}.pub-form{display:grid;gap:8px}.pub-form label{display:grid;gap:4px;font-size:12px;color:var(--muted)}.pub-form input[type=text],.pub-form input[type=color]{width:100%;min-height:38px;border:1px solid var(--line);border-radius:7px;padding:8px;background:var(--panel);color:var(--text)}.pub-form .pub-check{display:flex;align-items:center;gap:8px}.pub-actions{display:flex;gap:8px;flex-wrap:wrap}.pub-actions .btn{font-size:12px}.pub-empty{padding:16px;border:1px dashed var(--line);border-radius:10px;color:var(--muted)}
+.pub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}.pub-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:10px;min-width:0}.pub-card h3{margin:0;font-size:15px;overflow-wrap:anywhere}.pub-meta{font-size:12px;color:var(--muted)}.pub-form{display:grid;gap:8px}.pub-form label{display:grid;gap:4px;font-size:12px;color:var(--muted)}.pub-form input[type=text],.pub-form input[type=number],.pub-form input[type=color]{width:100%;min-height:38px;border:1px solid var(--line);border-radius:7px;padding:8px;background:var(--panel);color:var(--text)}.pub-form .pub-check{display:flex;align-items:center;gap:8px}.pub-actions{display:flex;gap:8px;flex-wrap:wrap}.pub-actions .btn{font-size:12px}.pub-empty{padding:16px;border:1px dashed var(--line);border-radius:10px;color:var(--muted)}.pub-order{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.pub-profit{padding:10px 12px;border-radius:8px;background:#1a211a;color:#c7e4bf;font-size:12px}.connection-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.connection-bar [role=status]{font-size:12px;color:var(--muted)}.connection-bar .offline{color:#d9a64a}.connection-bar .online{color:#79c88a}@media(max-width:560px){.pub-grid{grid-template-columns:1fr}.connection-bar .btn{width:100%}}
 .radar-action{min-height:42px;padding:10px 12px;border-radius:13px;border:1px solid rgba(255,255,255,.16);font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;text-decoration:none;backdrop-filter:blur(12px)}
 .radar-specs{background:rgba(8,10,14,.72);color:#fff}
 .radar-open{background:#ff8a00;border-color:#ff8a00;color:#080a0e}
@@ -60,7 +62,7 @@
 <div class="import-fallback"><a class="btn small" href="https://central-7ykr.vercel.app/tarjetas">Abrir creador de tarjetas</a></div>
 <div class="import-result" id="importResult" role="status" aria-live="polite"></div>
 </div></section>
-<section id="publicaciones"><div class="wrap"><div class="section-head"><div><div class="eyebrow">04 · tienda</div><h2>Gestionar tarjetas publicadas</h2><p>Publica oportunidades, edita los textos visibles, despublica o elimina una ficha sin borrar el producto del catálogo.</p></div><div class="pub-actions"><a class="btn small" href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Ver tienda</a><a class="btn small" id="salesAnchor" href="#ventas" hidden>Ventas</a><button class="btn small" id="adminLogout" type="button">Cerrar sesión</button></div></div><div id="publicationMessage" class="pub-empty">Comprobando sesión administrativa…</div><div id="publicationList" class="pub-grid"></div></div></section>
+<section id="publicaciones"><div class="wrap"><div class="section-head"><div><div class="eyebrow">04 · tienda</div><h2>Administrar productos y tarjetas</h2><p>Ordena, retira o publica productos. El precio de venta viene de la fuente y no se cambia aquí. Los productos personales usan Wompi; los de Amazon/AliExpress llevan al enlace de compra del producto.</p></div><div class="pub-actions"><a class="btn small" href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Ver tienda</a><a class="btn small" id="salesAnchor" href="#ventas" hidden>Ventas</a><button class="btn small" id="adminLogout" type="button">Cerrar sesión</button></div></div><div class="connection-bar"><div id="connectionStatus" role="status">Comprobando conexión…</div><div class="pub-actions"><span id="offlineQueueStatus" class="pub-meta">Sin cambios pendientes</span><button class="btn small" id="syncOfflineQueue" type="button" hidden>Sincronizar pendientes</button></div></div><div id="publicationMessage" class="pub-empty">Comprobando sesión administrativa…</div><div id="publicationList" class="pub-grid"></div></div></section>
 
 <section id="salesAdmin" hidden><div class="wrap"><div class="section-head"><div><div class="eyebrow">05 · administración de tienda</div><h2>Ventas, pedidos y comprobantes</h2><p>Datos confirmados por Wompi y costos guardados en cada pedido.</p></div><div class="sales-status" id="salesUpdated">—</div></div><div class="sales-summary"><div class="sales-card"><span>Ventas cobradas</span><strong id="salesGross">—</strong></div><div class="sales-card"><span>Utilidad bruta estimada</span><strong id="salesProfit">—</strong></div><div class="sales-card"><span>Pedidos aprobados</span><strong id="salesOrders">—</strong></div><div class="sales-card"><span>Unidades vendidas</span><strong id="salesUnits">—</strong></div><div class="sales-card"><span>Ventas de hoy</span><strong id="salesToday">—</strong></div><div class="sales-card"><span>Ventas del mes</span><strong id="salesMonth">—</strong></div><div class="sales-card"><span>Ticket promedio</span><strong id="salesAverage">—</strong></div><div class="sales-card"><span>Pagos pendientes</span><strong id="salesPending">—</strong></div><div class="sales-card"><span>Pagos rechazados/anulados</span><strong id="salesFailed">—</strong></div></div><div class="sales-note">La utilidad es una estimación con el costo registrado al vender; no descuenta comisión de Wompi, impuestos, envíos, devoluciones ni otros gastos. El documento generado es un comprobante comercial, no una factura electrónica DIAN.</div><div class="sales-toolbar"><strong>Últimos pedidos</strong><div class="pub-actions"><span class="sales-status" id="notificationStatus">Estado de avisos: —</span><button class="btn small" id="retryNotifications" type="button">Reintentar avisos pendientes</button></div></div><div id="salesMessage" class="pub-empty">Cargando ventas…</div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Pedido / cliente</th><th>Estado</th><th>Unidades</th><th>Total</th><th>Utilidad bruta est.</th><th>Comprobante</th></tr></thead><tbody id="salesRows"></tbody></table></div></div></section>
 <section id="telegram"><div class="wrap"><div class="section-head"><div><div class="eyebrow">06 · automatización</div><h2>Telegram</h2><p>Consulta el catálogo y las oportunidades de Central directamente desde Telegram.</p></div><div class="mono" id="telegramStatus">Comprobando…</div></div><div class="panel" style="padding:20px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap"><div><strong id="telegramName">Bot de Central</strong><div class="status" id="telegramDetail" style="margin-top:5px">Verificando conexión con Telegram.</div></div><a class="btn primary" id="telegramOpen" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Abrir Telegram</a></div></div></section>
@@ -75,13 +77,106 @@ const API="/api/v1", $=id=>document.getElementById(id);
 const authHeaders=(extra={})=>extra;
 const adminHeaders=(extra={})=>extra;
 const requestOptions=(options={})=>({...options,credentials:"include",cache:"no-store"});
-const requireSession=error=>{if(error?.status===401){$("publicationMessage").innerHTML='Sesión administrativa requerida. <a href="/admin-login.html">Inicia sesión con tu contraseña</a>; no necesitas la clave interna de Railway.';return true}return false};
+const offlineAdminKey="central.admin.offline-enabled.v1";
+const offlinePublicationsKey="central.admin.publications.v1";
+const offlineQueueKey="central.admin.queue.v1";
+let queueSyncing=false,offlineQueueError="";
+function readOfflineQueue(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(offlineQueueKey)||"[]");
+  if(!Array.isArray(saved))throw new Error("Formato de cola inválido");
+  offlineQueueError="";
+  return saved;
+ }catch(error){
+  offlineQueueError="No se pudo leer la cola local: "+error.message;
+  return [];
+ }
+}
+function saveOfflineQueue(queue){
+ try{localStorage.setItem(offlineQueueKey,JSON.stringify(queue));offlineQueueError="";return true}
+ catch(error){offlineQueueError="No se pudo guardar la cola local: "+error.message;return false}
+}
+function clearOfflineAdminCache(){
+ try{localStorage.removeItem(offlineAdminKey);localStorage.removeItem(offlinePublicationsKey)}
+ catch(error){console.warn("No se pudo limpiar la copia administrativa local:",error)}
+}
+function updateOfflineStatus(){
+ const status=$("connectionStatus"),queueStatus=$("offlineQueueStatus"),sync=$("syncOfflineQueue");
+ if(!status||!queueStatus||!sync)return;
+ const queue=readOfflineQueue();
+ status.className=navigator.onLine?"online":"offline";
+ status.textContent=navigator.onLine?"Con conexión · cambios sincronizados con Central":"Sin conexión · cambios guardados en este dispositivo";
+ sync.hidden=!queue.length;
+ queueStatus.textContent=offlineQueueError||(
+  queue.length?queue.length+" cambio"+(queue.length===1?" pendiente":"s pendientes")+
+   (queue.some(item=>item.error)?" · revisa el mensaje antes de reintentar":""):"Sin cambios pendientes"
+ );
+}
+function enqueueOfflineAction(action){
+ const queue=readOfflineQueue();
+ if(action.type==="reorder"){
+  for(let i=queue.length-1;i>=0;i--)if(queue[i].type==="reorder")queue.splice(i,1);
+ }
+ queue.push({id:"q-"+Date.now()+"-"+Math.random().toString(36).slice(2),...action});
+ if(!saveOfflineQueue(queue))throw new Error(offlineQueueError);
+ updateOfflineStatus();
+}
+async function flushOfflineQueue(){
+ if(queueSyncing||!navigator.onLine)return;
+ let queue=readOfflineQueue();
+ if(!queue.length){updateOfflineStatus();return}
+ queueSyncing=true;
+ let syncedImport=false;
+ const button=$("syncOfflineQueue");
+ if(button)button.disabled=true;
+ try{
+  for(let index=0;index<queue.length;index++){
+   const action=queue[index];
+   let response;
+   try{
+    response=await fetch(API+action.path,requestOptions({
+     method:action.method,
+     headers:action.body?adminHeaders({"Content-Type":"application/json",Accept:"application/json"}):adminHeaders({Accept:"application/json"}),
+     ...(action.body?{body:JSON.stringify(action.body)}:{})
+    }));
+   }catch(error){
+    action.error="Sin conexión: "+error.message;
+    queue[index]=action;saveOfflineQueue(queue);break;
+   }
+   if(action.type==="delete"&&response.status===404){
+    queue.splice(index,1);index--;saveOfflineQueue(queue);continue;
+   }
+   if(!response.ok){
+    const data=await response.json().catch(()=>({}));
+    action.error=response.status===401?"Vuelve a iniciar sesión para sincronizar.":(data.detail||"HTTP "+response.status);
+    if(response.status===401)requireSession({status:401});
+    queue[index]=action;saveOfflineQueue(queue);break;
+   }
+   if(action.type==="import")syncedImport=true;
+   queue.splice(index,1);index--;saveOfflineQueue(queue);
+  }
+  updateOfflineStatus();
+  if(!queue.length&&navigator.onLine){
+   await loadPublications();
+   if(syncedImport){$("importResult").textContent="Producto importado al recuperar conexión.";await load()}
+  }
+ }finally{
+  queueSyncing=false;
+  if(button)button.disabled=false;
+  updateOfflineStatus();
+ }
+}
+const requireSession=error=>{if(error?.status===401){clearOfflineAdminCache();$("publicationMessage").innerHTML='Sesión administrativa requerida. <a href="/admin-login.html">Inicia sesión con tu contraseña</a>; no necesitas la clave interna de Railway.';return true}return false};
 const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=(v,c)=>{if(v==null||Number.isNaN(Number(v)))return"—";const n=Number(v);const cur=String(c||"COP").toUpperCase();if(cur==="USD"||cur==="US$"||cur==="$"){const cop=n*3329.61;return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(cop)+" COP";}try{return new Intl.NumberFormat("es-CO",{style:"currency",currency:"COP",maximumFractionDigits:0}).format(n)+" COP"}catch{return n.toLocaleString("es-CO")+" COP"}};
 const date=v=>v?new Date(v).toLocaleString("es-CO"):"—";
 const productImage=p=>{const mongo=p?.source_metadata?.mongo_image_id;return mongo?"mongo://"+mongo:(p?.image_url||((p?.image_gallery||[]).find(Boolean)||""))};
 async function get(path){const protectedRead=/^\/(mongo\/health|pipeline\/(summary|metrics)|intelligence\/overview|opportunities\/top|catalog\/active|products\/compare)(\/|\?|$)/.test(path);const headers=protectedRead?adminHeaders({Accept:"application/json"}):authHeaders({Accept:"application/json"});const r=await fetch(API+path,requestOptions({headers}));if(!r.ok){const data=await r.json().catch(()=>({}));throw Object.assign(new Error(data.detail||"HTTP "+r.status),{status:r.status})}return r.json()}
 function status(kind,label){$("status").innerHTML='<span class="dot '+(kind==="ok"?"ok":kind==="warn"?"warn":"")+'"></span>'+esc(label)}
+updateOfflineStatus();
+window.addEventListener("online",()=>{updateOfflineStatus();flushOfflineQueue()});
+window.addEventListener("offline",updateOfflineStatus);
+if("serviceWorker" in navigator)navigator.serviceWorker.register("/service-worker.js").catch(error=>console.warn("Modo sin conexión no disponible:",error));
 function card(p){
   const id=p.id;
   const score=p.opportunity_score==null?"—":Math.round(Number(p.opportunity_score));
@@ -302,34 +397,98 @@ async function persistPublicationDraft(id,draft,revision){
   else if(!requireSession(error))draftStatus(id,"Sin sincronización: "+error.message+". El borrador queda en este dispositivo.");
  }
 }
+function renderPublicationRows(rows,drafts={},offline=false){
+ const message=$("publicationMessage"),list=$("publicationList"),queue=readOfflineQueue();
+ const deletedIds=new Set(queue.filter(item=>item.type==="delete").map(item=>String(item.publication_id)));
+ let visibleRows=rows.filter(row=>!deletedIds.has(String(row.id))).map(row=>({...row}));
+ for(const item of queue){
+  if(item.type==="patch"){
+   const row=visibleRows.find(value=>String(value.id)===String(item.publication_id));
+   if(row)Object.assign(row,{
+    subtitle:item.body.subtitle,footer:item.body.footer,accent:item.body.accent,
+    is_published:item.body.is_published,cost_price:item.body.cost_price,
+    sale_price:item.body.sale_price,price_display:item.body.price_display
+   });
+   if(row&&String(row.platform||"").toLowerCase()==="personal"){
+    row.profit_amount=null;row.profit_margin_pct=null;
+   }
+   if(row&&String(row.platform||"").toLowerCase()==="personal"&&row.sale_price!=null&&row.cost_price!=null&&Number(row.sale_price)>0){
+    row.profit_amount=Number(row.sale_price)-Number(row.cost_price);
+    row.profit_margin_pct=row.profit_amount/Number(row.sale_price)*100;
+   }
+  }
+  if(item.type==="reorder"){
+   const rank=new Map(item.body.publication_ids.map((id,index)=>[String(id),index]));
+   visibleRows.sort((a,b)=>(rank.get(String(a.id))??Number.MAX_SAFE_INTEGER)-(rank.get(String(b.id))??Number.MAX_SAFE_INTEGER));
+  }
+ }
+ publishedProductIds=new Set(rows.map(row=>String(row.product_id)));
+ message.textContent=offline
+  ?"Modo sin conexión: estos datos son la última copia guardada en este dispositivo. Las acciones se sincronizarán al reconectar."
+  :(rows.length?rows.length+" tarjetas encontradas. Ajusta el orden y administra publicación, margen o canal.":"No hay tarjetas publicadas ni borradores.");
+ list.innerHTML=visibleRows.map((row,index)=>{
+  const id=String(row.id),serverDraft=drafts[id]||null,localDraft=readLocalDraft(id);
+  const serverTime=Date.parse(serverDraft?.updated_at||""),localTime=Date.parse(localDraft?.updated_at||"");
+  const useLocal=Boolean(localDraft&&(!serverDraft||!Number.isFinite(serverTime)||localTime>serverTime));
+  const draft=useLocal?localDraft:(serverDraft||row),personal=String(row.platform||"").toLowerCase()==="personal";
+  serverDraftRevisions.set(id,Number(draft.revision)||0);
+  const restored=Boolean(serverDraft||localDraft);
+  const profitLabel=personal
+   ?(row.profit_margin_pct==null
+     ?"Falta registrar el costo interno para calcular el margen."
+     :"Margen bruto "+Number(row.profit_margin_pct).toLocaleString("es-CO")+"% · utilidad estimada "+money(row.profit_amount,row.currency))
+   :"Producto externo · compra mediante su enlace; margen no disponible en Central.";
+  return `<article class="pub-card" data-publication-card="${row.id}">
+   <div class="pub-order"><span class="pub-meta" data-publication-position>Posición ${index+1} de ${visibleRows.length}</span><div class="pub-actions"><button class="btn small" type="button" data-move-publication="${row.id}" data-direction="-1" aria-label="Mover ${esc(row.title)} hacia arriba" ${index===0?"disabled":""}>↑ Subir</button><button class="btn small" type="button" data-move-publication="${row.id}" data-direction="1" aria-label="Mover ${esc(row.title)} hacia abajo" ${index===visibleRows.length-1?"disabled":""}>↓ Bajar</button></div></div>
+   <div class="pub-meta">${personal?"Producto personal · Wompi":esc(row.platform||"Producto")+" · compra por URL"} · ${row.is_published?"Visible en tienda":"Borrador / retirada"}</div>
+   <h3>${esc(row.title)}</h3><div class="pub-meta">Precio de venta (solo lectura): ${esc(row.price_display||"Precio no disponible")}</div>
+   <div class="pub-profit">${profitLabel}</div>
+   <form class="pub-form" data-publication-form="${row.id}">
+    ${personal?`<label>Costo interno para calcular ganancia (no cambia el precio de venta)<input type="number" name="cost_price" min="0" step="0.01" value="${row.cost_price==null?"":esc(row.cost_price)}" inputmode="decimal"></label>`:""}
+    <label>Texto secundario<input type="text" name="subtitle" maxlength="500" value="${esc(draft.subtitle||"")}"></label>
+    <label>Pie de tarjeta<input type="text" name="footer" maxlength="200" value="${esc(draft.footer||"Disponible en Central")}"></label>
+    <label>Color de acento<input type="color" name="accent" value="${/^#[0-9a-f]{6}$/i.test(draft.accent||"")?draft.accent:"#b6f23a"}"></label>
+    <label class="pub-check"><input type="checkbox" name="is_published" ${draft.is_published?"checked":""}> Visible en la tienda</label>
+    <div class="pub-actions"><button class="btn primary small" type="submit">Guardar ajustes</button><button class="btn small" type="button" data-remove-publication="${row.id}">Eliminar publicación</button><button class="btn small" type="button" data-publish-telegram="${row.id}" ${navigator.onLine?"":"disabled"}>Enviar a Telegram</button></div>
+    <div class="pub-meta" data-draft-status="${row.id}">${restored?"Borrador recuperado.":"Los cambios se guardan automáticamente."}</div>
+   </form></article>`;
+ }).join("");
+ list.querySelectorAll("[data-publication-form]").forEach(form=>{
+  const id=String(form.dataset.publicationForm),localDraft=readLocalDraft(id),serverDraft=drafts[id];
+  if(localDraft&&(!serverDraft||Date.parse(localDraft.updated_at||"")>Date.parse(serverDraft.updated_at||""))){
+   dirtyPublicationIds.add(id);schedulePublicationDraft(form);
+  }
+ });
+}
 async function loadPublications(){
  const message=$("publicationMessage"),list=$("publicationList");if(!message||!list)return;
  if(dirtyPublicationIds.size||document.activeElement?.closest?.("[data-publication-form]"))return;
  try{
   const rows=await get("/publications?include_unpublished=true&limit=100"),drafts=await get("/publications/drafts");
   adminSessionActive=true;
+  let localCacheError="";
+  try{
+   localStorage.setItem(offlineAdminKey,"1");
+   localStorage.setItem(offlinePublicationsKey,JSON.stringify(rows));
+  }catch(error){localCacheError=" El modo offline no pudo guardar datos en este navegador: "+error.message}
   $("inteligencia").hidden=false;
   $("salesNav").hidden=false;
   $("salesAnchor").hidden=false;
-  publishedProductIds=new Set(rows.map(row=>String(row.product_id)));
-  message.textContent=rows.length?rows.length+" tarjetas encontradas. Los borradores se sincronizan automáticamente.":"No hay tarjetas publicadas ni borradores.";
-  list.innerHTML=rows.map(row=>{
-   const id=String(row.id),serverDraft=drafts[id]||null,localDraft=readLocalDraft(id);
-   const serverTime=Date.parse(serverDraft?.updated_at||""),localTime=Date.parse(localDraft?.updated_at||"");
-   const useLocal=Boolean(localDraft&&(!serverDraft||!Number.isFinite(serverTime)||localTime>serverTime));
-   const draft=useLocal?localDraft:(serverDraft||row);
-   serverDraftRevisions.set(id,Number(draft.revision)||0);
-   const restored=Boolean(serverDraft||localDraft);
-   return `<article class="pub-card" data-publication-card="${row.id}"><div class="pub-meta">${esc(row.platform||"Producto")} · ${row.is_published?"Visible en tienda":"Borrador / retirada"}</div><h3>${esc(row.title)}</h3><div class="pub-meta">${esc(row.price_display||"Precio no disponible")}</div><form class="pub-form" data-publication-form="${row.id}"><label>Texto secundario<input type="text" name="subtitle" maxlength="500" value="${esc(draft.subtitle||"")}"></label><label>Pie de tarjeta<input type="text" name="footer" maxlength="200" value="${esc(draft.footer||"Disponible en Central")}"></label><label>Color de acento<input type="color" name="accent" value="${/^#[0-9a-f]{6}$/i.test(draft.accent||"")?draft.accent:"#b6f23a"}"></label><label class="pub-check"><input type="checkbox" name="is_published" ${draft.is_published?"checked":""}> Visible en la tienda</label><div class="pub-actions"><button class="btn primary small" type="submit">Guardar ajustes</button><button class="btn small" type="button" data-remove-publication="${row.id}">Eliminar publicación</button></div><div class="pub-meta" data-draft-status="${row.id}">${restored?"Borrador recuperado.":"Los cambios se guardan automáticamente."}</div></form></article>`;
-  }).join("");
-  list.querySelectorAll("[data-publication-form]").forEach(form=>{
-   const id=String(form.dataset.publicationForm),localDraft=readLocalDraft(id),serverDraft=drafts[id];
-   if(localDraft&&(!serverDraft||Date.parse(localDraft.updated_at||"")>Date.parse(serverDraft.updated_at||""))){
-    dirtyPublicationIds.add(id);schedulePublicationDraft(form);
-   }
-  });
+  renderPublicationRows(rows,drafts);
+  if(localCacheError)message.textContent+=localCacheError;
   await loadCommerceAdmin();
+  updateOfflineStatus();
+  if(readOfflineQueue().length)setTimeout(()=>flushOfflineQueue(),0);
  }catch(error){
+  if((!navigator.onLine||!error.status)&&localStorage.getItem(offlineAdminKey)==="1"){
+   try{
+    const cached=JSON.parse(localStorage.getItem(offlinePublicationsKey)||"null");
+    if(Array.isArray(cached)){
+     adminSessionActive=true;$("inteligencia").hidden=false;$("salesAdmin").hidden=true;
+     renderPublicationRows(cached,{},true);updateOfflineStatus();return;
+    }
+   }catch(cacheError){message.textContent="No se pudo recuperar el catálogo local: "+cacheError.message;return}
+  }
   list.innerHTML="";
   if(requireSession(error)){
    adminSessionActive=false;
@@ -339,6 +498,26 @@ async function loadPublications(){
    $("salesAnchor").hidden=true;
   }else message.textContent="No fue posible cargar las tarjetas: "+error.message;
  }
+}
+function cachedPublication(id){
+ try{return (JSON.parse(localStorage.getItem(offlinePublicationsKey)||"[]")).find(row=>String(row.id)===String(id))||null}
+ catch{return null}
+}
+function applyPublicationOrder(ids){
+ const list=$("publicationList"),cards=new Map([...list.querySelectorAll("[data-publication-card]")].map(card=>[card.dataset.publicationCard,card]));
+ ids.forEach(id=>{const card=cards.get(String(id));if(card)list.appendChild(card)});
+ const ordered=[...list.querySelectorAll("[data-publication-card]")];
+ ordered.forEach((card,index)=>{
+  const position=card.querySelector("[data-publication-position]");
+  if(position)position.textContent="Posición "+(index+1)+" de "+ordered.length;
+  const controls=[...card.querySelectorAll("[data-move-publication]")];
+  controls.forEach(control=>{control.disabled=(control.dataset.direction==="-1"&&index===0)||(control.dataset.direction==="1"&&index===ordered.length-1)});
+ });
+ try{
+  const rows=JSON.parse(localStorage.getItem(offlinePublicationsKey)||"[]"),rank=new Map(ids.map((id,index)=>[String(id),index]));
+  rows.sort((a,b)=>(rank.get(String(a.id))??Number.MAX_SAFE_INTEGER)-(rank.get(String(b.id))??Number.MAX_SAFE_INTEGER));
+  localStorage.setItem(offlinePublicationsKey,JSON.stringify(rows));
+ }catch(error){$("publicationMessage").textContent="El orden cambió en pantalla, pero no se pudo actualizar la copia local: "+error.message}
 }
 async function load(){
   const [itemsResult,topResult,intelResult,pipelineResult]=await Promise.allSettled([
@@ -370,15 +549,26 @@ async function load(){
 async function submitImport(e){
   e.preventDefault();
   const btn=$("importBtn"),out=$("importResult");
+  const body={url:$("url").value.trim(),category:$("category").value};
   btn.disabled=true;
   btn.textContent="Importando…";
-  out.textContent="Leyendo el producto y guardando sus datos reales…";
+  out.textContent=navigator.onLine?"Leyendo el producto y guardando sus datos reales…":"Guardando la importación en la cola local…";
+  if(!navigator.onLine){
+    try{
+      enqueueOfflineAction({type:"import",path:"/products/import-url",method:"POST",body});
+      out.textContent="Importación guardada en este dispositivo; se procesará al recuperar conexión.";
+      $("url").value="";
+      localStorage.removeItem(importDraftKey);
+    }catch(error){out.textContent="No se guardó la importación local: "+error.message}
+    finally{btn.disabled=false;btn.textContent="Importar producto"}
+    return;
+  }
   try{
     const r=await fetch(API+"/products/import-url",{
       method:"POST",
       credentials:"include",
       headers:adminHeaders({"Content-Type":"application/json"}),
-      body:JSON.stringify({url:$("url").value.trim(),category:$("category").value})
+      body:JSON.stringify(body)
     });
     const data=await r.json();
     if(!r.ok)throw new Error(data.detail||"No fue posible importar el producto.");
@@ -390,6 +580,15 @@ async function submitImport(e){
     await load();
   }catch(err){
     if(requireSession(err)){out.textContent="";return}
+    if(!navigator.onLine){
+      try{
+        enqueueOfflineAction({type:"import",path:"/products/import-url",method:"POST",body});
+        out.textContent="Se perdió la conexión. La importación quedó en cola y se procesará al reconectar.";
+        $("url").value="";
+        localStorage.removeItem(importDraftKey);
+        return;
+      }catch(queueError){out.textContent="Se perdió la conexión y no se pudo guardar la importación local: "+queueError.message;return}
+    }
     out.textContent="No se pudo importar: "+(err.message||"Error desconocido")+". ";
     const fallback=document.createElement("a");
     fallback.href="https://central-7ykr.vercel.app/tarjetas";
@@ -411,25 +610,36 @@ if(importForm){
 
 load();
 loadTelegram();
-loadPublications();
+loadPublications().then(()=>flushOfflineQueue());
+const syncOfflineQueue=$("syncOfflineQueue");
+if(syncOfflineQueue)syncOfflineQueue.addEventListener("click",()=>{
+ const queue=readOfflineQueue();
+ queue.forEach(item=>delete item.error);
+ if(saveOfflineQueue(queue))flushOfflineQueue();
+ updateOfflineStatus();
+});
 
 const adminLogout=$("adminLogout");
 if(adminLogout)adminLogout.addEventListener("click",async()=>{
+ if(readOfflineQueue().length){$("publicationMessage").textContent="Hay cambios pendientes. Sincronízalos antes de cerrar sesión para no perder la cola local.";return}
  adminLogout.disabled=true;
  try{
   const response=await fetch(API+"/auth/logout",requestOptions({method:"POST",headers:adminHeaders({Accept:"application/json"})}));
   const result=await response.json().catch(()=>({}));
   if(!response.ok)throw new Error(result.detail||"No fue posible cerrar sesión.");
+  clearOfflineAdminCache();
   window.location.replace("/admin-login.html");
  }catch(error){$("publicationMessage").textContent="No se cerró la sesión: "+error.message}
  finally{adminLogout.disabled=false}
 });
 
 document.addEventListener("input",event=>{
+ if(event.target.name==="cost_price")return;
  const form=event.target.closest("[data-publication-form]");if(form)schedulePublicationDraft(form);
 });
 document.addEventListener("change",event=>{
  const input=event.target;
+ if(input.name==="cost_price")return;
  if(input.type!=="checkbox"&&input.type!=="color")return;
  const form=input.closest("[data-publication-form]");if(form)schedulePublicationDraft(form);
 });
@@ -441,12 +651,25 @@ document.addEventListener("click",async event=>{
   try{
    const p=radarProducts.find(item=>String(item.id)===String(publish.dataset.publishProduct));
    if(!p)throw new Error("Producto no encontrado");
-   const response=await fetch(API+"/publications",requestOptions({method:"POST",headers:adminHeaders({"Content-Type":"application/json",Accept:"application/json"}),body:JSON.stringify({product_id:p.id,title:p.title,subtitle:p.description||null,price_display:money(p.current_price,p.currency),image_url:p.image_url||((p.image_gallery||[]).find(Boolean)||null),product_url:p.affiliate_url||p.product_url||null,sale_price:p.current_price,cost_price:p.current_price,footer:"Disponible en Central",accent:"#b6f23a",is_published:true})}));
-   const data=await response.json().catch(()=>({}));
-   if(!response.ok)throw Object.assign(new Error(data.detail||"No fue posible publicar"),{status:response.status});
-   $("publicationMessage").textContent="Publicación guardada correctamente.";await loadPublications();await load();
+   const personal=String(p.platform||"").toLowerCase()==="personal";
+   const body={product_id:p.id,title:p.title,subtitle:p.description||null,price_display:money(p.current_price,p.currency),image_url:p.image_url||((p.image_gallery||[]).find(Boolean)||null),product_url:p.affiliate_url||p.product_url||null,sale_price:p.current_price,cost_price:personal?null:p.current_price,footer:"Disponible en Central",accent:"#b6f23a",is_published:true};
+   enqueueOfflineAction({type:"publish",path:"/publications",method:"POST",body});
+   $("publicationMessage").textContent=navigator.onLine?"Publicación enviada a la cola segura de sincronización.":"Publicación guardada localmente; se enviará al recuperar conexión.";
+   await flushOfflineQueue();
   }catch(error){if(!requireSession(error))$("publicationMessage").textContent="No se publicó: "+error.message;}
   finally{publish.disabled=false;}
+ }
+ const move=event.target.closest("[data-move-publication]");
+ if(move){
+  const cards=[...$("publicationList").querySelectorAll("[data-publication-card]")],from=cards.findIndex(card=>card.dataset.publicationCard===move.dataset.movePublication),to=from+Number(move.dataset.direction);
+  if(from<0||to<0||to>=cards.length)return;
+  const ids=cards.map(card=>card.dataset.publicationCard);[ids[from],ids[to]]=[ids[to],ids[from]];
+  try{
+   enqueueOfflineAction({type:"reorder",path:"/publications/order",method:"PUT",body:{publication_ids:ids.map(Number)}});
+   applyPublicationOrder(ids);
+   $("publicationMessage").textContent=navigator.onLine?"Guardando el nuevo orden…":"Nuevo orden guardado localmente; pendiente de sincronización.";
+   await flushOfflineQueue();
+  }catch(error){$("publicationMessage").textContent="No se guardó el nuevo orden: "+error.message}
  }
  const remove=event.target.closest("[data-remove-publication]");
  if(remove){
@@ -455,13 +678,25 @@ document.addEventListener("click",async event=>{
   try{
    const id=String(remove.dataset.removePublication);clearTimeout(draftTimers.get(id));draftTimers.delete(id);
    const pendingDraft=draftQueues.get(id);if(pendingDraft)await pendingDraft.catch(()=>{});
-   const response=await fetch(API+"/publications/"+encodeURIComponent(remove.dataset.removePublication),requestOptions({method:"DELETE",headers:adminHeaders({Accept:"application/json"})}));
-   const data=await response.json().catch(()=>({}));
-   if(!response.ok)throw Object.assign(new Error(data.detail||"No fue posible eliminar la publicación"),{status:response.status});
-   clearLocalDraft(id);dirtyPublicationIds.delete(id);draftRevisions.set(id,(draftRevisions.get(id)||0)+1);serverDraftRevisions.delete(id);document.activeElement?.blur?.();
-   await loadPublications();await load();
+   enqueueOfflineAction({type:"delete",publication_id:id,path:"/publications/"+encodeURIComponent(id),method:"DELETE"});
+   clearLocalDraft(id);dirtyPublicationIds.delete(id);draftRevisions.set(id,(draftRevisions.get(id)||0)+1);serverDraftRevisions.delete(id);
+   remove.closest("[data-publication-card]")?.remove();document.activeElement?.blur?.();
+   $("publicationMessage").textContent=navigator.onLine?"Eliminando publicación…":"Publicación retirada localmente; la eliminación se aplicará al recuperar conexión.";
+   await flushOfflineQueue();
   }catch(error){if(!requireSession(error))$("publicationMessage").textContent="No se pudo eliminar: "+error.message;}
   finally{remove.disabled=false;}
+ }
+ const telegram=event.target.closest("[data-publish-telegram]");
+ if(telegram){
+  if(!navigator.onLine){$("publicationMessage").textContent="Telegram necesita conexión; la tarjeta sigue guardada en la cola local.";return}
+  telegram.disabled=true;
+  try{
+   const response=await fetch(API+"/publications/"+encodeURIComponent(telegram.dataset.publishTelegram)+"/telegram",requestOptions({method:"POST",headers:adminHeaders({Accept:"application/json"})}));
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok)throw Object.assign(new Error(data.detail||"No fue posible publicar en Telegram"),{status:response.status});
+   $("publicationMessage").textContent="Tarjeta enviada a Telegram.";
+  }catch(error){if(!requireSession(error))$("publicationMessage").textContent="Telegram no confirmó el envío: "+error.message}
+  finally{telegram.disabled=false}
  }
 });
 document.addEventListener("submit",async event=>{
@@ -469,12 +704,18 @@ document.addEventListener("submit",async event=>{
  const id=form.dataset.publicationForm;
  clearTimeout(draftTimers.get(id));draftTimers.delete(id);
  const pendingDraft=draftQueues.get(String(id));if(pendingDraft)await pendingDraft.catch(()=>{});
- let current;try{current=await get("/publications?include_unpublished=true&limit=100")}catch(error){if(!requireSession(error))$("publicationMessage").textContent=error.message;return}
- const row=current.find(item=>String(item.id)===String(id));if(!row){$("publicationMessage").textContent="No se encontró la publicación para actualizar.";return}
+ let row=cachedPublication(id);
+ if(navigator.onLine)try{const current=await get("/publications?include_unpublished=true&limit=100");row=current.find(item=>String(item.id)===String(id))||row}catch(error){if(navigator.onLine&&error.status===401){requireSession(error);return}}
+ if(!row){$("publicationMessage").textContent="No hay una copia local de esta tarjeta. Conéctate para cargarla.";return}
  const data=new FormData(form);
- const payload={product_id:row.product_id,title:row.title,subtitle:String(data.get("subtitle")||"").trim()||null,price_display:row.price_display,image_url:row.image_url,product_url:row.product_url,sale_price:row.sale_price,cost_price:row.cost_price,opportunity_score:row.opportunity_score,footer:String(data.get("footer")||"Disponible en Central").trim(),accent:String(data.get("accent")||"#b6f23a"),is_published:data.get("is_published")==="on"};
+ const personal=String(row.platform||"").toLowerCase()==="personal",costRaw=String(data.get("cost_price")||"").trim();
+ const payload={product_id:row.product_id,title:row.title,subtitle:String(data.get("subtitle")||"").trim()||null,price_display:row.price_display,image_url:row.image_url,product_url:row.product_url,sale_price:row.current_price??row.sale_price,cost_price:personal?(costRaw===""?null:Number(costRaw)):row.cost_price,opportunity_score:row.opportunity_score,footer:String(data.get("footer")||"Disponible en Central").trim(),accent:String(data.get("accent")||"#b6f23a"),is_published:data.get("is_published")==="on"};
  const controls=[...form.querySelectorAll("input,button")];controls.forEach(control=>control.disabled=true);
- try{const response=await fetch(API+"/publications/"+encodeURIComponent(id),requestOptions({method:"PATCH",headers:adminHeaders({"Content-Type":"application/json",Accept:"application/json"}),body:JSON.stringify(payload)}));const result=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(new Error(result.detail||"No fue posible guardar los ajustes"),{status:response.status});dirtyPublicationIds.delete(String(id));clearLocalDraft(id);draftRevisions.set(String(id),(draftRevisions.get(String(id))||0)+1);serverDraftRevisions.delete(String(id));$("publicationMessage").textContent="Ajustes guardados.";document.activeElement?.blur?.();await loadPublications();await load()}
+ try{
+  enqueueOfflineAction({type:"patch",publication_id:id,path:"/publications/"+encodeURIComponent(id),method:"PATCH",body:payload});
+  dirtyPublicationIds.delete(String(id));clearLocalDraft(id);draftRevisions.set(String(id),(draftRevisions.get(String(id))||0)+1);serverDraftRevisions.delete(String(id));$("publicationMessage").textContent=navigator.onLine?"Guardando ajustes…":"Ajustes guardados localmente; pendientes de sincronización.";
+  document.activeElement?.blur?.();await flushOfflineQueue();if(!navigator.onLine)await loadPublications();
+ }
  catch(error){if(!requireSession(error))$("publicationMessage").textContent="No se guardaron los ajustes: "+error.message}
  finally{controls.forEach(control=>control.disabled=false)}
 });

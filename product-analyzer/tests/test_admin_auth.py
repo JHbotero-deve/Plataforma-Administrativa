@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi import HTTPException, Response
 from pydantic import ValidationError
@@ -14,7 +14,8 @@ sys.path.insert(0, str(APP_PATH))
 
 import admin_auth
 import api
-from publications import PublicationDraftPayload
+import publications
+from publications import PublicationDraftPayload, PublicationOrderPayload
 
 
 class AdminAuthenticationTests(unittest.TestCase):
@@ -155,6 +156,7 @@ class AdminAuthenticationTests(unittest.TestCase):
             ("PATCH", "/products/{product_id}/images"),
             ("PATCH", "/products/{product_id}/model"),
             ("POST", "/publications"),
+            ("PUT", "/publications/order"),
             ("PATCH", "/publications/{publication_id}"),
             ("DELETE", "/publications/{publication_id}"),
             ("POST", "/publications/{publication_id}/telegram"),
@@ -173,6 +175,51 @@ class AdminAuthenticationTests(unittest.TestCase):
                     protected.add((method, route.path))
 
         self.assertTrue(expected.issubset(protected))
+
+    def test_publication_order_rejects_duplicate_ids(self):
+        with self.assertRaises(HTTPException) as error:
+            publications.reorder_publications(
+                PublicationOrderPayload(publication_ids=[1, 1])
+            )
+
+        self.assertEqual(error.exception.status_code, 422)
+
+    def test_publication_order_saves_an_exact_active_card_order(self):
+        connection = MagicMock()
+        cursor = MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        cursor.fetchall.return_value = [{"id": 8}, {"id": 4}]
+
+        with patch("publications.get_connection", return_value=connection):
+            result = publications.reorder_publications(
+                PublicationOrderPayload(publication_ids=[4, 8])
+            )
+
+        self.assertEqual(result["publication_ids"], [4, 8])
+        self.assertEqual(
+            cursor.execute.call_args_list[1].args[1],
+            (0, 4),
+        )
+        self.assertEqual(
+            cursor.execute.call_args_list[2].args[1],
+            (1, 8),
+        )
+        connection.commit.assert_called_once()
+
+    def test_publication_order_rejects_stale_card_sets(self):
+        connection = MagicMock()
+        cursor = MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        cursor.fetchall.return_value = [{"id": 8}, {"id": 4}]
+
+        with patch("publications.get_connection", return_value=connection):
+            with self.assertRaises(HTTPException) as error:
+                publications.reorder_publications(
+                    PublicationOrderPayload(publication_ids=[4, 99])
+                )
+
+        self.assertEqual(error.exception.status_code, 409)
+        connection.rollback.assert_called_once()
 
 
 if __name__ == "__main__":

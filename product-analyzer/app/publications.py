@@ -51,6 +51,17 @@ class PublicationDraftPayload(BaseModel):
     expected_revision: int = Field(default=0, ge=0)
 
 
+class PublicationOrderPayload(BaseModel):
+    publication_ids: list[int]
+
+
+def _profit_metrics(sale_price, cost_price):
+    if sale_price is None or cost_price is None or float(sale_price) <= 0:
+        return None, None
+    profit = round(float(sale_price) - float(cost_price), 2)
+    return profit, round(profit / float(sale_price) * 100, 2)
+
+
 @router.get("/publications")
 def list_publications(
     request: Request,
@@ -63,13 +74,19 @@ def list_publications(
     try:
         with conn.cursor() as cur:
             where = "" if include_unpublished else "AND pc.is_published = TRUE"
+            private_fields = (
+                "pc.cost_price, pc.profit_amount, pc.profit_margin_pct"
+                if include_unpublished else
+                "NULL::NUMERIC AS cost_price, NULL::NUMERIC AS profit_amount, "
+                "NULL::NUMERIC AS profit_margin_pct"
+            )
             cur.execute(
                 f"""
                 SELECT pc.id, pc.product_id, pc.title, pc.subtitle, pc.price_display,
                        COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) AS image_url,
                        COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) AS product_url,
-                       pc.sale_price, pc.cost_price,
-                       pc.profit_amount, pc.profit_margin_pct, pc.opportunity_score, pc.footer,
+                       pc.sale_price, {private_fields},
+                       pc.opportunity_score, pc.footer,
                        pc.accent, pc.is_published, pc.sort_order, pc.published_at,
                        p.current_price, p.currency, p.image_gallery, p.affiliate_url, p.external_id, p.sku,
                        p.description, p.stock, pl.name AS platform, c.name AS category
@@ -78,7 +95,7 @@ def list_publications(
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
                 WHERE p.is_active = TRUE {where}
-                ORDER BY pc.sort_order ASC, pc.published_at DESC
+                ORDER BY pc.sort_order ASC, pc.published_at DESC, pc.id DESC
                 LIMIT %s
                 """,
                 (limit,),
@@ -98,6 +115,66 @@ def list_publications(
                 row["checkout_mode"] = "CENTRAL" if str(
                     row["platform"]).lower() == "personal" else "EXTERNAL"
             return rows
+    finally:
+        conn.close()
+
+
+@router.put(
+    "/publications/order", dependencies=[Depends(require_admin)]
+)
+def reorder_publications(payload: PublicationOrderPayload):
+    publication_ids = payload.publication_ids
+    if (
+        not publication_ids
+        or any(publication_id <= 0 for publication_id in publication_ids)
+        or len(publication_ids) != len(set(publication_ids))
+    ):
+        raise HTTPException(
+            status_code=422, detail="El orden de publicaciones no es válido"
+        )
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT pc.id
+                FROM published_cards pc
+                JOIN products p ON p.id = pc.product_id
+                WHERE p.is_active = TRUE
+                ORDER BY pc.sort_order ASC, pc.published_at DESC, pc.id DESC
+                FOR UPDATE OF pc
+                """
+            )
+            current_ids = [row["id"] for row in cur.fetchall()]
+            requested_ids = set(publication_ids)
+            if not requested_ids.issubset(current_ids):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Las tarjetas cambiaron. Actualiza la administración e inténtalo de nuevo.",
+                )
+            ordered_ids = publication_ids + [
+                publication_id
+                for publication_id in current_ids
+                if publication_id not in requested_ids
+            ]
+            for position, publication_id in enumerate(ordered_ids):
+                cur.execute(
+                    """
+                    UPDATE published_cards
+                    SET sort_order = %s, updated_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (position, publication_id),
+                )
+        conn.commit()
+        return {"status": "saved", "publication_ids": ordered_ids}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 
@@ -285,6 +362,19 @@ def publish_card(payload: PublicationPayload):
                         if canonical_price is not None else None
                     ),
                 })
+            else:
+                canonical_price = product["current_price"]
+                payload = payload.model_copy(update={
+                    "sale_price": canonical_price,
+                    "price_display": (
+                        f"{canonical_price:,.0f} {product['currency'] or 'COP'}"
+                        if canonical_price is not None else None
+                    ),
+                })
+            profit_amount, profit_margin_pct = _profit_metrics(
+                payload.sale_price,
+                payload.cost_price if is_personal else product["current_price"],
+            )
 
             cur.execute(
                 """
@@ -307,16 +397,10 @@ def publish_card(payload: PublicationPayload):
                 (
                     payload.product_id, payload.title, payload.subtitle, payload.price_display,
                     payload.image_url or product["image_url"], payload.product_url or product["product_url"],
-                    payload.sale_price if payload.sale_price is not None else product[
-                        "current_price"],
-                    payload.cost_price if payload.cost_price is not None else product[
-                        "current_price"],
-                    ((payload.sale_price if payload.sale_price is not None else product["current_price"]) or 0) -
-                    ((payload.cost_price if payload.cost_price is not None else product["current_price"]) or 0),
-                    (((payload.sale_price if payload.sale_price is not None else product["current_price"]) -
-                      (payload.cost_price if payload.cost_price is not None else product["current_price"])) /
-                     (payload.sale_price if payload.sale_price is not None else product["current_price"])) * 100
-                    if (payload.sale_price if payload.sale_price is not None else product["current_price"]) else 0,
+                    payload.sale_price,
+                    payload.cost_price if is_personal else product["current_price"],
+                    profit_amount,
+                    profit_margin_pct,
                     payload.opportunity_score if payload.opportunity_score is not None else product[
                         "opportunity_score"],
                     payload.footer, payload.accent, payload.is_published,
@@ -378,6 +462,20 @@ def update_publication(publication_id: int, payload: PublicationPayload):
                     ),
                     "opportunity_score": current["opportunity_score"],
                 })
+            else:
+                canonical_price = current["current_price"]
+                payload = payload.model_copy(update={
+                    "sale_price": canonical_price,
+                    "price_display": (
+                        f"{canonical_price:,.0f} {current['currency'] or 'COP'}"
+                        if canonical_price is not None else None
+                    ),
+                })
+            profit_amount, profit_margin_pct = _profit_metrics(
+                payload.sale_price,
+                payload.cost_price if str(current["platform"]).lower() == "personal"
+                else current["current_price"],
+            )
 
             cur.execute(
                 """
@@ -391,10 +489,7 @@ def update_publication(publication_id: int, payload: PublicationPayload):
                 (
                     payload.title, payload.subtitle, payload.price_display, payload.image_url,
                     payload.product_url, payload.sale_price, payload.cost_price,
-                    ((payload.sale_price or 0) - (payload.cost_price or 0)),
-                    (((payload.sale_price or 0) - (payload.cost_price or 0)) /
-                     payload.sale_price * 100)
-                    if payload.sale_price else 0,
+                    profit_amount, profit_margin_pct,
                     payload.opportunity_score, payload.footer, payload.accent,
                     payload.is_published, publication_id,
                 ),

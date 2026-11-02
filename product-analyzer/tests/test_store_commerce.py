@@ -12,12 +12,93 @@ sys.path.insert(0, str(APP_PATH))
 
 import api
 import notifications
+import publications
+from publications import PublicationPayload
 import store_orders
 import store_notifications
 import wompi
 
 
 class StoreCommerceTests(unittest.TestCase):
+    def test_personal_card_margin_requires_a_real_internal_cost(self):
+        self.assertEqual(publications._profit_metrics(100, 70), (30.0, 30.0))
+        self.assertEqual(publications._profit_metrics(100, None), (None, None))
+        self.assertEqual(publications._profit_metrics(0, 20), (None, None))
+
+    def test_public_publication_feed_never_exposes_internal_cost_or_margin(self):
+        connection = unittest.mock.MagicMock()
+        cursor = unittest.mock.MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        cursor.fetchall.return_value = []
+
+        with patch("publications.get_connection", return_value=connection):
+            publications.list_publications(
+                request=unittest.mock.MagicMock(),
+                limit=20,
+                include_unpublished=False,
+            )
+
+        query = cursor.execute.call_args.args[0]
+        self.assertNotIn("pc.cost_price", query)
+        self.assertNotIn("pc.profit_amount", query)
+        self.assertNotIn("pc.profit_margin_pct", query)
+
+    def test_personal_publication_keeps_source_price_and_saves_private_cost(self):
+        connection = unittest.mock.MagicMock()
+        cursor = unittest.mock.MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        cursor.fetchone.side_effect = [
+            {
+                "product_id": 42,
+                "title": "Producto personal",
+                "image_url": "https://example.com/image.jpg",
+                "image_gallery": [],
+                "product_url": None,
+                "affiliate_url": None,
+                "current_price": 100,
+                "currency": "COP",
+                "platform": "personal",
+                "opportunity_score": None,
+            },
+            {"id": 8, "is_published": True},
+        ]
+        payload = PublicationPayload(
+            product_id=42,
+            title="Producto personal",
+            price_display="Precio manipulado",
+            sale_price=999,
+            cost_price=70,
+        )
+
+        with patch("publications.get_connection", return_value=connection):
+            publications.update_publication(8, payload)
+
+        saved = cursor.execute.call_args_list[1].args[1]
+        self.assertEqual(saved[2], "100 COP")
+        self.assertEqual(saved[5:9], (100, 70, 30.0, 30.0))
+
+    def test_wompi_checkout_rejects_products_without_personal_publications(self):
+        connection = unittest.mock.MagicMock()
+        cursor = unittest.mock.MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        cursor.fetchone.return_value = None
+        request = wompi.ProductCheckout(
+            product_id=42,
+            customer_name="Cliente",
+            customer_email="cliente@example.com",
+        )
+
+        with patch.dict(
+            os.environ,
+            {"WOMPI_PUBLIC_KEY": "test-public-key", "WOMPI_CURRENCY": "COP"},
+            clear=True,
+        ), patch("wompi.get_connection", return_value=connection):
+            with self.assertRaises(HTTPException) as error:
+                wompi.create_product_checkout(request)
+
+        self.assertEqual(error.exception.status_code, 404)
+        self.assertIn("LOWER(pl.name)='personal'", cursor.execute.call_args.args[0])
+
     def test_admin_sales_routes_require_a_session(self):
         guarded = set()
         for route in [*store_orders.router.routes, *api.core_router.routes]:

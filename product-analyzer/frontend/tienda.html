@@ -116,6 +116,7 @@ function imageSrc(p){return p.image_url||((p.image_gallery||[]).find(Boolean)||"
 function saveCart(){localStorage.setItem("central_cart",JSON.stringify(cart));renderCart()}
 function isOwn(p){return String(p.checkout_mode||"").toUpperCase()==="CENTRAL"||String(p.platform||"").toLowerCase()==="personal"}
 function externalUrl(p){return p.product_url||p.affiliate_url||""}
+function purchaseChannel(p){const platform=String(p.platform||"").toLowerCase();return platform==="aliexpress"?"AliExpress":platform==="amazon"?"Amazon":"su enlace de compra"}
 
 function renderHeroCarousel(){
   const cards=$("stageCards"),status=$("stageStatus");
@@ -165,8 +166,8 @@ function renderFeature(){
   $("variants").innerHTML=gallery.length>1?gallery.slice(0,5).map((im,i)=>'<button class="variant '+(i===0?"active":"")+'" data-image="'+esc(im)+'" style="background-image:url(\''+esc(im).replace(/'/g,"%27")+'\');background-size:cover" aria-label="Imagen '+(i+1)+'"></button>').join(""):"";
   const own=isOwn(p), ext=externalUrl(p);
   const action=$("featureAction");
-  if(own){action.textContent="Añadir al carrito";action.href="#";action.onclick=e=>{e.preventDefault();addToCart(p)}}
-  else if(ext){action.textContent="Ver producto";action.href=ext;action.target="_blank";action.rel="nofollow sponsored noopener";action.onclick=null}
+  if(own){action.textContent="Añadir · pagar con Wompi";action.href="#";action.onclick=e=>{e.preventDefault();addToCart(p)}}
+  else if(ext){action.textContent="Comprar en "+purchaseChannel(p);action.href=ext;action.target="_blank";action.rel="nofollow sponsored noopener";action.onclick=null}
   else{action.textContent="Ver ficha";action.href=productUrl(p);action.target="_self";action.onclick=null}
   $("featureFicha").href=productUrl(p);
   $("featureFicha").target="_self";
@@ -175,8 +176,8 @@ function renderFeature(){
 function card(p){
   const own=isOwn(p), ext=externalUrl(p), price=p.price_display||money(p.sale_price??p.current_price,p.currency), src=imageSrc(p);
   let main;
-  if(own) main='<button class="btn primary wide add" data-id="'+esc(p.product_id||p.id)+'">Añadir al carrito</button>';
-  else if(ext) main='<a class="btn primary wide" href="'+esc(ext)+'" target="_blank" rel="nofollow sponsored noopener">Ver producto</a>';
+  if(own) main='<button class="btn primary wide add" data-id="'+esc(p.product_id||p.id)+'">Añadir · pagar con Wompi</button>';
+  else if(ext) main='<a class="btn primary wide" href="'+esc(ext)+'" target="_blank" rel="nofollow sponsored noopener">Comprar en '+esc(purchaseChannel(p))+'</a>';
   else main='<a class="btn primary wide" href="'+productUrl(p)+'">Ver ficha</a>';
   return '<article class="card"><div class="card-media">'+(src?'<img src="'+esc(src)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer"><div class="no-image" hidden>Imagen no disponible</div>':'<div class="no-image">Imagen no disponible</div>')+'<span class="badge">'+esc(p.platform||"Central")+'</span></div><div class="card-body"><div class="category">'+esc(p.category||"Producto")+'</div><h3>'+esc(p.title)+'</h3><small>'+esc(p.subtitle||"Producto publicado por Central")+'</small><div class="card-price">'+esc(price)+'</div><div class="card-actions">'+main+'<a class="btn" href="'+productUrl(p)+'">Ficha</a></div></div></article>'
 }

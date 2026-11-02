@@ -1,0 +1,18 @@
+{
+  "name": "Central · Administración",
+  "short_name": "Central Admin",
+  "description": "Administración de productos, publicaciones y ventas de Central.",
+  "start_url": "/admin",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#11151b",
+  "theme_color": "#11151b",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

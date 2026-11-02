@@ -125,8 +125,11 @@ def create_product_checkout(req: ProductCheckout):
         with conn.cursor() as cur:
             cur.execute("""SELECT p.id,p.title,p.image_url,p.product_url,p.current_price,p.currency,p.stock,
                                   pc.id AS publication_id,pc.sale_price,pc.cost_price
-                           FROM products p LEFT JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
-                           WHERE p.id=%s AND p.is_active=TRUE""", (req.product_id,))
+                           FROM products p
+                           JOIN platforms pl ON pl.id=p.platform_id
+                           JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
+                           WHERE p.id=%s AND p.is_active=TRUE AND LOWER(pl.name)='personal'""",
+                        (req.product_id,))
             product = cur.fetchone()
             if not product:
                 raise HTTPException(
@@ -247,9 +250,10 @@ async def create_cart_checkout(request: Request):
                           pc.id AS publication_id, pc.sale_price, pc.cost_price,
                           pl.name AS platform_name
                    FROM products p
-                   LEFT JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
-                   LEFT JOIN platforms pl ON pl.id=p.platform_id
-                   WHERE p.id = ANY(%s) AND p.is_active=TRUE""",
+                   JOIN platforms pl ON pl.id=p.platform_id
+                   JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
+                   WHERE p.id = ANY(%s) AND p.is_active=TRUE
+                     AND LOWER(pl.name)='personal'""",
                 (list(wanted.keys()),),
             )
             rows = {r["id"]: r for r in cur.fetchall()}
