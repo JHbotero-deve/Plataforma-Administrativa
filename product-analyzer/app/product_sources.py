@@ -236,7 +236,7 @@ def search_marketplaces(term, category="accesorios", limit=10):
     try:
         products.extend(search_amazon(term, category, limit))
     except Exception as exc:
-        errors.append("Amazon: " + type(exc).__name__)
+        errors.append("Amazon: " + str(exc)[:160])
     try:
         from promotion_bots import _search_bucket
         products.extend(_search_bucket(category, term)[:limit])
