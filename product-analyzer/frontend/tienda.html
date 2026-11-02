@@ -114,7 +114,8 @@ const HERO_INTERVAL=6000;
 
 function imageSrc(p){return p.image_url||((p.image_gallery||[]).find(Boolean)||"")}
 function saveCart(){localStorage.setItem("central_cart",JSON.stringify(cart));renderCart()}
-function isOwn(p){return String(p.checkout_mode||"").toUpperCase()==="CENTRAL"||String(p.platform||"").toLowerCase()==="personal"}
+function isOwn(p){return String(p.platform||"").toLowerCase()==="personal"}
+function cleanCart(){cart=cart.filter(x=>{const p=products.find(p=>String(p.product_id||p.id)===String(x.product_id));return p&&isOwn(p)});saveCart()}
 function externalUrl(p){return p.product_url||p.affiliate_url||""}
 function purchaseChannel(p){const platform=String(p.platform||"").toLowerCase();return platform==="aliexpress"?"AliExpress":platform==="amazon"?"Amazon":"su enlace de compra"}
 
@@ -203,9 +204,9 @@ async function load(){
     if(!r.ok)throw Error("HTTP "+r.status);
     const d=await r.json();const list=Array.isArray(d)?d:(d.items||d.publications||d.data||[]);
     if(!Array.isArray(list)||!list.length)throw Error("sin publicaciones");
-    products=list;heroIndex=0;localStorage.setItem("central_products_cache",JSON.stringify(products));setCategories();applyFilter();return;
+    products=list;heroIndex=0;localStorage.setItem("central_products_cache",JSON.stringify(products));cleanCart();setCategories();applyFilter();return;
   }catch(e){}
-  if(products.length){setCategories();applyFilter();return}
+  if(products.length){cleanCart();setCategories();applyFilter();return}
   $("grid").innerHTML='<div class="empty"><b>Catálogo vacío</b>Central está lista para recibir productos publicados.</div>';renderFeature();renderHeroCarousel();
 }
 $("search").oninput=applyFilter;$("category").onchange=applyFilter;
