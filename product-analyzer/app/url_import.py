@@ -52,7 +52,8 @@ def import_url(
         raise ValueError("La URL debe comenzar con http:// o https://.")
 
     platform = detect_platform(url)
-    external_id = str(external_id).strip()[:150] if external_id else _external_id(url, platform)
+    supplied_id = str(external_id or "").strip()
+    external_id = supplied_id[:150] if supplied_id else _external_id(url, platform)
     final_title = (title or "").strip() or f"Producto {platform.title()} {external_id}"
     final_image = (image_url or "").strip() or None
     final_price = price if price is not None else None
