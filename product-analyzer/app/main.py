@@ -7,6 +7,7 @@ from analysis import score_product
 from db import get_connection, upsert_product
 from init_db import init_database
 from notifications import send_telegram_alert
+from product_sources import enrich_pending_products
 from promotion_bots import run_promotion_cycle
 from seed_catalog import seed_catalog
 from tiktok_creator import creator_configured, sync_showcase
@@ -55,9 +56,10 @@ def run_pipeline():
         print("[promotions] búsqueda por API desactivada; se mantienen las importaciones por URL.")
 
     conn = get_connection()
-    product_ids = []
     try:
         print("[ingesta] se conservan las importaciones manuales y por CLI autorizado.")
+        enriched = enrich_pending_products(conn, limit=20)
+        print(f"[catalog] productos enriquecidos desde URLs públicas: {enriched}")
 
         averages = {}
         with conn.cursor() as cur:
@@ -70,6 +72,18 @@ def run_pipeline():
             """)
             for row in cur.fetchall():
                 averages[(row["category"], row["currency"])] = float(row["avg_price"] or 0)
+            cur.execute("""
+                SELECT p.id
+                FROM products p
+                WHERE p.is_active = TRUE
+                  AND p.current_price IS NOT NULL
+                  AND p.current_price > 0
+                  AND p.category_id IS NOT NULL
+                ORDER BY p.updated_at DESC
+                LIMIT 500
+            """)
+            product_ids = [row["id"] for row in cur.fetchall()]
+        print(f"[catalog] productos listos para puntuar: {len(product_ids)}")
 
         for product_id in set(product_ids):
             with conn.cursor() as cur:

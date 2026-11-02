@@ -25,11 +25,12 @@ class TelegramCommandTests(unittest.TestCase):
 
         with (
             patch.object(telegram_alert, "get_connection", return_value=connection),
+            patch.object(telegram_alert, "enrich_pending_products", return_value=0),
             patch.object(telegram_alert, "score_product", return_value=72),
         ):
             result = telegram_alert._model_active_products()
 
-        self.assertEqual(result, (1, 9, 0, 500))
+        self.assertEqual(result, (1, 9, 0, 500, 0))
         connection.close.assert_called_once()
 
     def test_add_without_arguments_returns_usage_instead_of_import_error(self):
@@ -77,6 +78,7 @@ class TelegramCommandTests(unittest.TestCase):
 
         with (
             patch.object(telegram_alert, "import_url", return_value=product),
+            patch.object(telegram_alert, "enrich_product", return_value=product),
             patch.object(telegram_alert, "get_connection", return_value=conn),
             patch.object(telegram_alert, "upsert_product", return_value=7) as upsert,
         ):
