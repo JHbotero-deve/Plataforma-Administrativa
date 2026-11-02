@@ -76,12 +76,16 @@ class ProductSourcesTests(unittest.TestCase):
         second = MagicMock()
         second.status_code = 302
         second.headers = {"Location": "https://login.aliexpress.com/check"}
-        with patch.object(product_sources.requests, "get", side_effect=[first, second]) as request:
+        third = MagicMock()
+        third.status_code = 302
+        third.headers = {"Location": "https://login.aliexpress.us/check"}
+        with patch.object(product_sources.requests, "get", side_effect=[first, second, third]) as request:
             with self.assertRaisesRegex(RuntimeError, "ciclo de redirección"):
                 product_sources._public_product_page("https://s.click.aliexpress.com/e/_mOOSCcP", "aliexpress")
-        self.assertEqual(request.call_count, 2)
+        self.assertEqual(request.call_count, 3)
         first.close.assert_called_once()
         second.close.assert_called_once()
+        third.close.assert_called_once()
 
     def test_category_is_only_assigned_when_metadata_identifies_one(self):
         self.assertEqual(product_sources._category("Shoes"), "calzado")
