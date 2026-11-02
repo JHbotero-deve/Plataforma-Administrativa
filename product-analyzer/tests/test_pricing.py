@@ -30,6 +30,21 @@ class CustomerOfferTests(unittest.TestCase):
         self.assertEqual(offer["discount_pct"], 40)
         connection.commit.assert_called_once()
 
+    def test_admin_exclusion_prevents_automatic_republication(self):
+        connection = MagicMock()
+        connection.cursor.return_value.__enter__.return_value.fetchone.return_value = {
+            "storefront_excluded": True
+        }
+        product = {"current_price": 50, "previous_price": 100, "title": "Bolso", "image_url": "https://img.example/bolso.jpg"}
+
+        offer = publish_discounted_offer(connection, 10, product, 80)
+
+        self.assertIsNone(offer)
+        query = connection.cursor.return_value.__enter__.return_value.execute
+        self.assertIn("SELECT storefront_excluded", query.call_args.args[0])
+        self.assertEqual(query.call_count, 1)
+        connection.commit.assert_not_called()
+
     def test_unpublishes_products_without_qualifying_margin(self):
         connection = MagicMock()
         offer = publish_discounted_offer(connection, 10, {"current_price": 70, "previous_price": 100, "title": "Bolso", "image_url": "https://img.example/bolso.jpg"})

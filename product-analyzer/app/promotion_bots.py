@@ -29,6 +29,7 @@ PRODUCT_FIELDS = ",".join(
         "target_sale_price",
         "target_sale_price_currency",
         "original_price",
+        "target_original_price",
         "original_price_currency",
         "discount",
         "evaluate_rate",
@@ -352,7 +353,7 @@ def run_storefront_refill():
                 try:
                     candidates = _search_bucket(section["category_name"], section["search_keyword"], page_no, review=False)
                 except Exception as exc:
-                    print(f"[storefront] búsqueda {section['slug']} página {page_no} falló: {type(exc).__name__}")
+                    print(f"[storefront] búsqueda {section['slug']} página {page_no} falló: {type(exc).__name__}: {str(exc)[:240]}")
                     break
                 pages_checked += 1
                 if not candidates:

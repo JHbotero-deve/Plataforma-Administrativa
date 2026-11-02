@@ -349,6 +349,42 @@ def _model_product(argument):
         return None, "No fue posible guardar el producto. Verifica los datos e inténtalo de nuevo."
 
 
+def _enqueue_marketplace_search(term):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """CREATE TABLE IF NOT EXISTS marketplace_search_requests (
+                    id BIGSERIAL PRIMARY KEY,
+                    query VARCHAR(100) NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+                    result_count INTEGER NOT NULL DEFAULT 0,
+                    published_count INTEGER NOT NULL DEFAULT 0,
+                    error TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    processed_at TIMESTAMPTZ
+                )"""
+            )
+            cur.execute(
+                """CREATE INDEX IF NOT EXISTS idx_marketplace_search_requests_pending
+                   ON marketplace_search_requests(created_at)
+                   WHERE status = 'pending'"""
+            )
+            cur.execute(
+                "INSERT INTO marketplace_search_requests(query) VALUES(%s) RETURNING id",
+                (term[:100],),
+            )
+            request_id = cur.fetchone()["id"]
+        conn.commit()
+        return request_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def _model_active_products():
     """Enriquece enlaces existentes y puntúa productos activos."""
     conn = get_connection()
@@ -454,7 +490,7 @@ def _handle(token, chat_id, text):
         return _send(token, chat_id, (
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
-            "/buscar producto — buscar por título o categoría en el catálogo\n"
+            "/buscar producto — buscar en Amazon y AliExpress y publicar ofertas válidas en tienda\n"
             "/modelar — leer metadatos públicos de URLs guardadas y puntuar\n"
             "/agregar URL — importar Amazon o AliExpress; admite datos manuales\n"
             "Publicación — selecciona productos en Studio y usa «Publicar en Central»\n"
@@ -480,22 +516,25 @@ def _handle(token, chat_id, text):
     if command == "/buscar":
         term = argument.strip()
         if not term:
-            return _send(token, chat_id, "La búsqueda automática por API está desactivada. Envía /agregar URL para importar un producto desde Amazon o AliExpress.")
+            return _send(token, chat_id, "Uso: /buscar producto. Buscaré en Amazon y AliExpress y publicaré en la tienda las ofertas que cumplan las reglas.")
         if _is_http_url(term):
             result, payload, score = _add_url(term)
             if result is None:
                 return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
             price_text = "Precio: " + str(payload["price"]) + " " + str(payload["currency"]) if payload.get("price") is not None else "Precio pendiente; puedes completarlo con /agregar categoría|URL|precio|título|imagen|moneda"
             return _send(token, chat_id, "<b>Producto importado desde URL</b>\n" + html.escape(str(payload["title"])[:250]) + "\n" + html.escape(price_text))
-        products = _search_products(term[:100])
-        if not products:
-            return _send(token, chat_id, f"No encontré productos en el catálogo para: {html.escape(term[:100])}\nImporta un enlace con /agregar URL.")
-        if not _send(token, chat_id, f"<b>Resultados del catálogo: {html.escape(term[:100])}</b>"):
-            return False
-        for product in products:
-            if not _send_product(token, chat_id, product):
-                return False
-        return True
+        try:
+            request_id = _enqueue_marketplace_search(term[:100])
+        except Exception as exc:
+            print(f"[telegram-bot] búsqueda externa no encolada: {type(exc).__name__}")
+            return _send(token, chat_id, "No pude iniciar la búsqueda. El catálogo sigue disponible; inténtalo de nuevo en un momento.")
+        return _send(
+            token,
+            chat_id,
+            f"<b>Búsqueda #{request_id} enviada</b>\n"
+            "Consultando Amazon y AliExpress. Los productos con foto, precio verificable y margen positivo aparecerán directamente en la tienda. "
+            "Puedes retirarlos o eliminarlos desde Administración.",
+        )
 
     if command == "/agregar":
         if not argument.strip():

@@ -53,7 +53,8 @@ def aliexpress_api_request(method: str, parameters: dict) -> dict:
     if error:
         if isinstance(error, dict):
             code = error.get("code") or error.get("sub_code") or "unknown"
-            raise RuntimeError(f"AliExpress rechazó la solicitud ({code}).")
+            message = error.get("msg") or error.get("message") or error.get("sub_msg") or "sin descripción"
+            raise RuntimeError(f"AliExpress rechazó la solicitud ({code}: {str(message)[:180]}).")
         raise RuntimeError("AliExpress rechazó la solicitud.")
     return payload
 

@@ -55,6 +55,24 @@ class AliExpressPromotionBotTests(unittest.TestCase):
         self.assertTrue(params["timestamp"].isdigit())
         self.assertEqual(len(params["timestamp"]), 13)
 
+    def test_api_error_includes_safe_code_and_message_for_diagnostics(self):
+        response = unittest.mock.MagicMock()
+        response.json.return_value = {
+            "error_response": {
+                "code": "InvalidAppKey",
+                "msg": "App key is not authorized",
+            }
+        }
+        with (
+            patch.dict(os.environ, {
+                "ALIEXPRESS_APP_KEY": "app-key",
+                "ALIEXPRESS_APP_SECRET": "app-secret",
+            }, clear=True),
+            patch.object(affiliate_links.requests, "post", return_value=response),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "InvalidAppKey: App key is not authorized"):
+                affiliate_links.aliexpress_api_request("aliexpress.affiliate.product.query", {})
+
     def test_product_query_response_extracts_official_result_list(self):
         payload = {
             "aliexpress_affiliate_product_query_response": {
