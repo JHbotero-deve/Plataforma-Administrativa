@@ -223,7 +223,7 @@ def enrich_product(product):
         metadata.pop("enrichment_error", None)
     except Exception as exc:
         message = str(exc)
-        login_loop = "ciclo de redirección" in message.lower() or "límite de" in message.lower()
+        login_loop = "ciclo de redirección" in message.lower() or "límite de" in message.lower() or "iniciar sesión" in message.lower() or "login" in message.lower()
         metadata.update({
             "enrichment_status": "blocked" if login_loop or "403" in message or "401" in message else "retry",
             "enrichment_error": ("login_or_redirect_required" if login_loop else type(exc).__name__)[:80],
