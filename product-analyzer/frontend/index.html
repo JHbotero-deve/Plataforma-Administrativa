@@ -31,7 +31,7 @@
 .radar-card .card-body small{color:#69716b;line-height:1.4}
 .radar-card .card-price{color:#30372f!important;font:700 16px/1.2 "Space Grotesk",Inter,sans-serif;margin:10px 0 0!important;white-space:normal;overflow-wrap:anywhere}
 @media(max-width:560px){.radar-card .card-media{aspect-ratio:4/3!important}.radar-card .card-body{padding:11px}.radar-action{font-size:9px;min-height:32px}}
-.pub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}.pub-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:10px;min-width:0}.pub-card h3{margin:0;font-size:15px;overflow-wrap:anywhere}.pub-meta{font-size:12px;color:var(--muted)}.pub-form{display:grid;gap:8px}.pub-form label{display:grid;gap:4px;font-size:12px;color:var(--muted)}.pub-form input[type=text],.pub-form input[type=number],.pub-form input[type=color]{width:100%;min-height:38px;border:1px solid var(--line);border-radius:7px;padding:8px;background:var(--panel);color:var(--text)}.pub-form .pub-check{display:flex;align-items:center;gap:8px}.pub-actions{display:flex;gap:8px;flex-wrap:wrap}.pub-actions .btn{font-size:12px}.pub-empty{padding:16px;border:1px dashed var(--line);border-radius:10px;color:var(--muted)}.pub-order{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.pub-profit{padding:10px 12px;border-radius:8px;background:#1a211a;color:#c7e4bf;font-size:12px}.connection-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.connection-bar [role=status]{font-size:12px;color:var(--muted)}.connection-bar .offline{color:#d9a64a}.connection-bar .online{color:#79c88a}@media(max-width:560px){.pub-grid{grid-template-columns:1fr}.connection-bar .btn{width:100%}}
+.pub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}.pub-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:grid;gap:10px;min-width:0}.pub-card h3{margin:0;font-size:15px;overflow-wrap:anywhere}.pub-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.pub-row-main,.pub-row-metrics{min-width:0}.pub-row-main h3{margin:3px 0;font-size:14px;overflow-wrap:anywhere}.pub-row-actions,.pub-editor{grid-column:1/-1}.pub-editor{padding:12px;border-top:1px solid var(--line)}.pub-editor[hidden]{display:none!important}.pub-meta{font-size:12px;color:var(--muted)}.pub-form{display:grid;gap:8px}.pub-form label{display:grid;gap:4px;font-size:12px;color:var(--muted)}.pub-form input[type=text],.pub-form input[type=number],.pub-form input[type=color]{width:100%;min-height:38px;border:1px solid var(--line);border-radius:7px;padding:8px;background:var(--panel);color:var(--text)}.pub-form .pub-check{display:flex;align-items:center;gap:8px}.pub-actions{display:flex;gap:8px;flex-wrap:wrap}.pub-actions .btn{font-size:12px}.pub-empty{padding:16px;border:1px dashed var(--line);border-radius:10px;color:var(--muted)}.pub-order{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.pub-profit{padding:10px 12px;border-radius:8px;background:#1a211a;color:#c7e4bf;font-size:12px}.connection-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.connection-bar [role=status]{font-size:12px;color:var(--muted)}.connection-bar .offline{color:#d9a64a}.connection-bar .online{color:#79c88a}@media(max-width:560px){.pub-grid{grid-template-columns:1fr}.connection-bar .btn{width:100%}}
 .radar-action{min-height:42px;padding:10px 12px;border-radius:13px;border:1px solid rgba(255,255,255,.16);font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;text-align:center;cursor:pointer;text-decoration:none;backdrop-filter:blur(12px)}
 .radar-specs{background:rgba(8,10,14,.72);color:#fff}
 .radar-open{background:#ff8a00;border-color:#ff8a00;color:#080a0e}
@@ -40,10 +40,87 @@
 .radar-card .category{color:#ff8a00!important}
 .radar-card h3,.radar-card .card-price{color:#fff!important}
 .sales-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}.sales-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:15px}.sales-card span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase}.sales-card strong{display:block;margin-top:6px;color:var(--accent);font:700 19px "JetBrains Mono";overflow-wrap:anywhere}.sales-note{padding:12px 14px;border:1px solid var(--line);border-radius:9px;color:var(--muted);font-size:12px}.sales-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0}.sales-status{color:var(--muted);font-size:12px}@media(max-width:850px){.sales-summary{grid-template-columns:1fr 1fr}}@media(max-width:560px){.sales-summary{grid-template-columns:1fr 1fr}.sales-card{padding:12px}.sales-card strong{font-size:16px}}
+.admin-header{display:none}
+body.admin-mode{background:#f4f6f8;color:#20242a;min-height:100vh}
+body.admin-mode .admin-header{position:sticky;top:0;z-index:30;display:flex;min-height:68px;align-items:center;justify-content:space-between;gap:20px;padding:0 clamp(16px,4vw,48px);background:#fff;border-bottom:1px solid #e4e7eb}
+body.admin-mode .admin-brand{display:flex;align-items:center;gap:10px;color:#1c252e;text-decoration:none}
+body.admin-mode .admin-brand strong{font-size:16px;letter-spacing:.04em}
+body.admin-mode .admin-brand span{color:#7b838c;font-size:12px}
+body.admin-mode .admin-top-actions{display:flex;align-items:center;gap:16px}
+body.admin-mode .admin-header a:not(.admin-brand){color:#5d6874;text-decoration:none;font-size:13px;font-weight:600}
+body.admin-mode .admin-header a:hover{color:#1c252e}
+body.admin-mode .admin-header .btn{min-height:36px;padding:7px 12px;border-color:#dfe3e8;background:#fff;color:#2d3742}
+body.admin-mode .admin-header .btn:hover{background:#f3f5f7}
+body.admin-mode>.nav,body.admin-mode>header:not(.admin-header),body.admin-mode>footer,
+body.admin-mode #inteligencia,body.admin-mode #oportunidades,body.admin-mode #importar,
+body.admin-mode #telegram,body.admin-mode #estado{display:none!important}
+body.admin-mode main>section{padding:22px 0;border:0}
+body.admin-mode #publicaciones .wrap,body.admin-mode #salesAdmin .wrap{width:min(1320px,calc(100% - 40px))}
+body.admin-mode #publicaciones .section-head,body.admin-mode #salesAdmin .section-head{align-items:flex-start;margin:22px 0 16px}
+body.admin-mode #publicaciones .section-head h2,body.admin-mode #salesAdmin .section-head h2{font-size:22px;letter-spacing:-.02em}
+body.admin-mode #publicaciones .section-head p,body.admin-mode #salesAdmin .section-head p{margin:4px 0;color:#6b7480;font-size:13px}
+body.admin-mode .connection-bar{margin:0 0 14px;padding:10px 12px;background:#fff;border-color:#e4e7eb;border-radius:6px}
+body.admin-mode .connection-bar [role=status],body.admin-mode .connection-bar .pub-meta{font-size:12px}
+body.admin-mode .pub-empty{padding:12px 0;border:0;border-bottom:1px solid #e4e7eb;border-radius:0;color:#68727e;font-size:13px}
+body.admin-mode #publicationList{display:block;border-top:1px solid #e0e4e8}
+body.admin-mode .publication-table-header{display:grid;grid-template-columns:84px minmax(220px,1fr) minmax(150px,220px) minmax(220px,290px);gap:16px;padding:9px 10px;background:#eef1f4;border-top:1px solid #e0e4e8;color:#66717d;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+body.admin-mode .pub-row{display:grid;grid-template-columns:84px minmax(220px,1fr) minmax(150px,220px) minmax(220px,290px);align-items:center;gap:16px;padding:15px 10px;border-bottom:1px solid #e5e8ec;background:#fff}
+body.admin-mode .pub-row-order{display:flex;align-items:center;gap:7px}
+body.admin-mode .pub-row-order .pub-meta{min-width:32px;color:#7a838d;font-variant-numeric:tabular-nums}
+body.admin-mode .pub-row-order .pub-actions{gap:4px}
+body.admin-mode .pub-row-order button{min-width:30px;padding:5px!important}
+body.admin-mode .pub-row-main{min-width:0}
+body.admin-mode .pub-row-main h3{margin:0 0 4px;font-size:14px;font-weight:650;line-height:1.35}
+body.admin-mode .pub-row-main .pub-meta{font-size:11px}
+body.admin-mode .pub-row-price{margin-top:5px;color:#34404c;font-size:12px;font-variant-numeric:tabular-nums}
+body.admin-mode .pub-row-profit{color:#415e2b;font-size:12px;line-height:1.45}
+body.admin-mode .pub-row-main .pub-row-state{margin-top:5px;color:#64707b;font-size:11px}
+body.admin-mode .pub-row-main .pub-row-state.is-live{color:#397041}
+body.admin-mode .pub-row-actions{justify-content:flex-end;gap:5px}
+body.admin-mode .pub-row-actions .btn{padding:7px 9px;border-radius:5px;font-size:11px}
+body.admin-mode .pub-editor{grid-column:1/-1;width:100%;margin-top:7px;padding:14px;border-top:1px solid #e5e8ec;background:#f8f9fa}
+body.admin-mode .pub-editor[hidden]{display:none!important}
+body.admin-mode .pub-editor.pub-form{grid-template-columns:repeat(3,minmax(0,1fr));align-items:end;gap:12px}
+body.admin-mode .pub-editor .pub-check{display:flex;align-items:center;min-height:38px}
+body.admin-mode .pub-editor .pub-actions{grid-column:1/-1}
+body.admin-mode .pub-form label{color:#66717d}
+body.admin-mode .pub-form input[type=text],body.admin-mode .pub-form input[type=number],body.admin-mode .pub-form input[type=color]{background:#fff;border-color:#dce1e6;color:#20242a;border-radius:5px}
+body.admin-mode .pub-profit{padding:0;background:transparent;color:#4a6235;font-size:12px}
+body.admin-mode .sales-summary{grid-template-columns:repeat(4,minmax(0,1fr));gap:0;background:#fff;border-top:1px solid #e2e6ea;border-bottom:1px solid #e2e6ea}
+body.admin-mode .sales-card{padding:14px 16px;border:0;border-right:1px solid #edf0f2;border-radius:0;background:transparent}
+body.admin-mode .sales-card span{color:#75808b;font-size:10px}
+body.admin-mode .sales-card strong{color:#24303b;font-size:17px}
+body.admin-mode .sales-note{border:0;border-left:3px solid #8da675;border-radius:0;background:#fff;padding:11px 14px}
+body.admin-mode .table-wrap{border-color:#e2e6ea;border-radius:5px}
+body.admin-mode table{background:#fff}
+body.admin-mode th{color:#77818c}
+body.admin-mode td{color:#303943}
+@media(max-width:900px){
+ body.admin-mode .publication-table-header{grid-template-columns:75px minmax(0,1fr) minmax(140px,190px) 1fr}
+ body.admin-mode .pub-row{grid-template-columns:75px minmax(0,1fr) minmax(140px,190px) 1fr}
+ body.admin-mode .pub-row-actions{grid-column:auto;justify-content:flex-end}
+ body.admin-mode .pub-editor{grid-column:1/-1}
+}
+@media(max-width:620px){
+ body.admin-mode .admin-header{position:relative;align-items:flex-start;flex-wrap:wrap;padding:13px 16px}
+ body.admin-mode .admin-top-actions{width:100%;justify-content:space-between;gap:10px;flex-wrap:wrap}
+ body.admin-mode .admin-header a:not(.admin-brand){font-size:12px}
+ body.admin-mode #publicaciones .wrap,body.admin-mode #salesAdmin .wrap{width:calc(100% - 24px)}
+ body.admin-mode .publication-table-header{display:none}
+ body.admin-mode .pub-row{grid-template-columns:1fr;gap:9px;padding:13px 8px}
+ body.admin-mode .pub-row-order,body.admin-mode .pub-row-main,body.admin-mode .pub-row-metrics,body.admin-mode .pub-row-actions{grid-column:1;justify-content:flex-start}
+ body.admin-mode .pub-row-order{justify-content:space-between}
+ body.admin-mode .pub-editor{grid-column:1;padding:10px}
+ body.admin-mode .pub-editor.pub-form{grid-template-columns:1fr}
+ body.admin-mode .pub-editor .pub-actions{grid-column:1}
+ body.admin-mode .sales-summary{grid-template-columns:1fr 1fr}
+ body.admin-mode .sales-card{padding:11px 10px;border-bottom:1px solid #edf0f2}
+ body.admin-mode .sales-card strong{font-size:15px}
+}
 </style>
 <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 </head>
-<body><nav class="nav"><div class="wrap"><div class="brand">CENTRAL <b>·</b> RADAR</div><div class="navlinks"><a href="#oportunidades">Oportunidades</a><a href="#importar">Importar producto</a><a href="#publicaciones">Gestionar tienda</a><a href="#ventas" id="salesNav" hidden>Ventas</a><a href="https://central-7ykr.vercel.app/catalogo">Catálogo activo</a><a href="/admin-login.html">Acceso administrativo</a><a href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Abrir tienda</a><a href="#telegram">Telegram</a></div><div class="status" id="status"><span class="dot"></span>Central operativo</div></div></nav>
+<body><div class="admin-header" id="adminHeader"><a class="admin-brand" href="/admin" aria-label="Central Administración"><strong>CENTRAL</strong><span>Administración</span></a><div class="admin-top-actions"><a href="#publicaciones">Productos</a><a id="adminSalesLink" href="#salesAdmin" hidden>Ventas</a><a href="/tienda" target="_blank" rel="noopener noreferrer">Ver tienda</a><button class="btn small" id="adminLogout" type="button">Cerrar sesión</button></div></div><nav class="nav"><div class="wrap"><div class="brand">CENTRAL <b>·</b> RADAR</div><div class="navlinks"><a href="#oportunidades">Oportunidades</a><a href="#importar">Importar producto</a><a href="#publicaciones">Gestionar tienda</a><a href="#salesAdmin" id="salesNav" hidden>Ventas</a><a href="https://central-7ykr.vercel.app/catalogo">Catálogo activo</a><a href="/admin-login.html">Acceso administrativo</a><a href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Abrir tienda</a><a href="#telegram">Telegram</a></div><div class="status" id="status"><span class="dot"></span>Central operativo</div></div></nav>
 
 <header><div class="wrap"><div class="eyebrow">Producto real · análisis · monetización</div><h1>Detecta oportunidades antes de que desaparezcan.</h1><p class="hero-copy">Central reúne productos reales, calcula una señal de oportunidad y mantiene un catálogo con renovación automática cada 2 horas y vigencia de 48 horas. No usa productos de demostración.</p><div class="actions"><a class="btn primary" href="#oportunidades">Ver oportunidades</a><a class="btn" href="#importar">Importar producto</a><a class="btn" href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Abrir tienda</a></div></div></header>
 
@@ -62,7 +139,7 @@
 <div class="import-fallback"><a class="btn small" href="https://central-7ykr.vercel.app/tarjetas">Abrir creador de tarjetas</a></div>
 <div class="import-result" id="importResult" role="status" aria-live="polite"></div>
 </div></section>
-<section id="publicaciones"><div class="wrap"><div class="section-head"><div><div class="eyebrow">04 · tienda</div><h2>Administrar productos y tarjetas</h2><p>Ordena, retira o publica productos. El precio de venta viene de la fuente y no se cambia aquí. Los productos personales usan Wompi; los de Amazon/AliExpress llevan al enlace de compra del producto.</p></div><div class="pub-actions"><a class="btn small" href="https://central-7ykr.vercel.app/tienda" target="_blank" rel="noopener noreferrer">Ver tienda</a><a class="btn small" id="salesAnchor" href="#ventas" hidden>Ventas</a><button class="btn small" id="adminLogout" type="button">Cerrar sesión</button></div></div><div class="connection-bar"><div id="connectionStatus" role="status">Comprobando conexión…</div><div class="pub-actions"><span id="offlineQueueStatus" class="pub-meta">Sin cambios pendientes</span><button class="btn small" id="syncOfflineQueue" type="button" hidden>Sincronizar pendientes</button></div></div><div id="publicationMessage" class="pub-empty">Comprobando sesión administrativa…</div><div id="publicationList" class="pub-grid"></div></div></section>
+<section id="publicaciones"><div class="wrap"><div class="section-head"><div><div class="eyebrow">Administración · Productos</div><h2>Productos de la tienda</h2><p>Orden, publicación, canal y margen propio. El precio de venta permanece de solo lectura.</p></div></div><div class="connection-bar"><div id="connectionStatus" role="status">Comprobando conexión…</div><div class="pub-actions"><span id="offlineQueueStatus" class="pub-meta">Sin cambios pendientes</span><button class="btn small" id="syncOfflineQueue" type="button" hidden>Sincronizar pendientes</button></div></div><div id="publicationMessage" class="pub-empty">Comprobando sesión administrativa…</div><div class="publication-table-header" aria-hidden="true"><span>Orden</span><span>Producto y canal</span><span>Precio / margen</span><span>Acciones</span></div><div id="publicationList" class="pub-grid"></div></div></section>
 
 <section id="salesAdmin" hidden><div class="wrap"><div class="section-head"><div><div class="eyebrow">05 · administración de tienda</div><h2>Ventas, pedidos y comprobantes</h2><p>Datos confirmados por Wompi y costos guardados en cada pedido.</p></div><div class="sales-status" id="salesUpdated">—</div></div><div class="sales-summary"><div class="sales-card"><span>Ventas cobradas</span><strong id="salesGross">—</strong></div><div class="sales-card"><span>Utilidad bruta estimada</span><strong id="salesProfit">—</strong></div><div class="sales-card"><span>Pedidos aprobados</span><strong id="salesOrders">—</strong></div><div class="sales-card"><span>Unidades vendidas</span><strong id="salesUnits">—</strong></div><div class="sales-card"><span>Ventas de hoy</span><strong id="salesToday">—</strong></div><div class="sales-card"><span>Ventas del mes</span><strong id="salesMonth">—</strong></div><div class="sales-card"><span>Ticket promedio</span><strong id="salesAverage">—</strong></div><div class="sales-card"><span>Pagos pendientes</span><strong id="salesPending">—</strong></div><div class="sales-card"><span>Pagos rechazados/anulados</span><strong id="salesFailed">—</strong></div></div><div class="sales-note">La utilidad es una estimación con el costo registrado al vender; no descuenta comisión de Wompi, impuestos, envíos, devoluciones ni otros gastos. El documento generado es un comprobante comercial, no una factura electrónica DIAN.</div><div class="sales-toolbar"><strong>Últimos pedidos</strong><div class="pub-actions"><span class="sales-status" id="notificationStatus">Estado de avisos: —</span><button class="btn small" id="retryNotifications" type="button">Reintentar avisos pendientes</button></div></div><div id="salesMessage" class="pub-empty">Cargando ventas…</div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Pedido / cliente</th><th>Estado</th><th>Unidades</th><th>Total</th><th>Utilidad bruta est.</th><th>Comprobante</th></tr></thead><tbody id="salesRows"></tbody></table></div></div></section>
 <section id="telegram"><div class="wrap"><div class="section-head"><div><div class="eyebrow">06 · automatización</div><h2>Telegram</h2><p>Consulta el catálogo y las oportunidades de Central directamente desde Telegram.</p></div><div class="mono" id="telegramStatus">Comprobando…</div></div><div class="panel" style="padding:20px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap"><div><strong id="telegramName">Bot de Central</strong><div class="status" id="telegramDetail" style="margin-top:5px">Verificando conexión con Telegram.</div></div><a class="btn primary" id="telegramOpen" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Abrir Telegram</a></div></div></section>
@@ -73,6 +150,8 @@
 
 <script>
 (()=>{"use strict";
+const isAdminRoute=location.pathname==="/admin"||location.pathname==="/admin/";
+if(isAdminRoute){document.body.classList.add("admin-mode");document.title="Central · Administración"}
 const API="/api/v1", $=id=>document.getElementById(id);
 const authHeaders=(extra={})=>extra;
 const adminHeaders=(extra={})=>extra;
@@ -243,7 +322,7 @@ async function loadCommerceAdmin(){
   const n=metrics.notifications||{};
   section.hidden=false;
    $("salesNav").hidden=false;
-   $("salesAnchor").hidden=false;
+   $("adminSalesLink").hidden=false;
   $("salesGross").textContent=money(metrics.gross_sales,metrics.currency);
   $("salesProfit").textContent=money(metrics.estimated_profit,metrics.currency);
   $("salesOrders").textContent=Number(metrics.paid_orders||0).toLocaleString("es-CO");
@@ -278,7 +357,7 @@ async function loadCommerceAdmin(){
    section.hidden=true;
    $("inteligencia").hidden=true;
    $("salesNav").hidden=true;
-   $("salesAnchor").hidden=true;
+   $("adminSalesLink").hidden=true;
   }else{
    $("salesMessage").textContent="No se pudieron cargar las ventas: "+error.message;
   }
@@ -438,18 +517,18 @@ function renderPublicationRows(rows,drafts={},offline=false){
      ?"Falta registrar el costo interno para calcular el margen."
      :"Margen bruto "+Number(row.profit_margin_pct).toLocaleString("es-CO")+"% · utilidad estimada "+money(row.profit_amount,row.currency))
    :"Producto externo · compra mediante su enlace; margen no disponible en Central.";
-  return `<article class="pub-card" data-publication-card="${row.id}">
-   <div class="pub-order"><span class="pub-meta" data-publication-position>Posición ${index+1} de ${visibleRows.length}</span><div class="pub-actions"><button class="btn small" type="button" data-move-publication="${row.id}" data-direction="-1" aria-label="Mover ${esc(row.title)} hacia arriba" ${index===0?"disabled":""}>↑ Subir</button><button class="btn small" type="button" data-move-publication="${row.id}" data-direction="1" aria-label="Mover ${esc(row.title)} hacia abajo" ${index===visibleRows.length-1?"disabled":""}>↓ Bajar</button></div></div>
-   <div class="pub-meta">${personal?"Producto personal · Wompi":esc(row.platform||"Producto")+" · compra por URL"} · ${row.is_published?"Visible en tienda":"Borrador / retirada"}</div>
-   <h3>${esc(row.title)}</h3><div class="pub-meta">Precio de venta (solo lectura): ${esc(row.price_display||"Precio no disponible")}</div>
-   <div class="pub-profit">${profitLabel}</div>
-   <form class="pub-form" data-publication-form="${row.id}">
+  return `<article class="pub-row" data-publication-card="${row.id}">
+   <div class="pub-row-order"><span class="pub-meta" data-publication-position>${String(index+1).padStart(2,"0")}</span><div class="pub-actions"><button class="btn small" type="button" data-move-publication="${row.id}" data-direction="-1" aria-label="Subir ${esc(row.title)}" ${index===0?"disabled":""}>↑</button><button class="btn small" type="button" data-move-publication="${row.id}" data-direction="1" aria-label="Bajar ${esc(row.title)}" ${index===visibleRows.length-1?"disabled":""}>↓</button></div></div>
+   <div class="pub-row-main"><div class="pub-meta">${personal?"Producto personal · checkout Wompi":esc(row.platform||"Producto")+" · compra por URL"}</div><h3>${esc(row.title)}</h3><div class="pub-row-state ${row.is_published?"is-live":""}">${row.is_published?"Publicado en tienda":"Borrador · no visible"}</div></div>
+   <div class="pub-row-metrics"><div class="pub-row-price">${esc(row.price_display||"Precio no disponible")} · solo lectura</div><div class="pub-profit">${profitLabel}</div></div>
+   <div class="pub-actions pub-row-actions"><button class="btn small" type="button" data-edit-publication="${row.id}" aria-expanded="false">Editar</button><button class="btn small" type="button" data-remove-publication="${row.id}">Retirar</button><button class="btn small" type="button" data-publish-telegram="${row.id}" ${navigator.onLine?"":"disabled"}>Telegram</button></div>
+   <form class="pub-editor pub-form" data-publication-form="${row.id}" hidden>
     ${personal?`<label>Costo interno para calcular ganancia (no cambia el precio de venta)<input type="number" name="cost_price" min="0" step="0.01" value="${row.cost_price==null?"":esc(row.cost_price)}" inputmode="decimal"></label>`:""}
     <label>Texto secundario<input type="text" name="subtitle" maxlength="500" value="${esc(draft.subtitle||"")}"></label>
     <label>Pie de tarjeta<input type="text" name="footer" maxlength="200" value="${esc(draft.footer||"Disponible en Central")}"></label>
     <label>Color de acento<input type="color" name="accent" value="${/^#[0-9a-f]{6}$/i.test(draft.accent||"")?draft.accent:"#b6f23a"}"></label>
     <label class="pub-check"><input type="checkbox" name="is_published" ${draft.is_published?"checked":""}> Visible en la tienda</label>
-    <div class="pub-actions"><button class="btn primary small" type="submit">Guardar ajustes</button><button class="btn small" type="button" data-remove-publication="${row.id}">Eliminar publicación</button><button class="btn small" type="button" data-publish-telegram="${row.id}" ${navigator.onLine?"":"disabled"}>Enviar a Telegram</button></div>
+    <div class="pub-actions"><button class="btn primary small" type="submit">Guardar cambios</button><button class="btn small" type="button" data-close-editor="${row.id}">Cerrar</button></div>
     <div class="pub-meta" data-draft-status="${row.id}">${restored?"Borrador recuperado.":"Los cambios se guardan automáticamente."}</div>
    </form></article>`;
  }).join("");
@@ -473,7 +552,7 @@ async function loadPublications(){
   }catch(error){localCacheError=" El modo offline no pudo guardar datos en este navegador: "+error.message}
   $("inteligencia").hidden=false;
   $("salesNav").hidden=false;
-  $("salesAnchor").hidden=false;
+   $("adminSalesLink").hidden=false;
   renderPublicationRows(rows,drafts);
   if(localCacheError)message.textContent+=localCacheError;
   await loadCommerceAdmin();
@@ -495,7 +574,7 @@ async function loadPublications(){
    $("salesAdmin").hidden=true;
    $("inteligencia").hidden=true;
    $("salesNav").hidden=true;
-   $("salesAnchor").hidden=true;
+   $("adminSalesLink").hidden=true;
   }else message.textContent="No fue posible cargar las tarjetas: "+error.message;
  }
 }
@@ -509,7 +588,7 @@ function applyPublicationOrder(ids){
  const ordered=[...list.querySelectorAll("[data-publication-card]")];
  ordered.forEach((card,index)=>{
   const position=card.querySelector("[data-publication-position]");
-  if(position)position.textContent="Posición "+(index+1)+" de "+ordered.length;
+  if(position)position.textContent=String(index+1).padStart(2,"0");
   const controls=[...card.querySelectorAll("[data-move-publication]")];
   controls.forEach(control=>{control.disabled=(control.dataset.direction==="-1"&&index===0)||(control.dataset.direction==="1"&&index===ordered.length-1)});
  });
@@ -658,6 +737,20 @@ document.addEventListener("click",async event=>{
    await flushOfflineQueue();
   }catch(error){if(!requireSession(error))$("publicationMessage").textContent="No se publicó: "+error.message;}
   finally{publish.disabled=false;}
+ }
+ const edit=event.target.closest("[data-edit-publication]");
+ if(edit){
+  const card=edit.closest("[data-publication-card]"),form=card?.querySelector("[data-publication-form]");
+  if(form){
+   form.hidden=!form.hidden;
+   edit.setAttribute("aria-expanded",String(!form.hidden));
+   if(!form.hidden)form.querySelector("input:not([type=checkbox])")?.focus();
+  }
+ }
+ const closeEditor=event.target.closest("[data-close-editor]");
+ if(closeEditor){
+  const card=closeEditor.closest("[data-publication-card]"),form=card?.querySelector("[data-publication-form]");
+  if(form){form.hidden=true;card.querySelector("[data-edit-publication]")?.setAttribute("aria-expanded","false")}
  }
  const move=event.target.closest("[data-move-publication]");
  if(move){

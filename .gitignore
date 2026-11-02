@@ -40,3 +40,4 @@ out/
 # Secretos locales
 .evn
 .env
+.vercel
