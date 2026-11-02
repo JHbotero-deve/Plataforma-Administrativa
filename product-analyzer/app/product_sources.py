@@ -232,7 +232,7 @@ def enrich_product(product):
     platform = product.get("platform")
     try:
         if platform == "amazon":
-            resolved_url = _resolve_amazon_url(url)
+            resolved_url = url if _amazon_asin(url) else _resolve_amazon_url(url)
             asin = _amazon_asin(resolved_url)
             if resolved_url != url:
                 product["product_url"] = resolved_url
