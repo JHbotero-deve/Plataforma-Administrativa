@@ -28,6 +28,16 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(result["currency"], "USD")
         self.assertEqual(result["image_url"], "https://img.alicdn.com/bolso.jpg")
 
+    def test_public_page_extracts_original_price_and_description(self):
+        response = MagicMock()
+        response.status_code = 200
+        response.text = '''<html><meta property="og:title" content="Bolso"><meta property="og:description" content="Bolso resistente"><meta property="og:price:amount" content="60"><meta property="og:price:standard_amount" content="100"><meta property="product:price:currency" content="USD"><meta property="og:image" content="https://img.example/bolso.jpg"></html>'''
+        with patch.object(product_sources.requests, "get", return_value=response):
+            result = product_sources._public_product_page("https://www.aliexpress.com/item/123.html", "aliexpress")
+        self.assertEqual(result["price"], 60)
+        self.assertEqual(result["previous_price"], 100)
+        self.assertEqual(result["description"], "Bolso resistente")
+
     def test_public_page_rejects_untrusted_host(self):
         with self.assertRaises(ValueError):
             product_sources._public_product_page("https://evil.example/product", "amazon")

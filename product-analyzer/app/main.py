@@ -8,12 +8,13 @@ from db import get_connection, upsert_product
 from init_db import init_database
 from notifications import send_telegram_alert
 from product_sources import enrich_pending_products
-from promotion_bots import run_promotion_cycle
+from promotion_bots import run_promotion_cycle, run_storefront_refill
 from seed_catalog import seed_catalog
 from tiktok_creator import creator_configured, sync_showcase
 
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
 PROMOTION_API_ENABLED = os.getenv("ENABLE_ALIEXPRESS_PROMOTION_API", "false").strip().lower() in {"1", "true", "yes"}
+STOREFRONT_AUTO_REFILL_ENABLED = os.getenv("STOREFRONT_AUTO_REFILL_ENABLED", "true").strip().lower() in {"1", "true", "yes"}
 def build_url(title: str, product_url: str | None) -> str:
     if product_url and product_url != "#":
         return product_url
@@ -121,9 +122,14 @@ def run_pipeline():
     finally:
         conn.close()
 
-    # La publicación de tarjetas es manual y única: Studio -> Publicar en Central.
-    # El worker solo ingesta, actualiza y puntúa productos; no crea tarjetas automáticamente.
-    print("[storefront] publicación automática desactivada; Studio es el único publicador.")
+    if STOREFRONT_AUTO_REFILL_ENABLED:
+        try:
+            refill = run_storefront_refill()
+            print(f"[storefront] reposición automática: {refill}")
+        except Exception as exc:
+            print(f"[storefront] reposición automática falló: {type(exc).__name__}: {exc}")
+    else:
+        print("[storefront] reposición automática desactivada por configuración.")
 
     if creator_configured():
         try:

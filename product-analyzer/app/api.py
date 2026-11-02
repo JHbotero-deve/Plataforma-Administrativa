@@ -32,11 +32,13 @@ from db import get_connection, upsert_product
 from notifications import send_telegram_alert
 from monetization import router as monetization_router
 from publications import ensure_draft_storage, router as publication_router
+from storefront_sections import ensure_storefront_section_storage, router as storefront_sections_router
 from store_orders import ensure_commerce_storage, router as store_orders_router
 from store_notifications import process_pending_notifications
 from tiktok_api import router as tiktok_creator_router
 from url_import import import_url
 from product_sources import enrich_product
+from pricing import publish_discounted_offer
 from wompi import router as wompi_router
 from notifications import _config as _config_telegram
 
@@ -57,6 +59,7 @@ notification_worker_task = None
 async def ensure_admin_draft_storage():
     global notification_worker_task
     ensure_draft_storage()
+    ensure_storefront_section_storage()
     ensure_commerce_storage()
     ensure_aliexpress_oauth_storage()
     notification_worker_task = asyncio.create_task(notification_delivery_loop())
@@ -89,6 +92,7 @@ app.include_router(monetization_router, prefix="/api/v1")
 app.include_router(wompi_router, prefix="/api/v1")
 app.include_router(tiktok_creator_router, prefix="/api/v1")
 app.include_router(publication_router, prefix="/api/v1")
+app.include_router(storefront_sections_router, prefix="/api/v1")
 app.include_router(store_orders_router, prefix="/api/v1")
 app.include_router(aliexpress_oauth_router, prefix="/api/v1")
 
@@ -457,7 +461,7 @@ def public_product(product_id: int):
     try:
         with conn.cursor() as cur:
             cur.execute("""SELECT pc.id AS publication_id,pc.product_id,pc.title,pc.subtitle,pc.price_display,
-                pc.sale_price,pc.opportunity_score,pc.footer,p.description,p.current_price,p.previous_price,p.currency,
+                pc.sale_price,pc.opportunity_score,pc.footer,p.description,pc.sale_price AS current_price,p.previous_price,p.previous_price AS original_price,CASE WHEN p.previous_price>0 AND pc.sale_price>0 THEN ROUND((p.previous_price-pc.sale_price)/p.previous_price*100,2) ELSE NULL END AS discount_pct,p.currency,
                 COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) AS image_url,p.image_gallery,
                 COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) AS product_url,
                 p.affiliate_url,p.sku,p.external_id,p.stock,
@@ -561,7 +565,7 @@ class ProductImportBatch(BaseModel):
 )
 def import_product_from_url(payload: ProductImport):
     category = (payload.category or "").strip().lower() or None
-    if category and category not in {"ropa", "calzado", "accesorios"}:
+    if category and category not in {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"}:
         raise HTTPException(status_code=400, detail="Categoría no permitida.")
     if payload.previous_price is not None and payload.price is not None and payload.previous_price < payload.price:
         raise HTTPException(status_code=400, detail="El precio anterior debe ser igual o superior al precio actual.")
@@ -629,7 +633,8 @@ def import_product_from_url(payload: ProductImport):
                 (product_id,),
             )
             saved = cur.fetchone()
-        return {"product": saved, "opportunity_score": score}
+        customer_offer = publish_discounted_offer(conn, product_id, dict(saved), score)
+        return {"product": saved, "opportunity_score": score, "customer_offer": customer_offer}
     finally:
         conn.close()
 

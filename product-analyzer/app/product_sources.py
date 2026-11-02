@@ -14,7 +14,7 @@ ALLOWED_HOSTS = {
     "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amzn.to", "amzn.com", "a.co"),
     "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub"),
 }
-ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios"}
+ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"}
 
 
 class _ProductHTML(HTMLParser):
@@ -80,15 +80,29 @@ def _number(value):
 
 def _category(value, title=""):
     text = unicodedata.normalize("NFKD", f"{value or ''} {title or ''}").encode("ascii", "ignore").decode().lower()
+    if any(word in text for word in ("smartphone", "iphone", "android", "laptop", "notebook", "computer", "tablet", "monitor", "keyboard", "mouse", "technology", "electronics", "electronica", "tecnologia", "celular")):
+        return "tecnologia"
+    if any(word in text for word in ("home decor", "kitchen", "furniture", "household", "decoracion", "cocina", "muebles", "hogar", "lampara")):
+        return "hogar"
+    if any(word in text for word in ("sports", "fitness", "gym", "exercise", "deportes", "gimnasio", "entrenamiento")):
+        return "deportes"
+    if any(word in text for word in ("beauty", "makeup", "cosmetic", "skincare", "maquillaje", "belleza", "cuidado de la piel")):
+        return "belleza"
+    if any(word in text for word in ("personal care", "wellness", "self care", "bienestar", "cuidado personal")):
+        return "bienestar"
+    if any(word in text for word in ("toy", "toys", "game", "juguete", "juegos")):
+        return "juguetes"
+    if any(word in text for word in ("office", "stationery", "school supplies", "papeleria", "oficina", "estudio")):
+        return "oficina"
     if any(word in text for word in ("footwear", "shoes", "sneaker", "boots", "sandals", "zapato", "tenis", "botas", "sandalia", "calzado")):
         return "calzado"
     if any(word in text for word in ("clothing", "apparel", "shirt", "pants", "dress", "jacket", "hoodie", "sweater", "camisa", "pantalon", "vestido", "chaqueta", "sudadera", "blusa", "falda", "ropa")):
         return "ropa"
+    if any(word in text for word in ("fashion", "moda")):
+        return "moda"
     if any(word in text for word in ("accessories", "accessory", "bag", "backpack", "watch", "jewelry", "phone case", "bolso", "mochila", "reloj", "joya", "funda", "lentes", "gorra", "cinturon", "accesorios", "earbuds", "headphones", "headset")):
         return "accesorios"
     return None
-
-
 def _normalized_url(url):
     parsed = urlsplit(url)
     return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), parsed.path or "/", parsed.query, ""))
@@ -137,6 +151,8 @@ def _public_product_page(url, platform):
         raise RuntimeError("La tienda exige iniciar sesión para mostrar los datos del producto.")
     image = metadata.get("og:image") or metadata.get("twitter:image")
     price = metadata.get("product:price:amount") or metadata.get("og:price:amount") or metadata.get("price")
+    previous_price = metadata.get("product:price:original") or metadata.get("product:original_price:amount") or metadata.get("og:price:standard_amount") or metadata.get("product:price:regular") or metadata.get("product:price:old_amount") or metadata.get("price:original")
+    description = metadata.get("og:description") or metadata.get("twitter:description") or metadata.get("description") or ""
     currency = metadata.get("product:price:currency") or metadata.get("og:price:currency")
     category = metadata.get("product:category") or metadata.get("og:category")
     rating = metadata.get("rating")
@@ -163,8 +179,18 @@ def _public_product_page(url, platform):
                 offers = offers[0] if offers else {}
             if isinstance(offers, dict) and isinstance(offers.get("offers"), list):
                 offers = offers["offers"][0] if offers["offers"] else {}
+            if isinstance(offers, dict):
+                specifications = offers.get("priceSpecification") or []
+                specifications = specifications if isinstance(specifications, list) else [specifications]
+                for specification in specifications:
+                    if not isinstance(specification, dict):
+                        continue
+                    price_type = str(specification.get("priceType") or specification.get("name") or "").casefold()
+                    if any(term in price_type for term in ("list", "original", "regular", "strikethrough", "reference")):
+                        previous_price = previous_price or specification.get("price")
             price = price or (offers.get("price") if isinstance(offers, dict) else None) or (offers.get("lowPrice") if isinstance(offers, dict) else None)
             currency = (offers.get("priceCurrency") if isinstance(offers, dict) else None) or currency
+            description = description or product.get("description") or ""
             category = product.get("category") or category
             aggregate = product.get("aggregateRating") or {}
             rating = rating or (aggregate.get("ratingValue") if isinstance(aggregate, dict) else None)
@@ -177,6 +203,8 @@ def _public_product_page(url, platform):
         "image_url": image_url,
         "gallery_urls": gallery,
         "price": _number(price),
+        "previous_price": _number(previous_price),
+        "description": str(description).strip()[:5000] or None,
         "currency": str(currency).upper()[:10] if currency else None,
         "rating": _number(rating),
         "reviews_count": int(_number(reviews_count) or 0),
@@ -203,7 +231,7 @@ def enrich_product(product):
         fresh = _public_product_page(url, platform)
         if fresh.get("title") and (not product.get("title") or str(product["title"]).startswith("Producto ")):
             product["title"] = fresh["title"]
-        for key in ("price", "image_url", "rating", "reviews_count"):
+        for key in ("price", "previous_price", "description", "image_url", "rating", "reviews_count"):
             if fresh.get(key) is not None and (product.get(key) is None or key == "reviews_count" and not product.get(key)):
                 product[key] = fresh[key]
         if fresh.get("price") is not None and fresh.get("currency") and not product.get("price"):

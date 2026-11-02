@@ -28,6 +28,7 @@
 @media(max-width:700px){.shell{width:calc(100% - 24px)}.topbar{height:66px}.top-actions .admin-link{display:none}.hero{padding-top:42px}.hero h1{font-size:clamp(42px,12vw,54px)}.stage{height:330px}.stage-carousel{height:320px}.stage-product{width:min(66%,260px);height:min(88%,285px);padding:9px;border-radius:20px}.stage-product.is-prev{transform:translate(calc(-50% - 68%),-50%) scale(.72) rotate(-7deg)}.stage-product.is-next{transform:translate(calc(-50% + 68%),-50%) scale(.72) rotate(7deg)}.stage-arrow{width:36px;height:36px}.stage-arrow.prev{left:0}.stage-arrow.next{right:0}.stage-status{right:4px;bottom:0}.toolbar{position:relative;top:auto;grid-template-columns:1fr;border-radius:20px}.count{min-height:34px}.feature-media{min-height:320px}.feature-info{padding:28px}.grid{grid-template-columns:1fr}.card-media{height:285px}.card-actions{grid-template-columns:1fr 1fr}.cart-fab{right:12px;bottom:12px}.drawer{padding:7px}.drawer-box{border-radius:17px;padding:18px}}
 @media(max-width:380px){.top-actions{gap:5px}.top-btn{padding:0 10px;font-size:10px}.stage-product{width:64%;height:82%}.stage-product-title{font-size:14px}.stage-product-price{font-size:13px}.stage-arrow{width:32px;height:32px}}
 @media(prefers-reduced-motion:reduce){.stage-product{transition:none}.stage-progress span{animation:none;transform:scaleX(1)}}
+.catalog-sections{display:grid;gap:34px;padding-bottom:70px}.catalog-section{min-width:0}.catalog-section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:0 0 14px}.catalog-section-head h2{font:600 clamp(22px,3vw,30px)/1.05 "Space Grotesk";margin:0;color:#fff}.catalog-section-head span{font-size:10px;color:#858b93;white-space:nowrap}.section-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.catalog-section .empty{min-height:80px;padding:22px}@media(max-width:1050px){.section-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.section-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -107,6 +108,19 @@ const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const money=(v,c="COP")=>{if(v==null||v==="")return"Consultar";try{return new Intl.NumberFormat("es-CO",{style:"currency",currency:String(c).toUpperCase()==="USD"?"USD":"COP",maximumFractionDigits:0}).format(Number(v))}catch{return String(v)}};
 const slug=p=>p.slug||String(p.title||"producto").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 const productUrl=p=>"/producto/"+esc(slug(p));
+const DEFAULT_SECTIONS=[
+ {slug:"tecnologia",title:"Tecnología",category_names:["tecnologia"],target_count:100},
+ {slug:"hogar",title:"Hogar",category_names:["hogar"],target_count:100},
+ {slug:"moda",title:"Moda",category_names:["moda","ropa","calzado"],target_count:100},
+ {slug:"accesorios",title:"Accesorios",category_names:["accesorios"],target_count:100},
+ {slug:"deportes",title:"Deportes",category_names:["deportes"],target_count:100},
+ {slug:"belleza",title:"Belleza y cuidado personal",category_names:["belleza"],target_count:100},
+ {slug:"bienestar",title:"Salud y bienestar",category_names:["bienestar"],target_count:100},
+ {slug:"juguetes",title:"Juguetes",category_names:["juguetes"],target_count:100},
+ {slug:"oficina-estudio",title:"Oficina y estudio",category_names:["oficina"],target_count:100},
+ {slug:"ofertas-destacadas",title:"Ofertas destacadas",category_names:[],target_count:100}
+];
+let sectionSettings=DEFAULT_SECTIONS;
 let products=JSON.parse(localStorage.getItem("central_products_cache")||"[]");
 let cart=JSON.parse(localStorage.getItem("central_cart")||"[]");
 let filtered=[], active=null, heroIndex=0, heroTimer=null, heroPaused=false;
@@ -119,32 +133,34 @@ function cleanCart(){cart=cart.filter(x=>{const p=products.find(p=>String(p.prod
 function externalUrl(p){return p.product_url||p.affiliate_url||""}
 function purchaseChannel(p){const platform=String(p.platform||"").toLowerCase();return platform==="aliexpress"?"AliExpress":platform==="amazon"?"Amazon":"su enlace de compra"}
 
+function featuredProducts(){const target=Number(sectionSettings.find(section=>section.slug==="ofertas-destacadas")?.target_count)||100;return products.slice(0,target)}
+function heroProducts(){return $("search").value.trim()||$("category").value?filtered:featuredProducts()}
 function renderHeroCarousel(){
-  const cards=$("stageCards"),status=$("stageStatus");
-  if(!products.length){cards.innerHTML='<div class="stage-empty">Los productos publicados aparecerán aquí.</div>';status.textContent="";return}
-  heroIndex=((heroIndex%products.length)+products.length)%products.length;
-  const offsets=products.length>2?[-1,0,1]:products.length===2?[0,1]:[0];
+  const cards=$("stageCards"),status=$("stageStatus"),featured=heroProducts();
+  if(!featured.length){cards.innerHTML='<div class="stage-empty">Los productos publicados aparecerán aquí.</div>';status.textContent="";return}
+  heroIndex=((heroIndex%featured.length)+featured.length)%featured.length;
+  const offsets=featured.length>2?[-1,0,1]:featured.length===2?[0,1]:[0];
   cards.innerHTML=offsets.map(offset=>{
-    const product=products[(heroIndex+offset+products.length)%products.length],position=offset===0?"is-active":offset<0?"is-prev":"is-next",src=imageSrc(product);
+    const product=featured[(heroIndex+offset+featured.length)%featured.length],position=offset===0?"is-active":offset<0?"is-prev":"is-next",src=imageSrc(product);
     return '<a class="stage-product '+position+'" href="'+productUrl(product)+'" aria-label="Ver '+esc(product.title||"producto")+'"><span class="stage-product-media">'+(src?'<img src="'+esc(src)+'" alt="'+esc(product.title||"Producto destacado")+'" loading="lazy" referrerpolicy="no-referrer"><span class="no-image" hidden>Imagen no disponible</span>':'<span class="no-image">Imagen no disponible</span>')+'</span><span class="stage-product-copy"><span class="stage-product-category">'+esc(product.category||product.platform||"Destacado")+'</span><span class="stage-product-title">'+esc(product.title||"Producto")+'</span><span class="stage-product-price">'+esc(product.price_display||money(product.sale_price??product.current_price,product.currency))+'</span></span></a>'
   }).join("");
   cards.querySelectorAll(".stage-product img").forEach(image=>image.addEventListener("error",()=>{image.hidden=true;const fallback=image.nextElementSibling;if(fallback)fallback.hidden=false},{once:true}));
-  status.innerHTML="<strong>"+String(heroIndex+1).padStart(2,"0")+"</strong> / "+String(products.length).padStart(2,"0");
+  status.innerHTML="<strong>"+String(heroIndex+1).padStart(2,"0")+"</strong> / "+String(featured.length).padStart(2,"0");
 }
-function stepHero(direction){if(products.length<2)return;heroIndex=(heroIndex+direction+products.length)%products.length;renderHeroCarousel()}
+function stepHero(direction){const featured=heroProducts();if(featured.length<2)return;heroIndex=(heroIndex+direction+featured.length)%featured.length;renderHeroCarousel()}
 function startHeroRotation(){
   clearInterval(heroTimer);
   heroTimer=setInterval(()=>{if(!heroPaused&&document.visibilityState==="visible"&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches)stepHero(1)},HERO_INTERVAL);
 }
 
 function setCategories(){
-  const cats=[...new Set(products.map(p=>p.category).filter(Boolean))].sort();
-  $("category").innerHTML='<option value="">Todas las categorías</option>'+cats.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join("");
-  $("categories").innerHTML='<button class="cat active" data-cat="">Todos</button>'+cats.map(c=>'<button class="cat" data-cat="'+esc(c)+'">'+esc(c)+'</button>').join("");
+  const cats=sectionSettings.filter(section=>section.category_names?.length);
+  $("category").innerHTML='<option value="">Todas las categorías</option>'+cats.map(section=>'<option value="'+esc(section.slug)+'">'+esc(section.title)+'</option>').join("");
+  $("categories").innerHTML='<button class="cat active" data-cat="">Todos</button>'+cats.map(section=>'<button class="cat" data-cat="'+esc(section.slug)+'">'+esc(section.title)+'</button>').join("");
 }
 function applyFilter(){
-  const q=$("search").value.trim().toLowerCase(), c=$("category").value;
-  filtered=products.filter(p=>(!q||[p.title,p.subtitle,p.category,p.platform,p.external_id].some(v=>String(v||"").toLowerCase().includes(q)))&&(!c||p.category===c));
+  const q=$("search").value.trim().toLowerCase(), c=$("category").value, selected=sectionSettings.find(section=>section.slug===c);
+  filtered=products.filter(p=>(!q||[p.title,p.subtitle,p.category,p.platform,p.external_id].some(v=>String(v||"").toLowerCase().includes(q)))&&(!selected||selected.category_names.includes(p.category)));
   $("count").textContent=filtered.length+" producto"+(filtered.length===1?"":"s");
   renderFeature();
   renderHeroCarousel();
@@ -162,7 +178,7 @@ function renderFeature(){
   $("featureTitle").textContent=p.title||"Producto";
   $("featureDescription").textContent=p.subtitle||p.description||"Producto publicado en Central.";
   $("featurePrice").textContent=p.price_display||money(p.sale_price??p.current_price,p.currency);
-  $("featureMeta").innerHTML=[p.brand,p.category,p.platform].filter(Boolean).map(x=>'<span class="pill">'+esc(x)+'</span>').join("");
+  $("featureMeta").innerHTML=[p.brand,p.category,p.platform].filter(Boolean).map(x=>'<span class="pill">'+esc(x)+'</span>').join("")+(Number(p.discount_pct)>=40?'<span class="pill">'+Math.round(Number(p.discount_pct))+'% de descuento</span>':"");
   const gallery=(p.image_gallery||[]).filter(Boolean);
   $("variants").innerHTML=gallery.length>1?gallery.slice(0,5).map((im,i)=>'<button class="variant '+(i===0?"active":"")+'" data-image="'+esc(im)+'" style="background-image:url(\''+esc(im).replace(/'/g,"%27")+'\');background-size:cover" aria-label="Imagen '+(i+1)+'"></button>').join(""):"";
   const own=isOwn(p), ext=externalUrl(p);
@@ -175,15 +191,22 @@ function renderFeature(){
   document.querySelectorAll(".variant").forEach(b=>b.onclick=()=>{media.innerHTML='<img class="feature-image" src="'+b.dataset.image+'" alt="'+esc(p.title)+'" referrerpolicy="no-referrer">';document.querySelectorAll(".variant").forEach(x=>x.classList.remove("active"));b.classList.add("active")});
 }
 function card(p){
-  const own=isOwn(p), ext=externalUrl(p), price=p.price_display||money(p.sale_price??p.current_price,p.currency), src=imageSrc(p);
+  const own=isOwn(p), ext=externalUrl(p), price=p.price_display||money(p.sale_price??p.current_price,p.currency), src=imageSrc(p), discount=Number(p.discount_pct||0), original=Number(p.original_price||0);
   let main;
   if(own) main='<button class="btn primary wide add" data-id="'+esc(p.product_id||p.id)+'">Añadir · pagar con Wompi</button>';
   else if(ext) main='<a class="btn primary wide" href="'+esc(ext)+'" target="_blank" rel="nofollow sponsored noopener">Comprar en '+esc(purchaseChannel(p))+'</a>';
   else main='<a class="btn primary wide" href="'+productUrl(p)+'">Ver ficha</a>';
-  return '<article class="card"><div class="card-media">'+(src?'<img src="'+esc(src)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer"><div class="no-image" hidden>Imagen no disponible</div>':'<div class="no-image">Imagen no disponible</div>')+'<span class="badge">'+esc(p.platform||"Central")+'</span></div><div class="card-body"><div class="category">'+esc(p.category||"Producto")+'</div><h3>'+esc(p.title)+'</h3><small>'+esc(p.subtitle||"Producto publicado por Central")+'</small><div class="card-price">'+esc(price)+'</div><div class="card-actions">'+main+'<a class="btn" href="'+productUrl(p)+'">Ficha</a></div></div></article>'
+  return '<article class="card"><div class="card-media">'+(src?'<img src="'+esc(src)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer"><div class="no-image" hidden>Imagen no disponible</div>':'<div class="no-image">Imagen no disponible</div>')+'<span class="badge">'+(discount>=40?Math.round(discount)+'% DTO':esc(p.platform||"Central"))+'</span></div><div class="card-body"><div class="category">'+esc(p.category||"Producto")+'</div><h3>'+esc(p.title)+'</h3><small>'+esc(p.subtitle||"Producto publicado por Central")+'</small><div class="card-price">'+esc(price)+'</div>'+(discount>=40&&original>0?'<small style="text-decoration:line-through;color:#888">Antes: '+esc(money(original,p.currency))+'</small>':'')+'<div class="card-actions">'+main+'<a class="btn" href="'+productUrl(p)+'">Ficha</a></div></div></article>'
 }
 function renderGrid(){
-  $("grid").innerHTML=filtered.length?filtered.map(card).join(""):'<div class="empty"><b>No hay productos</b>Prueba otra búsqueda o publica un producto desde Central.</div>';
+  const host=$("grid"),q=$("search").value.trim(),selected=$("category").value;
+  if(!filtered.length){host.className="grid";host.innerHTML='<div class="empty"><b>No hay productos</b>Prueba otra búsqueda o publica un producto desde Central.</div>';return}
+  if(q||selected){host.className="grid";host.innerHTML=filtered.map(card).join("");return}
+  host.className="catalog-sections";
+  host.innerHTML=sectionSettings.filter(section=>section.category_names?.length).map(section=>{
+    const items=products.filter(product=>section.category_names.includes(product.category)).slice(0,Number(section.target_count)||100);
+    return '<section class="catalog-section"><div class="catalog-section-head"><h2>'+esc(section.title)+'</h2><span>'+items.length+' / '+Number(section.target_count||100)+' productos</span></div><div class="section-grid">'+(items.length?items.map(card).join(""):'<div class="empty">La sección se completará cuando haya productos que cumplan los criterios de publicación.</div>')+'</div></section>';
+  }).join("");
 }
 function addToCart(p){
   if(!isOwn(p))return;
@@ -197,7 +220,8 @@ function renderCart(){
   $("cartTotal").textContent=money(cart.reduce((n,x)=>n+Number(x.price)*Number(x.quantity),0),"COP");
 }
 async function load(){
-  const endpoints=[API+"/publications?limit=100","https://gracious-renewal-production-76df.up.railway.app/api/v1/publications?limit=100"];
+  try{const response=await fetch(API+"/storefront/sections",{cache:"no-store"});if(response.ok){const data=await response.json();if(Array.isArray(data)&&data.length)sectionSettings=data}}catch(error){}
+  const endpoints=[API+"/publications?limit=5000","https://gracious-renewal-production-76df.up.railway.app/api/v1/publications?limit=5000"];
   for(const endpoint of endpoints)try{
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),7000);
     const r=await fetch(endpoint,{cache:"no-store",signal:controller.signal});clearTimeout(timer);

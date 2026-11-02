@@ -9,6 +9,8 @@ from affiliate_links import aliexpress_api_request
 from analysis import score_product
 from db import get_connection, upsert_product
 from notifications import send_telegram_alert
+from pricing import build_customer_offer, publish_discounted_offer
+from storefront_sections import count_published_for_category, ensure_storefront_section_storage, get_refill_sections
 
 
 SEARCH_BUCKETS = (
@@ -131,13 +133,15 @@ def _normalize_product(raw, category):
         raw.get("target_original_price") or raw.get("original_price")
     )
     discount = _percentage(raw.get("discount"))
-    volume = _number(raw.get("lastest_volume"))
-    quality = _percentage(raw.get("evaluate_rate"))
+    if (discount is None or discount <= 0) and original_price and sale_price and original_price > sale_price:
+        discount = round((original_price - sale_price) / original_price * 100, 2)
+    volume = _number(raw.get("lastest_volume")) or 0
+    quality = _percentage(raw.get("evaluate_rate")) or 0
     commission = _percentage(
         raw.get("relevant_market_commission_rate")
         or raw.get("hot_product_commission_rate")
         or raw.get("commission_rate")
-    )
+    ) or 0
     image = _official_url(raw.get("product_main_image_url"), image=True)
     currency = str(
         raw.get("target_sale_price_currency")
@@ -153,9 +157,6 @@ def _normalize_product(raw, category):
         or sale_price is None
         or sale_price <= 0
         or discount is None
-        or volume is None
-        or quality is None
-        or commission is None
     ):
         return None
 
@@ -194,12 +195,13 @@ def _normalize_product(raw, category):
         "currency": currency[:10],
         "rating": None,
         "reviews_count": 0,
-        "sales_estimate": int(volume),
+        "sales_estimate": int(volume or 0),
         "category": category,
         "discount": round(discount, 2),
         "original_price": original_price,
-        "quality": round(quality, 2),
-        "commission_rate": round(commission, 2),
+        "previous_price": original_price,
+        "quality": round(quality or 0, 2),
+        "commission_rate": round(commission or 0, 2),
         "promo_code": promo_code[:60],
         "promotion_score": _promotion_score(discount, volume, quality, commission),
         "source_metadata": {
@@ -301,12 +303,12 @@ def _category_average(conn, category, currency, price):
     return float((row or {}).get("average") or price)
 
 
-def _search_bucket(category, keyword):
+def _search_bucket(category, keyword, page_no=1, review=True):
     payload = aliexpress_api_request(
         "aliexpress.affiliate.product.query",
         {
             "keywords": keyword,
-            "page_no": "1",
+            "page_no": str(max(1, int(page_no))),
             "page_size": "50",
             "sort": "LAST_VOLUME_DESC",
             "target_currency": "USD",
@@ -317,12 +319,77 @@ def _search_bucket(category, keyword):
             "fields": PRODUCT_FIELDS,
         },
     )
-    return [
-        normalized
-        for raw in _product_results(payload)
-        if (normalized := _normalize_product(raw, category)) is not None
-        and _review_product(normalized)
-    ]
+    products = []
+    for raw in _product_results(payload):
+        normalized = _normalize_product(raw, category)
+        if normalized and (not review or _review_product(normalized)):
+            products.append(normalized)
+    return products
+
+
+
+def run_storefront_refill():
+    """Completa los cupos por sección con productos reales de la API oficial."""
+    tracking_id = _env("ALIEXPRESS_TRACKING_ID") or _env("ALIEXPRESS_AFFILIATE_TRACKING_ID")
+    if not (_env("ALIEXPRESS_APP_KEY") and _env("ALIEXPRESS_APP_SECRET") and tracking_id):
+        return {"status": "disabled", "reason": "Faltan credenciales oficiales de AliExpress.", "published": 0, "sections": {}}
+    ensure_storefront_section_storage()
+    sections = get_refill_sections()
+    max_pages = _number(_env("STOREFRONT_SEARCH_MAX_PAGES") or 4) or 4
+    max_pages = max(1, min(10, int(max_pages)))
+    conn = get_connection()
+    results = {}
+    total_added = 0
+    seen_external_ids = set()
+    try:
+        for section in sections:
+            target = int(section["target_count"])
+            current = count_published_for_category(conn, section["category_names"])
+            missing = max(0, target - current)
+            pages = min(max_pages, max(1, math.ceil(missing / 25))) if missing else 0
+            pages_checked = 0
+            for page_no in range(1, pages + 1):
+                try:
+                    candidates = _search_bucket(section["category_name"], section["search_keyword"], page_no, review=False)
+                except Exception as exc:
+                    print(f"[storefront] búsqueda {section['slug']} página {page_no} falló: {type(exc).__name__}")
+                    break
+                pages_checked += 1
+                if not candidates:
+                    break
+                for product in candidates:
+                    external_id = product["external_id"]
+                    if external_id in seen_external_ids or not build_customer_offer(product.get("price"), product.get("previous_price")):
+                        continue
+                    seen_external_ids.add(external_id)
+                    product_id = upsert_product(conn, "aliexpress", section["category_name"], product)
+                    average = _category_average(conn, section["category_name"], product["currency"], product["price"])
+                    score = score_product(conn, product_id, average)
+                    offer = publish_discounted_offer(conn, product_id, {
+                        "title": product["title"],
+                        "current_price": product["price"],
+                        "previous_price": product["previous_price"],
+                        "currency": product["currency"],
+                        "image_url": product["image_url"],
+                        "product_url": product["product_url"],
+                    }, score)
+                    updated_count = count_published_for_category(conn, section["category_names"])
+                    if offer:
+                        total_added += max(0, updated_count - current)
+                    current = updated_count
+                    if current >= target:
+                        break
+                if current >= target:
+                    break
+            results[section["slug"]] = {
+                "target": target,
+                "published": min(current, target),
+                "remaining": max(0, target - current),
+                "pages_checked": pages_checked,
+            }
+    finally:
+        conn.close()
+    return {"status": "completed", "published": total_added, "sections": results}
 
 
 def run_promotion_cycle(max_alerts=5):

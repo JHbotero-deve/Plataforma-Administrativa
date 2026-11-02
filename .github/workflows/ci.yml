@@ -44,6 +44,11 @@ jobs:
               Path("/tmp/central-frontend.js").write_text(inline_code, encoding="utf-8")
               import subprocess
               subprocess.run(["node", "--check", "/tmp/central-frontend.js"], check=True)
+              store_html = Path("product-analyzer/frontend/tienda.html").read_text(encoding="utf-8")
+              store_scripts = re.findall(r"<script(?:\s[^>]*)?>([\s\S]*?)</script>", store_html)
+              store_code = "\n".join([script for script in store_scripts if script.strip()])
+              Path("/tmp/central-store.js").write_text(store_code, encoding="utf-8")
+              subprocess.run(["node", "--check", "/tmp/central-store.js"], check=True)
           PY
 
       - name: Build Figma showcase
@@ -152,8 +157,10 @@ jobs:
       - name: Test product discovery and enrichment
         shell: bash
         run: |
-          python -m pip install requests psycopg2-binary schedule
+          python -m pip install requests psycopg2-binary schedule fastapi
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_product_sources.py'
+          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_pricing.py'
+          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_storefront_sections.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_telegram_alert.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_main.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_analysis.py'

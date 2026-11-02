@@ -117,6 +117,7 @@ body.admin-mode td{color:#303943}
  body.admin-mode .sales-card{padding:11px 10px;border-bottom:1px solid #edf0f2}
  body.admin-mode .sales-card strong{font-size:15px}
 }
+.section-settings-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin:18px 0 10px}.section-settings-head p{margin:4px 0;color:var(--muted);font-size:12px}.section-settings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:22px}.section-setting{display:grid;grid-template-columns:minmax(0,1fr) 90px auto;gap:10px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--panel)}.section-setting strong,.section-setting small{display:block}.section-setting small{color:var(--muted);font-size:11px;margin-top:3px}.section-setting input{width:100%;padding:9px;border:1px solid var(--line);border-radius:6px;background:#f7f3eb;color:var(--text)}@media(max-width:700px){.section-settings{grid-template-columns:1fr}.section-setting{grid-template-columns:minmax(0,1fr) 78px auto}}
 </style>
 <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 </head>
@@ -132,14 +133,14 @@ body.admin-mode td{color:#303943}
 <div class="section-head"><div><div class="eyebrow">03 · entrada real</div><h2>Importar un producto</h2><p>Pega el enlace del producto. Central detecta la plataforma e intenta extraer el nombre, el precio y la imagen reales.</p></div></div>
 <form id="importForm"><div class="import-main">
 <input class="field" id="url" type="url" placeholder="Pega aquí el enlace del producto" autocomplete="url" required>
-<label class="import-category"><span>Categoría</span><select class="field" id="category"><option value="otros" selected>Otros</option><option value="accesorios">Accesorios</option><option value="electronicos">Electrónica</option><option value="hogar">Hogar</option><option value="belleza">Belleza</option><option value="ropa">Ropa</option><option value="calzado">Calzado</option></select></label>
+<label class="import-category"><span>Categoría</span><select class="field" id="category"><option value="" selected>Detectar automáticamente</option><option value="tecnologia">Tecnología</option><option value="hogar">Hogar</option><option value="moda">Moda</option><option value="accesorios">Accesorios</option><option value="deportes">Deportes</option><option value="belleza">Belleza y cuidado personal</option><option value="bienestar">Salud y bienestar</option><option value="juguetes">Juguetes</option><option value="oficina">Oficina y estudio</option><option value="calzado">Calzado</option></select></label>
 <button class="btn primary" id="importBtn" type="submit">Importar producto</button>
 </div></form>
-<p class="import-help">Pega una URL de producto de Amazon o AliExpress. Amazon se importa sin rastrear ni consultar repetidamente la página; si faltan metadatos, envía título, precio e imagen desde tu CLI autorizado.</p>
+<p class="import-help">Pega una URL pública de Amazon o AliExpress. Central extrae nombre, descripción, fotos y precios disponibles. Solo publica ofertas con al menos 40% de descuento real y margen positivo; el costo y la ganancia quedan visibles únicamente en administración. Si la tienda exige iniciar sesión o no entrega el precio original, el producto se guarda sin publicarse.</p>
 <div class="import-fallback"><a class="btn small" href="https://central-7ykr.vercel.app/tarjetas">Abrir creador de tarjetas</a></div>
 <div class="import-result" id="importResult" role="status" aria-live="polite"></div>
 </div></section>
-<section id="publicaciones"><div class="wrap"><div class="section-head"><div><div class="eyebrow">Administración · Productos</div><h2>Productos de la tienda</h2><p>Orden, publicación, canal y margen propio. El precio de venta permanece de solo lectura.</p></div></div><div class="connection-bar"><div id="connectionStatus" role="status">Comprobando conexión…</div><div class="pub-actions"><span id="offlineQueueStatus" class="pub-meta">Sin cambios pendientes</span><button class="btn small" id="syncOfflineQueue" type="button" hidden>Sincronizar pendientes</button></div></div><div id="publicationMessage" class="pub-empty">Comprobando sesión administrativa…</div><div class="publication-table-header" aria-hidden="true"><span>Orden</span><span>Producto y canal</span><span>Precio / margen</span><span>Acciones</span></div><div id="publicationList" class="pub-grid"></div></div></section>
+<section id="publicaciones"><div class="wrap"><div class="section-head"><div><div class="eyebrow">Administración · Productos</div><h2>Productos de la tienda</h2><p>Orden, publicación, canal y margen propio. El precio de venta permanece de solo lectura.</p></div></div><div class="connection-bar"><div id="connectionStatus" role="status">Comprobando conexión…</div><div class="pub-actions"><span id="offlineQueueStatus" class="pub-meta">Sin cambios pendientes</span><button class="btn small" id="syncOfflineQueue" type="button" hidden>Sincronizar pendientes</button></div></div><div class="section-settings-head"><div><strong>Cupos de productos por sección</strong><p>Configura entre 100 y 500 productos por sección. Central repone los faltantes en cada ciclo si la API oficial está configurada.</p></div><button class="btn small" id="reloadSections" type="button">Actualizar</button></div><div id="sectionSettings" class="section-settings" aria-live="polite">Cargando secciones…</div><div id="publicationMessage" class="pub-empty">Comprobando sesión administrativa…</div><div class="publication-table-header" aria-hidden="true"><span>Orden</span><span>Producto y canal</span><span>Precio / margen</span><span>Acciones</span></div><div id="publicationList" class="pub-grid"></div></div></section>
 
 <section id="salesAdmin" hidden><div class="wrap"><div class="section-head"><div><div class="eyebrow">05 · administración de tienda</div><h2>Ventas, pedidos y comprobantes</h2><p>Datos confirmados por Wompi y costos guardados en cada pedido.</p></div><div class="sales-status" id="salesUpdated">—</div></div><div class="sales-summary"><div class="sales-card"><span>Ventas cobradas</span><strong id="salesGross">—</strong></div><div class="sales-card"><span>Utilidad bruta estimada</span><strong id="salesProfit">—</strong></div><div class="sales-card"><span>Pedidos aprobados</span><strong id="salesOrders">—</strong></div><div class="sales-card"><span>Unidades vendidas</span><strong id="salesUnits">—</strong></div><div class="sales-card"><span>Ventas de hoy</span><strong id="salesToday">—</strong></div><div class="sales-card"><span>Ventas del mes</span><strong id="salesMonth">—</strong></div><div class="sales-card"><span>Ticket promedio</span><strong id="salesAverage">—</strong></div><div class="sales-card"><span>Pagos pendientes</span><strong id="salesPending">—</strong></div><div class="sales-card"><span>Pagos rechazados/anulados</span><strong id="salesFailed">—</strong></div></div><div class="sales-note">La utilidad es una estimación con el costo registrado al vender; no descuenta comisión de Wompi, impuestos, envíos, devoluciones ni otros gastos. El documento generado es un comprobante comercial, no una factura electrónica DIAN.</div><div class="sales-toolbar"><strong>Últimos pedidos</strong><div class="pub-actions"><span class="sales-status" id="notificationStatus">Estado de avisos: —</span><button class="btn small" id="retryNotifications" type="button">Reintentar avisos pendientes</button></div></div><div id="salesMessage" class="pub-empty">Cargando ventas…</div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Pedido / cliente</th><th>Estado</th><th>Unidades</th><th>Total</th><th>Utilidad bruta est.</th><th>Comprobante</th></tr></thead><tbody id="salesRows"></tbody></table></div></div></section>
 <section id="telegram"><div class="wrap"><div class="section-head"><div><div class="eyebrow">06 · automatización</div><h2>Telegram</h2><p>Consulta el catálogo y las oportunidades de Central directamente desde Telegram.</p></div><div class="mono" id="telegramStatus">Comprobando…</div></div><div class="panel" style="padding:20px;display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap"><div><strong id="telegramName">Bot de Central</strong><div class="status" id="telegramDetail" style="margin-top:5px">Verificando conexión con Telegram.</div></div><a class="btn primary" id="telegramOpen" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Abrir Telegram</a></div></div></section>
@@ -512,11 +513,9 @@ function renderPublicationRows(rows,drafts={},offline=false){
   const draft=useLocal?localDraft:(serverDraft||row),personal=String(row.platform||"").toLowerCase()==="personal";
   serverDraftRevisions.set(id,Number(draft.revision)||0);
   const restored=Boolean(serverDraft||localDraft);
-  const profitLabel=personal
-   ?(row.profit_margin_pct==null
-     ?"Falta registrar el costo interno para calcular el margen."
-     :"Margen bruto "+Number(row.profit_margin_pct).toLocaleString("es-CO")+"% · utilidad estimada "+money(row.profit_amount,row.currency))
-   :"Producto externo · compra mediante su enlace; margen no disponible en Central.";
+  const profitLabel=row.profit_margin_pct==null
+   ?"Sin oferta rentable con descuento mínimo del 40%."
+   :"Margen bruto "+Number(row.profit_margin_pct).toLocaleString("es-CO")+"% · utilidad estimada "+money(row.profit_amount,row.currency);
   return `<article class="pub-row" data-publication-card="${row.id}">
    <div class="pub-row-order"><span class="pub-meta" data-publication-position>${String(index+1).padStart(2,"0")}</span><div class="pub-actions"><button class="btn small" type="button" data-move-publication="${row.id}" data-direction="-1" aria-label="Subir ${esc(row.title)}" ${index===0?"disabled":""}>↑</button><button class="btn small" type="button" data-move-publication="${row.id}" data-direction="1" aria-label="Bajar ${esc(row.title)}" ${index===visibleRows.length-1?"disabled":""}>↓</button></div></div>
    <div class="pub-row-main"><div class="pub-meta">${personal?"Producto personal · checkout Wompi":esc(row.platform||"Producto")+" · compra por URL"}</div><h3>${esc(row.title)}</h3><div class="pub-row-state ${row.is_published?"is-live":""}">${row.is_published?"Publicado en tienda":"Borrador · no visible"}</div></div>
@@ -539,6 +538,30 @@ function renderPublicationRows(rows,drafts={},offline=false){
   }
  });
 }
+async function loadSectionSettings(){
+ const host=$("sectionSettings");if(!host||!adminSessionActive)return;
+ try{
+  const rows=await get("/storefront/sections");
+  host.innerHTML=rows.map(section=>'<article class="section-setting"><div><strong>'+esc(section.title)+'</strong><small>'+Number(section.published_count||0)+' publicados · faltan '+Number(section.missing_count||0)+'</small></div><input type="number" min="100" max="500" step="25" value="'+Number(section.target_count||100)+'" aria-label="Objetivo de '+esc(section.title)+'" data-section-target><button class="btn small" type="button" data-save-section="'+esc(section.slug)+'">Guardar</button></article>').join("");
+ }catch(error){if(!requireSession(error))host.textContent="No fue posible cargar las secciones: "+error.message}
+}
+async function saveSectionTarget(button){
+ const input=button.parentElement.querySelector("[data-section-target]"),target=Number(input?.value);
+ if(!Number.isInteger(target)||target<100||target>500){input?.setCustomValidity("Usa un valor entero entre 100 y 500");input?.reportValidity();return}
+ input?.setCustomValidity("");
+ button.disabled=true;
+ try{
+  const response=await fetch(API+"/storefront/sections/"+encodeURIComponent(button.dataset.saveSection),requestOptions({method:"PUT",headers:adminHeaders({"Content-Type":"application/json",Accept:"application/json"}),body:JSON.stringify({target_count:target})}));
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok)throw Object.assign(new Error(result.detail||"No se pudo guardar el cupo"),{status:response.status});
+  await loadSectionSettings();
+ }catch(error){if(!requireSession(error))$("sectionSettings").textContent="No se pudo guardar el cupo: "+error.message}
+ finally{button.disabled=false}
+}
+const sectionSettingsHost=$("sectionSettings");
+if(sectionSettingsHost)sectionSettingsHost.addEventListener("click",event=>{const button=event.target.closest("[data-save-section]");if(button)saveSectionTarget(button)});
+const reloadSections=$("reloadSections");
+if(reloadSections)reloadSections.addEventListener("click",loadSectionSettings);
 async function loadPublications(){
  const message=$("publicationMessage"),list=$("publicationList");if(!message||!list)return;
  if(dirtyPublicationIds.size||document.activeElement?.closest?.("[data-publication-form]"))return;
@@ -556,6 +579,7 @@ async function loadPublications(){
   renderPublicationRows(rows,drafts);
   if(localCacheError)message.textContent+=localCacheError;
   await loadCommerceAdmin();
+  await loadSectionSettings();
   updateOfflineStatus();
   if(readOfflineQueue().length)setTimeout(()=>flushOfflineQueue(),0);
  }catch(error){
@@ -628,7 +652,7 @@ async function load(){
 async function submitImport(e){
   e.preventDefault();
   const btn=$("importBtn"),out=$("importResult");
-  const body={url:$("url").value.trim(),category:$("category").value};
+  const body={url:$("url").value.trim(),category:$("category").value||null};
   btn.disabled=true;
   btn.textContent="Importando…";
   out.textContent=navigator.onLine?"Leyendo el producto y guardando sus datos reales…":"Guardando la importación en la cola local…";
@@ -652,11 +676,12 @@ async function submitImport(e){
     const data=await r.json();
     if(!r.ok)throw new Error(data.detail||"No fue posible importar el producto.");
     out.textContent="Producto importado: "+(data.product?.title||"Guardado")+
-      (data.opportunity_score!=null?" · puntuación "+Math.round(data.opportunity_score):" · puntuación pendiente")+
-      (data.product?.affiliate_url?" · enlace promocional conservado":"");
+      (data.customer_offer?" · publicado con "+Math.round(data.customer_offer.discount_pct)+"% de descuento para clientes":" · guardado sin publicar: requiere 40% de descuento real y margen positivo")+
+      (data.product?.affiliate_url?" · enlace afiliado listo":" · enlace afiliado pendiente");
     $("url").value="";
     try{localStorage.removeItem(importDraftKey)}catch{}
     await load();
+    await loadPublications();
   }catch(err){
     if(requireSession(err)){out.textContent="";return}
     if(!navigator.onLine){
