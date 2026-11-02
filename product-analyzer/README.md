@@ -22,8 +22,10 @@ No existen productos demo, mocks ni valores de respaldo. Si la fuente real falla
 ## Producción
 Las credenciales reales viven en las variables de entorno de Railway/Vercel y no se almacenan en Git.
 
-## Amazon por URL
-Amazon se importa por URL sin descargar ni raspar sus páginas. Central agrega `AMAZON_PARTNER_TAG` y, si existe, `AMAZON_TRACKING_ID`. Los CLI autorizados pueden enviar título, precio, moneda e imagen junto con la URL. AliExpress genera el enlace afiliado mediante `aliexpress.affiliate.link.generate` usando App Key, App Secret y Tracking ID.
+## Importación por URL y descuentos al cliente
+Al pegar una URL pública de Amazon o AliExpress, Central intenta extraer título, descripción, precio actual, precio original, imagen principal y galería. El acceso se limita a páginas públicas y dominios permitidos; si la tienda exige sesión, bloquea la consulta o no publica el precio original, el producto queda guardado en el catálogo pero no se publica automáticamente.
+
+La regla comercial es independiente del scoring: el precio de referencia es el precio original del proveedor; el precio al cliente se calcula con 40% de descuento. Solo se publica si el precio de venta supera el costo actual. El margen y el costo se almacenan en `published_cards` y se muestran únicamente en administración; las respuestas públicas entregan el precio final, precio de referencia y descuento, nunca el costo ni el porcentaje de ganancia. Las publicaciones externas se ordenan por margen interno descendente. Amazon agrega `AMAZON_PARTNER_TAG` y, si existe, `AMAZON_TRACKING_ID`. AliExpress genera el enlace afiliado mediante `aliexpress.affiliate.link.generate` usando App Key, App Secret y Tracking ID.
 
 ## Telegram
 El bot mantiene /top, /buscar, /modelar y /estado. También acepta URLs de Amazon y AliExpress. El endpoint autenticado `/api/v1/products/import-cli` guarda el producto y envía el enlace afiliado a Telegram. El servicio de Telegram en Railway requiere TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID; sin esas variables queda deshabilitado de forma segura.

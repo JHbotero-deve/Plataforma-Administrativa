@@ -80,6 +80,12 @@ def list_publications(
                 "NULL::NUMERIC AS cost_price, NULL::NUMERIC AS profit_amount, "
                 "NULL::NUMERIC AS profit_margin_pct"
             )
+            customer_price = "p.current_price" if include_unpublished else "COALESCE(pc.sale_price, p.current_price)"
+            order_by = (
+                "pc.sort_order ASC, pc.published_at DESC, pc.id DESC"
+                if include_unpublished else
+                "COALESCE(pc.profit_margin_pct, 0) DESC, pc.sort_order ASC, pc.published_at DESC, pc.id DESC"
+            )
             cur.execute(
                 f"""
                 SELECT pc.id, pc.product_id, pc.title, pc.subtitle, pc.price_display,
@@ -88,14 +94,16 @@ def list_publications(
                        pc.sale_price, {private_fields},
                        pc.opportunity_score, pc.footer,
                        pc.accent, pc.is_published, pc.sort_order, pc.published_at,
-                       p.current_price, p.currency, p.image_gallery, p.affiliate_url, p.external_id, p.sku,
+                       {customer_price} AS current_price, p.previous_price AS original_price,
+                       CASE WHEN p.previous_price > 0 AND pc.sale_price > 0 THEN ROUND((p.previous_price - pc.sale_price) / p.previous_price * 100, 2) ELSE NULL END AS discount_pct,
+                       p.currency, p.image_gallery, p.affiliate_url, p.external_id, p.sku,
                        p.description, p.stock, pl.name AS platform, c.name AS category
                 FROM published_cards pc
                 JOIN products p ON p.id = pc.product_id
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
                 WHERE p.is_active = TRUE {where}
-                ORDER BY pc.sort_order ASC, pc.published_at DESC, pc.id DESC
+                ORDER BY {order_by}
                 LIMIT %s
                 """,
                 (limit,),

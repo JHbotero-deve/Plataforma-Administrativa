@@ -132,10 +132,10 @@ body.admin-mode td{color:#303943}
 <div class="section-head"><div><div class="eyebrow">03 · entrada real</div><h2>Importar un producto</h2><p>Pega el enlace del producto. Central detecta la plataforma e intenta extraer el nombre, el precio y la imagen reales.</p></div></div>
 <form id="importForm"><div class="import-main">
 <input class="field" id="url" type="url" placeholder="Pega aquí el enlace del producto" autocomplete="url" required>
-<label class="import-category"><span>Categoría</span><select class="field" id="category"><option value="otros" selected>Otros</option><option value="accesorios">Accesorios</option><option value="electronicos">Electrónica</option><option value="hogar">Hogar</option><option value="belleza">Belleza</option><option value="ropa">Ropa</option><option value="calzado">Calzado</option></select></label>
+<label class="import-category"><span>Categoría</span><select class="field" id="category"><option value="" selected>Detectar automáticamente</option><option value="accesorios">Accesorios</option><option value="ropa">Ropa</option><option value="calzado">Calzado</option></select></label>
 <button class="btn primary" id="importBtn" type="submit">Importar producto</button>
 </div></form>
-<p class="import-help">Pega una URL de producto de Amazon o AliExpress. Amazon se importa sin rastrear ni consultar repetidamente la página; si faltan metadatos, envía título, precio e imagen desde tu CLI autorizado.</p>
+<p class="import-help">Pega una URL pública de Amazon o AliExpress. Central extrae nombre, descripción, fotos y precios disponibles. Solo publica ofertas con al menos 40% de descuento real y margen positivo; el costo y la ganancia quedan visibles únicamente en administración. Si la tienda exige iniciar sesión o no entrega el precio original, el producto se guarda sin publicarse.</p>
 <div class="import-fallback"><a class="btn small" href="https://central-7ykr.vercel.app/tarjetas">Abrir creador de tarjetas</a></div>
 <div class="import-result" id="importResult" role="status" aria-live="polite"></div>
 </div></section>
@@ -652,11 +652,12 @@ async function submitImport(e){
     const data=await r.json();
     if(!r.ok)throw new Error(data.detail||"No fue posible importar el producto.");
     out.textContent="Producto importado: "+(data.product?.title||"Guardado")+
-      (data.opportunity_score!=null?" · puntuación "+Math.round(data.opportunity_score):" · puntuación pendiente")+
-      (data.product?.affiliate_url?" · enlace promocional conservado":"");
+      (data.customer_offer?" · publicado con "+Math.round(data.customer_offer.discount_pct)+"% de descuento para clientes":" · guardado sin publicar: requiere 40% de descuento real y margen positivo")+
+      (data.product?.affiliate_url?" · enlace afiliado listo":" · enlace afiliado pendiente");
     $("url").value="";
     try{localStorage.removeItem(importDraftKey)}catch{}
     await load();
+    await loadPublications();
   }catch(err){
     if(requireSession(err)){out.textContent="";return}
     if(!navigator.onLine){

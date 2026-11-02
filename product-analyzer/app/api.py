@@ -37,6 +37,7 @@ from store_notifications import process_pending_notifications
 from tiktok_api import router as tiktok_creator_router
 from url_import import import_url
 from product_sources import enrich_product
+from pricing import publish_discounted_offer
 from wompi import router as wompi_router
 from notifications import _config as _config_telegram
 
@@ -457,7 +458,7 @@ def public_product(product_id: int):
     try:
         with conn.cursor() as cur:
             cur.execute("""SELECT pc.id AS publication_id,pc.product_id,pc.title,pc.subtitle,pc.price_display,
-                pc.sale_price,pc.opportunity_score,pc.footer,p.description,p.current_price,p.previous_price,p.currency,
+                pc.sale_price,pc.opportunity_score,pc.footer,p.description,COALESCE(pc.sale_price,p.current_price) AS current_price,p.previous_price,p.previous_price AS original_price,CASE WHEN p.previous_price>0 AND pc.sale_price>0 THEN ROUND((p.previous_price-pc.sale_price)/p.previous_price*100,2) ELSE NULL END AS discount_pct,p.currency,
                 COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) AS image_url,p.image_gallery,
                 COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) AS product_url,
                 p.affiliate_url,p.sku,p.external_id,p.stock,
@@ -629,7 +630,8 @@ def import_product_from_url(payload: ProductImport):
                 (product_id,),
             )
             saved = cur.fetchone()
-        return {"product": saved, "opportunity_score": score}
+        customer_offer = publish_discounted_offer(conn, product_id, dict(saved), score)
+        return {"product": saved, "opportunity_score": score, "customer_offer": customer_offer}
     finally:
         conn.close()
 

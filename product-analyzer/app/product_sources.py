@@ -137,6 +137,8 @@ def _public_product_page(url, platform):
         raise RuntimeError("La tienda exige iniciar sesión para mostrar los datos del producto.")
     image = metadata.get("og:image") or metadata.get("twitter:image")
     price = metadata.get("product:price:amount") or metadata.get("og:price:amount") or metadata.get("price")
+    previous_price = metadata.get("product:price:original") or metadata.get("product:original_price:amount") or metadata.get("og:price:standard_amount") or metadata.get("product:price:regular") or metadata.get("product:price:old_amount") or metadata.get("price:original")
+    description = metadata.get("og:description") or metadata.get("twitter:description") or metadata.get("description") or ""
     currency = metadata.get("product:price:currency") or metadata.get("og:price:currency")
     category = metadata.get("product:category") or metadata.get("og:category")
     rating = metadata.get("rating")
@@ -163,8 +165,18 @@ def _public_product_page(url, platform):
                 offers = offers[0] if offers else {}
             if isinstance(offers, dict) and isinstance(offers.get("offers"), list):
                 offers = offers["offers"][0] if offers["offers"] else {}
+            if isinstance(offers, dict):
+                specifications = offers.get("priceSpecification") or []
+                specifications = specifications if isinstance(specifications, list) else [specifications]
+                for specification in specifications:
+                    if not isinstance(specification, dict):
+                        continue
+                    price_type = str(specification.get("priceType") or specification.get("name") or "").casefold()
+                    if any(term in price_type for term in ("list", "original", "regular", "strikethrough", "reference")):
+                        previous_price = previous_price or specification.get("price")
             price = price or (offers.get("price") if isinstance(offers, dict) else None) or (offers.get("lowPrice") if isinstance(offers, dict) else None)
             currency = (offers.get("priceCurrency") if isinstance(offers, dict) else None) or currency
+            description = description or product.get("description") or ""
             category = product.get("category") or category
             aggregate = product.get("aggregateRating") or {}
             rating = rating or (aggregate.get("ratingValue") if isinstance(aggregate, dict) else None)
@@ -177,6 +189,8 @@ def _public_product_page(url, platform):
         "image_url": image_url,
         "gallery_urls": gallery,
         "price": _number(price),
+        "previous_price": _number(previous_price),
+        "description": str(description).strip()[:5000] or None,
         "currency": str(currency).upper()[:10] if currency else None,
         "rating": _number(rating),
         "reviews_count": int(_number(reviews_count) or 0),
@@ -203,7 +217,7 @@ def enrich_product(product):
         fresh = _public_product_page(url, platform)
         if fresh.get("title") and (not product.get("title") or str(product["title"]).startswith("Producto ")):
             product["title"] = fresh["title"]
-        for key in ("price", "image_url", "rating", "reviews_count"):
+        for key in ("price", "previous_price", "description", "image_url", "rating", "reviews_count"):
             if fresh.get(key) is not None and (product.get(key) is None or key == "reviews_count" and not product.get(key)):
                 product[key] = fresh[key]
         if fresh.get("price") is not None and fresh.get("currency") and not product.get("price"):

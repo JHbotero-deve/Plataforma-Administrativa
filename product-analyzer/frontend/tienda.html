@@ -162,7 +162,7 @@ function renderFeature(){
   $("featureTitle").textContent=p.title||"Producto";
   $("featureDescription").textContent=p.subtitle||p.description||"Producto publicado en Central.";
   $("featurePrice").textContent=p.price_display||money(p.sale_price??p.current_price,p.currency);
-  $("featureMeta").innerHTML=[p.brand,p.category,p.platform].filter(Boolean).map(x=>'<span class="pill">'+esc(x)+'</span>').join("");
+  $("featureMeta").innerHTML=[p.brand,p.category,p.platform].filter(Boolean).map(x=>'<span class="pill">'+esc(x)+'</span>').join("")+(Number(p.discount_pct)>=40?'<span class="pill">'+Math.round(Number(p.discount_pct))+'% de descuento</span>':"");
   const gallery=(p.image_gallery||[]).filter(Boolean);
   $("variants").innerHTML=gallery.length>1?gallery.slice(0,5).map((im,i)=>'<button class="variant '+(i===0?"active":"")+'" data-image="'+esc(im)+'" style="background-image:url(\''+esc(im).replace(/'/g,"%27")+'\');background-size:cover" aria-label="Imagen '+(i+1)+'"></button>').join(""):"";
   const own=isOwn(p), ext=externalUrl(p);
@@ -175,12 +175,12 @@ function renderFeature(){
   document.querySelectorAll(".variant").forEach(b=>b.onclick=()=>{media.innerHTML='<img class="feature-image" src="'+b.dataset.image+'" alt="'+esc(p.title)+'" referrerpolicy="no-referrer">';document.querySelectorAll(".variant").forEach(x=>x.classList.remove("active"));b.classList.add("active")});
 }
 function card(p){
-  const own=isOwn(p), ext=externalUrl(p), price=p.price_display||money(p.sale_price??p.current_price,p.currency), src=imageSrc(p);
+  const own=isOwn(p), ext=externalUrl(p), price=p.price_display||money(p.sale_price??p.current_price,p.currency), src=imageSrc(p), discount=Number(p.discount_pct||0), original=Number(p.original_price||0);
   let main;
   if(own) main='<button class="btn primary wide add" data-id="'+esc(p.product_id||p.id)+'">Añadir · pagar con Wompi</button>';
   else if(ext) main='<a class="btn primary wide" href="'+esc(ext)+'" target="_blank" rel="nofollow sponsored noopener">Comprar en '+esc(purchaseChannel(p))+'</a>';
   else main='<a class="btn primary wide" href="'+productUrl(p)+'">Ver ficha</a>';
-  return '<article class="card"><div class="card-media">'+(src?'<img src="'+esc(src)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer"><div class="no-image" hidden>Imagen no disponible</div>':'<div class="no-image">Imagen no disponible</div>')+'<span class="badge">'+esc(p.platform||"Central")+'</span></div><div class="card-body"><div class="category">'+esc(p.category||"Producto")+'</div><h3>'+esc(p.title)+'</h3><small>'+esc(p.subtitle||"Producto publicado por Central")+'</small><div class="card-price">'+esc(price)+'</div><div class="card-actions">'+main+'<a class="btn" href="'+productUrl(p)+'">Ficha</a></div></div></article>'
+  return '<article class="card"><div class="card-media">'+(src?'<img src="'+esc(src)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer"><div class="no-image" hidden>Imagen no disponible</div>':'<div class="no-image">Imagen no disponible</div>')+'<span class="badge">'+(discount>=40?Math.round(discount)+'% DTO':esc(p.platform||"Central"))+'</span></div><div class="card-body"><div class="category">'+esc(p.category||"Producto")+'</div><h3>'+esc(p.title)+'</h3><small>'+esc(p.subtitle||"Producto publicado por Central")+'</small><div class="card-price">'+esc(price)+'</div>'+(discount>=40&&original>0?'<small style="text-decoration:line-through;color:#888">Antes: '+esc(money(original,p.currency))+'</small>':'')+'<div class="card-actions">'+main+'<a class="btn" href="'+productUrl(p)+'">Ficha</a></div></div></article>'
 }
 function renderGrid(){
   $("grid").innerHTML=filtered.length?filtered.map(card).join(""):'<div class="empty"><b>No hay productos</b>Prueba otra búsqueda o publica un producto desde Central.</div>';
