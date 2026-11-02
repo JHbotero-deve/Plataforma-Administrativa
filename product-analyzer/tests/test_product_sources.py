@@ -133,6 +133,21 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertIn("enrichment_status", update.args[1][-2])
         connection.commit.assert_called_once()
 
+    def test_complete_cli_product_uses_title_category_without_fetching_page(self):
+        product = {
+            "platform": "aliexpress",
+            "product_url": "https://www.aliexpress.com/item/123.html",
+            "title": "Men running shoes",
+            "price": 19.9,
+            "image_url": "https://img.example/shoes.jpg",
+            "source_metadata": {"metadata_source": "cli"},
+        }
+        with patch.object(product_sources, "_public_product_page") as fetch:
+            result = product_sources.enrich_product(product)
+        fetch.assert_not_called()
+        self.assertEqual(result["category"], "calzado")
+        self.assertEqual(result["source_metadata"]["category_source"], "title_inference")
+
 
 if __name__ == "__main__":
     unittest.main()
