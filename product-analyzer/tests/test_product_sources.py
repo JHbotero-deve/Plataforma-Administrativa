@@ -36,6 +36,15 @@ class ProductSourcesTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             product_sources._public_aliexpress_page("https://evil.example/product")
 
+    def test_amazon_short_link_resolves_only_to_amazon_domain(self):
+        response = MagicMock()
+        response.status_code = 302
+        response.headers = {"Location": "https://www.amazon.com/dp/B012345678"}
+        with patch.object(product_sources.requests, "get", return_value=response):
+            result = product_sources._resolve_amazon_url("https://amzn.to/example")
+        self.assertEqual(result, "https://www.amazon.com/dp/B012345678")
+        response.close.assert_called_once()
+
     def test_amazon_credentials_are_read_with_whitespace_normalization(self):
         with patch.dict(os.environ, {" AMAZON_CREDENTIAL_ID ": "id", "AMAZON_CREDENTIAL_SECRET": "secret", " AMAZON_CREDENTIAL_VERSION": "3.1", "AMAZON_PARTNER_TAG": "central-20"}, clear=True):
             config = product_sources._amazon_config()
