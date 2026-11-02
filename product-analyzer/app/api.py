@@ -36,6 +36,7 @@ from store_orders import ensure_commerce_storage, router as store_orders_router
 from store_notifications import process_pending_notifications
 from tiktok_api import router as tiktok_creator_router
 from url_import import import_url
+from product_sources import enrich_product
 from wompi import router as wompi_router
 from notifications import _config as _config_telegram
 
@@ -557,6 +558,7 @@ def import_product_from_url(payload: ProductImport):
             currency=payload.currency,
             image_url=payload.image_url,
         )
+        product = enrich_product(product)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
