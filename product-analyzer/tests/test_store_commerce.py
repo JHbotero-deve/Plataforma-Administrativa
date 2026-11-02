@@ -1,8 +1,9 @@
+import asyncio
 import os
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 
@@ -98,6 +99,31 @@ class StoreCommerceTests(unittest.TestCase):
 
         self.assertEqual(error.exception.status_code, 404)
         self.assertIn("LOWER(pl.name)='personal'", cursor.execute.call_args.args[0])
+
+    def test_wompi_cart_checkout_rejects_non_personal_publications(self):
+        connection = unittest.mock.MagicMock()
+        cursor = unittest.mock.MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        cursor.fetchall.return_value = []
+        request = unittest.mock.MagicMock()
+        request.json = AsyncMock(return_value={
+            "customer_name": "Cliente",
+            "customer_email": "cliente@example.com",
+            "items": [{"product_id": 42, "quantity": 1}],
+        })
+
+        with patch.dict(
+            os.environ,
+            {"WOMPI_PUBLIC_KEY": "test-public-key", "WOMPI_CURRENCY": "COP"},
+            clear=True,
+        ), patch("wompi.get_connection", return_value=connection):
+            with self.assertRaises(HTTPException) as error:
+                asyncio.run(wompi.create_cart_checkout(request))
+
+        self.assertEqual(error.exception.status_code, 404)
+        self.assertIn("LOWER(pl.name)='personal'", cursor.execute.call_args.args[0])
+        self.assertEqual(cursor.execute.call_count, 1)
+        connection.commit.assert_not_called()
 
     def test_admin_sales_routes_require_a_session(self):
         guarded = set()
