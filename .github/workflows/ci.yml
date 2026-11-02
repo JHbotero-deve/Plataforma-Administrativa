@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -13,6 +14,9 @@ jobs:
   source-validation:
     name: Validate source
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -45,9 +49,57 @@ jobs:
       - name: Build Figma showcase
         shell: bash
         run: |
-          npm --prefix product-analyzer/headphones install --no-audit --no-fund
+          npm --prefix product-analyzer/headphones ci --no-audit --no-fund
           npm --prefix product-analyzer/headphones run build
           test -f product-analyzer/frontend/headphones/index.html
+      - name: Upload Headphones static build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: headphones-static-build
+          path: product-analyzer/frontend/headphones
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Synchronize and verify Headphones static build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_status="$(git status --porcelain -- product-analyzer/frontend/headphones)"
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" && "${PR_HEAD_REPO}" == "${GITHUB_REPOSITORY}" ]]; then
+            if [[ -n "${build_status}" ]]; then
+              mkdir -p /tmp/headphones-static-build
+            cp -a product-analyzer/frontend/headphones/. /tmp/headphones-static-build/
+            git fetch origin "${PR_HEAD_REF}"
+            git checkout -B "${PR_HEAD_REF}" FETCH_HEAD
+            rm -rf product-analyzer/frontend/headphones
+            mkdir -p product-analyzer/frontend/headphones
+            cp -a /tmp/headphones-static-build/. product-analyzer/frontend/headphones/
+            if [[ -z "$(git status --porcelain -- product-analyzer/frontend/headphones)" ]]; then
+              echo "Generated Headphones build was not preserved after switching to the PR branch."
+              exit 1
+            fi
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add product-analyzer/frontend/headphones
+            git commit -m "build: sync Headphones static assets"
+            git push origin "HEAD:${PR_HEAD_REF}"
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/dispatches" -f ref="${PR_HEAD_REF}"
+            fi
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/workflows/codeql.yml/dispatches" -f ref="${PR_HEAD_REF}"
+          elif [[ -n "${build_status}" ]]; then
+            git status --short -- product-analyzer/frontend/headphones
+            echo "Headphones static build differs from committed assets; update the build before merging."
+            exit 1
+          fi
+          if [[ -n "$(git status --porcelain -- product-analyzer/frontend/headphones)" ]]; then
+            git status --short -- product-analyzer/frontend/headphones
+            echo "Headphones static build is not synchronized."
+            exit 1
+          fi
 
       - name: Validate admin routes and API proxy
         shell: bash
