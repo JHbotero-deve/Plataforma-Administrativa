@@ -148,6 +148,16 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(result["category"], "calzado")
         self.assertEqual(result["source_metadata"]["category_source"], "title_inference")
 
+    def test_login_html_is_not_mistaken_for_product_metadata(self):
+        response = MagicMock()
+        response.status_code = 200
+        response.url = "https://login.aliexpress.com/"
+        response.text = '<html><meta property="og:title" content="Sign in to AliExpress"></html>'
+        with patch.object(product_sources.requests, "get", return_value=response):
+            with self.assertRaisesRegex(RuntimeError, "exige iniciar sesión"):
+                product_sources._public_product_page("https://www.aliexpress.com/item/123.html", "aliexpress")
+        response.close.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()
