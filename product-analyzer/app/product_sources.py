@@ -147,17 +147,17 @@ def enrich_pending_products(conn, limit=80):
     with conn.cursor() as cur:
         cur.execute("""SELECT p.id,p.title,p.current_price,p.currency,p.image_url,p.product_url,pl.name AS platform,c.name AS category,p.source_metadata
             FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id
-            WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %')
+            WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %' OR p.category_id IS NULL)
             ORDER BY p.updated_at DESC LIMIT %s""", (limit,))
         rows = cur.fetchall()
     updated = 0
     for row in rows:
         product = {"platform": row["platform"], "product_url": row["product_url"], "title": row["title"], "price": row["current_price"], "currency": row["currency"], "image_url": row["image_url"], "category": row["category"] or "accesorios", "source_metadata": row["source_metadata"] or {}}
         enriched = enrich_product(product)
-        if enriched.get("title") == row["title"] and enriched.get("price") == row["current_price"] and enriched.get("image_url") == row["image_url"] and enriched.get("product_url") == row["product_url"]:
+        if enriched.get("title") == row["title"] and enriched.get("price") == row["current_price"] and enriched.get("image_url") == row["image_url"] and enriched.get("product_url") == row["product_url"] and enriched.get("category") == row["category"]:
             continue
         with conn.cursor() as cur:
-            cur.execute("""UPDATE products SET title=%s,current_price=COALESCE(%s,current_price),currency=COALESCE(%s,currency),image_url=COALESCE(%s,image_url),product_url=%s,source_metadata=%s::jsonb,updated_at=NOW() WHERE id=%s""", (enriched.get("title") or row["title"], enriched.get("price"), enriched.get("currency"), enriched.get("image_url"), enriched.get("product_url") or row["product_url"], json.dumps(enriched.get("source_metadata") or {}), row["id"]))
+            cur.execute("""UPDATE products SET category_id=COALESCE(category_id,(SELECT id FROM categories WHERE name=%s)),title=%s,current_price=COALESCE(%s,current_price),currency=COALESCE(%s,currency),image_url=COALESCE(%s,image_url),product_url=%s,source_metadata=%s::jsonb,updated_at=NOW() WHERE id=%s""", (enriched.get("category") or "accesorios", enriched.get("title") or row["title"], enriched.get("price"), enriched.get("currency"), enriched.get("image_url"), enriched.get("product_url") or row["product_url"], json.dumps(enriched.get("source_metadata") or {}), row["id"]))
         conn.commit()
         updated += 1
     return updated
