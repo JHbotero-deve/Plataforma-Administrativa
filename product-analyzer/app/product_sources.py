@@ -104,6 +104,28 @@ def search_amazon(term, category="accesorios", limit=10):
     return [product for item in items if (product := _amazon_product(item, category))]
 
 
+def _resolve_amazon_url(url):
+    allowed = ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amzn.to", "amzn.com", "a.co")
+    current = url
+    for _ in range(5):
+        parsed = urlsplit(current)
+        host = (parsed.hostname or "").lower().rstrip(".")
+        if parsed.scheme not in ("http", "https") or not any(host == domain or host.endswith("." + domain) for domain in allowed):
+            raise ValueError("La URL redirigió fuera de los dominios permitidos de Amazon.")
+        response = requests.get(current, headers={"User-Agent": "CentralRadar/1.0 (+product URL resolver)"}, timeout=12, allow_redirects=False, stream=True)
+        try:
+            if response.status_code not in (301, 302, 303, 307, 308):
+                response.raise_for_status()
+                return current
+            location = response.headers.get("Location")
+            if not location:
+                return current
+            current = urljoin(current, location)
+        finally:
+            response.close()
+    return current
+
+
 def _amazon_asin(url):
     match = ASIN_RE.search(urlsplit(url).path)
     return match.group(1).upper() if match else None
@@ -210,7 +232,10 @@ def enrich_product(product):
     platform = product.get("platform")
     try:
         if platform == "amazon":
-            asin = _amazon_asin(url)
+            resolved_url = _resolve_amazon_url(url)
+            asin = _amazon_asin(resolved_url)
+            if resolved_url != url:
+                product["product_url"] = resolved_url
             if asin:
                 items = _amazon_items([asin], category=product.get("category") or "accesorios")
                 if items:
