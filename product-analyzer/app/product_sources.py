@@ -361,7 +361,7 @@ def enrich_product(product):
         try:
             fresh = _official_product_data(url, platform, product.get("category"))
         except Exception as exc:
-            api_error = type(exc).__name__
+            api_error = f"{type(exc).__name__}: {str(exc)[:180]}"
             fresh = None
             print(f"[catalog] {platform} official API unavailable: {api_error}")
         if not fresh:
@@ -416,7 +416,7 @@ def enrich_product(product):
             "enrichment_attempted_at": datetime.now(timezone.utc).isoformat(),
             "enrichment_retry_after": (datetime.now(timezone.utc) + timedelta(hours=24 if login_loop else 2)).isoformat(),
         })
-        print(f"[catalog] product URL enrichment unavailable ({platform}): {metadata['enrichment_error']}")
+        print(f"[catalog] product URL enrichment unavailable ({platform}): {metadata['enrichment_error']} ({message[:180]})")
     product["source_metadata"] = metadata
     return product
 
