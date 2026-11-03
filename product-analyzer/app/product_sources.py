@@ -311,7 +311,7 @@ def _enrich_pending_row(row):
         category = None
     product = {
         "platform": row["platform"],
-        "external_id": row["external_id"],
+        "external_id": row.get("external_id"),
         "product_url": row["product_url"],
         "title": row["title"],
         "price": row["current_price"],
@@ -345,7 +345,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4):
         gallery = enriched.get("gallery_urls") or row.get("image_gallery") or []
         seller = enriched.get("seller") or {}
         seller_id = None
-        candidate_external_id = enriched.get("external_id") if enriched.get("external_id") != row["external_id"] else None
+        candidate_external_id = enriched.get("external_id") if enriched.get("external_id") != row.get("external_id") else None
         affiliate_url = _affiliate_url(enriched, row["platform"]) if enriched.get("product_url") != row["product_url"] else None
         if seller.get("external_id") and seller.get("name"):
             with conn.cursor() as cur:
