@@ -4,19 +4,14 @@ import time
 import schedule
 
 from analysis import score_product
-from amazon_creators import run_amazon_storefront_refill
-from db import get_connection, upsert_product
+from db import get_connection
 from init_db import init_database
-from marketplace_search import process_marketplace_search_requests
 from notifications import send_telegram_alert
 from product_sources import enrich_pending_products
-from promotion_bots import run_promotion_cycle, run_storefront_refill
 from seed_catalog import seed_catalog
 from tiktok_creator import creator_configured, sync_showcase
 
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "50"))
-PROMOTION_API_ENABLED = os.getenv("ENABLE_ALIEXPRESS_PROMOTION_API", "false").strip().lower() in {"1", "true", "yes"}
-STOREFRONT_AUTO_REFILL_ENABLED = os.getenv("STOREFRONT_AUTO_REFILL_ENABLED", "true").strip().lower() in {"1", "true", "yes"}
 def build_url(title: str, product_url: str | None) -> str:
     if product_url and product_url != "#":
         return product_url
@@ -44,19 +39,9 @@ def expire_catalog():
 
 
 def run_pipeline():
-    print("== Iniciando ciclo de análisis de catálogo y promociones AliExpress ==")
+    print("== Iniciando ciclo de análisis de catálogo por URL ==")
     expire_catalog()
-    if PROMOTION_API_ENABLED:
-        try:
-            promotions = run_promotion_cycle()
-            print(
-                "[promotions] consultados={queried} aprobados={approved} "
-                "nuevos_avisos={alerts}".format(**promotions)
-            )
-        except Exception as exc:
-            print(f"[promotions] ciclo falló: {type(exc).__name__}: {exc}")
-    else:
-        print("[promotions] búsqueda por API desactivada; se mantienen las importaciones por URL.")
+    print("[marketplaces] modo URL: no se ejecutan búsquedas ni reposiciones por API.")
 
     conn = get_connection()
     try:
@@ -124,19 +109,6 @@ def run_pipeline():
     finally:
         conn.close()
 
-    if STOREFRONT_AUTO_REFILL_ENABLED:
-        try:
-            amazon_refill = run_amazon_storefront_refill()
-            print(f"[storefront] reposición Amazon: {amazon_refill}")
-        except Exception as exc:
-            print(f"[amazon] reposición automática falló: {type(exc).__name__}: {str(exc)[:240]}")
-        try:
-            refill = run_storefront_refill()
-            print(f"[storefront] reposición AliExpress: {refill}")
-        except Exception as exc:
-            print(f"[aliexpress] reposición automática falló: {type(exc).__name__}: {str(exc)[:240]}")
-    else:
-        print("[storefront] reposición automática desactivada por configuración.")
 
     if creator_configured():
         try:
@@ -161,10 +133,6 @@ def run_worker():
     run_pipeline()
     schedule.every(2).hours.do(run_pipeline)
     while True:
-        try:
-            process_marketplace_search_requests(limit=1)
-        except Exception as exc:
-            print(f"[marketplace-search] cola falló: {type(exc).__name__}: {str(exc)[:240]}")
         schedule.run_pending()
         time.sleep(30)
 
