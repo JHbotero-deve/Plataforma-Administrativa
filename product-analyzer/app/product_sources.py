@@ -9,6 +9,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import requests
 
+from db import _affiliate_url
 from url_import import ASIN_RE
 
 MAX_REDIRECTS = 12
@@ -310,6 +311,7 @@ def _enrich_pending_row(row):
         category = None
     product = {
         "platform": row["platform"],
+        "external_id": row["external_id"],
         "product_url": row["product_url"],
         "title": row["title"],
         "price": row["current_price"],
@@ -327,7 +329,7 @@ def _enrich_pending_row(row):
 
 def enrich_pending_products(conn, limit=80, max_workers=4):
     with conn.cursor() as cur:
-        cur.execute("""SELECT p.id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,pl.name AS platform,c.name AS category,p.source_metadata,s.external_id AS seller_external_id,s.name AS seller_name
+        cur.execute("""SELECT p.id,p.external_id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,pl.name AS platform,c.name AS category,p.source_metadata,s.external_id AS seller_external_id,s.name AS seller_name
             FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN sellers s ON s.id=p.seller_id
             WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL OR p.seller_id IS NULL)
             ORDER BY p.updated_at DESC LIMIT %s""", (max(limit, limit * 5),))
@@ -343,6 +345,8 @@ def enrich_pending_products(conn, limit=80, max_workers=4):
         gallery = enriched.get("gallery_urls") or row.get("image_gallery") or []
         seller = enriched.get("seller") or {}
         seller_id = None
+        candidate_external_id = enriched.get("external_id") if enriched.get("external_id") != row["external_id"] else None
+        affiliate_url = _affiliate_url(enriched, row["platform"]) if enriched.get("product_url") != row["product_url"] else None
         if seller.get("external_id") and seller.get("name"):
             with conn.cursor() as cur:
                 cur.execute("""INSERT INTO sellers(platform_id,external_id,name)
@@ -353,6 +357,9 @@ def enrich_pending_products(conn, limit=80, max_workers=4):
                 seller_id = seller_row["id"] if seller_row else None
         with conn.cursor() as cur:
             cur.execute("""UPDATE products SET
+                external_id=CASE WHEN %s IS NOT NULL AND NOT EXISTS (SELECT 1 FROM products existing WHERE existing.platform_id=products.platform_id AND existing.external_id=%s AND existing.id<>products.id) THEN %s ELSE external_id END,
+                product_url=COALESCE(%s,product_url),
+                affiliate_url=COALESCE(%s,affiliate_url),
                 seller_id=COALESCE(%s,seller_id),
                 category_id=CASE WHEN %s THEN (SELECT id FROM categories WHERE name=%s) ELSE COALESCE(category_id,(SELECT id FROM categories WHERE name=%s)) END,
                 title=%s,
