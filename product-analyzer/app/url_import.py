@@ -3,7 +3,7 @@ import math
 import re
 from urllib.parse import urlparse
 
-AMAZON_HOST_RE = re.compile(r"(^|\.)(amazon\.[a-z.]+|amzn\.to|amzn\.com|a\.co)$", re.I)
+AMAZON_HOST_RE = re.compile(r"(^|\.)(amazon\.[a-z.]+|link\.amazon|amzn\.to|amzn\.com|a\.co)$", re.I)
 ALIEXPRESS_HOST_RE = re.compile(r"(^|\.)(aliexpress\.[a-z.]+|aliexpress\.ru|alii\.pub)$", re.I)
 ASIN_RE = re.compile(r"(?:/dp/|/gp/product/)([A-Z0-9]{10})(?:[/?]|$)", re.I)
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
