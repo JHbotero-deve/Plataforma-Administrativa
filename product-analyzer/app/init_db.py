@@ -21,6 +21,8 @@ SQL_FILES = [
     "sql/017_store_notifications.sql",
     "sql/018_promotion_alerts.sql",
     "sql/019_aliexpress_oauth.sql",
+    "sql/020_storefront_exclusions.sql",
+    "sql/021_marketplace_search_requests.sql",
 ]
 
 

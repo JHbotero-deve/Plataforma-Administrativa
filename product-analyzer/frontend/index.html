@@ -281,7 +281,7 @@ function card(p){
     '<div class="card-body">'+
       '<div class="card-topline"><span class="category">'+esc(p.platform||"Producto")+'</span><span class="rating">Score '+esc(score)+'</span></div>'+
       '<h3>'+esc(p.title)+'</h3>'+
-      '<small>'+esc(p.category||"Oportunidad detectada")+'</small>'+
+      '<small>'+esc(p.category||"Oportunidad detectada")+' · Vendedor: '+esc(p.seller_name||"No informado")+'</small>'+
       '<div class="card-price">'+money(p.current_price,p.currency)+'</div>'+
     '</div></article>';
 }
@@ -403,6 +403,7 @@ function showRadarSpecs(p){
   '<div><b>Plataforma:</b> '+esc(p.platform||"—")+'</div>'+
   '<div><b>Categoría:</b> '+esc(p.category||"—")+'</div>'+
   '<div><b>Score:</b> '+Math.round(Number(p.opportunity_score||0))+'/100</div>'+
+  '<div><b>Vendedor:</b> '+esc(p.seller_name||"No informado")+'</div>'+
   '<div><b>Descripción:</b> '+esc(p.description||p.subtitle||"Sin descripción disponible.")+'</div>'+
   '</div></div>';
   modal.style.display="flex";
@@ -518,7 +519,7 @@ function renderPublicationRows(rows,drafts={},offline=false){
    :"Margen bruto "+Number(row.profit_margin_pct).toLocaleString("es-CO")+"% · utilidad estimada "+money(row.profit_amount,row.currency);
   return `<article class="pub-row" data-publication-card="${row.id}">
    <div class="pub-row-order"><span class="pub-meta" data-publication-position>${String(index+1).padStart(2,"0")}</span><div class="pub-actions"><button class="btn small" type="button" data-move-publication="${row.id}" data-direction="-1" aria-label="Subir ${esc(row.title)}" ${index===0?"disabled":""}>↑</button><button class="btn small" type="button" data-move-publication="${row.id}" data-direction="1" aria-label="Bajar ${esc(row.title)}" ${index===visibleRows.length-1?"disabled":""}>↓</button></div></div>
-   <div class="pub-row-main"><div class="pub-meta">${personal?"Producto personal · checkout Wompi":esc(row.platform||"Producto")+" · compra por URL"}</div><h3>${esc(row.title)}</h3><div class="pub-row-state ${row.is_published?"is-live":""}">${row.is_published?"Publicado en tienda":"Borrador · no visible"}</div></div>
+   <div class="pub-row-main"><div class="pub-meta">${personal?"Producto personal · checkout Wompi":esc(row.platform||"Producto")+" · compra por URL"} · Vendedor: ${esc(row.seller_name||"No informado")}</div><h3>${esc(row.title)}</h3><div class="pub-row-state ${row.is_published?"is-live":""}">${row.is_published?"Publicado en tienda":"Borrador · no visible"}</div></div>
    <div class="pub-row-metrics"><div class="pub-row-price">${esc(row.price_display||"Precio no disponible")} · solo lectura</div><div class="pub-profit">${profitLabel}</div></div>
    <div class="pub-actions pub-row-actions"><button class="btn small" type="button" data-edit-publication="${row.id}" aria-expanded="false">Editar</button><button class="btn small" type="button" data-remove-publication="${row.id}">Retirar</button><button class="btn small" type="button" data-publish-telegram="${row.id}" ${navigator.onLine?"":"disabled"}>Telegram</button></div>
    <form class="pub-editor pub-form" data-publication-form="${row.id}" hidden>

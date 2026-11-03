@@ -14,11 +14,18 @@ router = APIRouter(tags=["publications"])
 
 
 def ensure_draft_storage():
-    migration = Path(__file__).with_name("sql") / "016_admin_publication_drafts.sql"
+    migrations = (
+        "016_admin_publication_drafts.sql",
+        "020_storefront_exclusions.sql",
+        "021_marketplace_search_requests.sql",
+    )
     conn = get_connection()
     try:
-        with conn.cursor() as cur, migration.open(encoding="utf-8") as file:
-            cur.execute(file.read())
+        with conn.cursor() as cur:
+            for name in migrations:
+                migration = Path(__file__).with_name("sql") / name
+                with migration.open(encoding="utf-8") as file:
+                    cur.execute(file.read())
         conn.commit()
     except Exception:
         conn.rollback()
@@ -84,7 +91,7 @@ def list_publications(
             order_by = (
                 "pc.sort_order ASC, pc.published_at DESC, pc.id DESC"
                 if include_unpublished else
-                "COALESCE(pc.profit_margin_pct, 0) DESC, pc.sort_order ASC, pc.published_at DESC, pc.id DESC"
+                "COALESCE(pc.opportunity_score, 0) DESC, pc.sort_order ASC, pc.published_at DESC, pc.id DESC"
             )
             cur.execute(
                 f"""
@@ -97,11 +104,13 @@ def list_publications(
                        {customer_price} AS current_price, p.previous_price AS original_price,
                        CASE WHEN p.previous_price > 0 AND pc.sale_price > 0 THEN ROUND((p.previous_price - pc.sale_price) / p.previous_price * 100, 2) ELSE NULL END AS discount_pct,
                        p.currency, p.image_gallery, p.affiliate_url, p.external_id, p.sku,
-                       p.description, p.stock, pl.name AS platform, c.name AS category
+                       p.description, p.stock, pl.name AS platform, c.name AS category,
+                       seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url
                 FROM published_cards pc
                 JOIN products p ON p.id = pc.product_id
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
+                LEFT JOIN sellers seller ON seller.id = p.seller_id
                 WHERE p.is_active = TRUE {where}
                 ORDER BY {order_by}
                 LIMIT %s
@@ -416,6 +425,10 @@ def publish_card(payload: PublicationPayload):
             )
             publication_id = cur.fetchone()["id"]
             cur.execute(
+                "UPDATE products SET storefront_excluded = %s WHERE id = %s",
+                (not payload.is_published, payload.product_id),
+            )
+            cur.execute(
                 "DELETE FROM admin_publication_drafts WHERE publication_id = %s",
                 (publication_id,),
             )
@@ -507,6 +520,10 @@ def update_publication(publication_id: int, payload: PublicationPayload):
                 raise HTTPException(
                     status_code=404, detail="Publicación no encontrada")
             cur.execute(
+                "UPDATE products SET storefront_excluded = %s WHERE id = %s",
+                (not payload.is_published, current["product_id"]),
+            )
+            cur.execute(
                 "DELETE FROM admin_publication_drafts WHERE publication_id = %s",
                 (publication_id,),
             )
@@ -531,7 +548,7 @@ def delete_publication(publication_id: int):
                 """
                 DELETE FROM published_cards
                 WHERE id = %s
-                RETURNING id
+                RETURNING id, product_id
                 """,
                 (publication_id,),
             )
@@ -540,6 +557,10 @@ def delete_publication(publication_id: int):
                 raise HTTPException(
                     status_code=404, detail="Publicación no encontrada"
                 )
+            cur.execute(
+                "UPDATE products SET storefront_excluded = TRUE WHERE id = %s",
+                (deleted["product_id"],),
+            )
         conn.commit()
         return {"id": deleted["id"], "status": "deleted"}
     except HTTPException:

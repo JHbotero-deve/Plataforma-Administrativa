@@ -4,8 +4,10 @@ import time
 import schedule
 
 from analysis import score_product
+from amazon_creators import run_amazon_storefront_refill
 from db import get_connection, upsert_product
 from init_db import init_database
+from marketplace_search import process_marketplace_search_requests
 from notifications import send_telegram_alert
 from product_sources import enrich_pending_products
 from promotion_bots import run_promotion_cycle, run_storefront_refill
@@ -124,10 +126,15 @@ def run_pipeline():
 
     if STOREFRONT_AUTO_REFILL_ENABLED:
         try:
-            refill = run_storefront_refill()
-            print(f"[storefront] reposición automática: {refill}")
+            amazon_refill = run_amazon_storefront_refill()
+            print(f"[storefront] reposición Amazon: {amazon_refill}")
         except Exception as exc:
-            print(f"[storefront] reposición automática falló: {type(exc).__name__}: {exc}")
+            print(f"[amazon] reposición automática falló: {type(exc).__name__}: {str(exc)[:240]}")
+        try:
+            refill = run_storefront_refill()
+            print(f"[storefront] reposición AliExpress: {refill}")
+        except Exception as exc:
+            print(f"[aliexpress] reposición automática falló: {type(exc).__name__}: {str(exc)[:240]}")
     else:
         print("[storefront] reposición automática desactivada por configuración.")
 
@@ -142,64 +149,6 @@ def run_pipeline():
     print("== Ciclo completo ==")
 
 
-def publish_top_opportunities(limit=15):
-    """Publish exactly the best active Amazon products without requiring a score row."""
-    conn = get_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT p.id, p.title, p.current_price, p.image_url, p.product_url,
-                       p.currency, COALESCE(s.opportunity_score, 0) AS opportunity_score
-                FROM products p
-                LEFT JOIN product_scores s ON s.product_id = p.id
-                JOIN platforms pl ON pl.id = p.platform_id
-                WHERE p.is_active = TRUE AND pl.name = 'amazon'
-                ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
-                LIMIT %s
-            """, (limit,))
-            products = cur.fetchall()
-
-            # La tienda automática del worker queda dedicada a Amazon.
-            cur.execute("""
-                UPDATE published_cards pc
-                SET is_published = FALSE, updated_at = NOW()
-                FROM products p
-                JOIN platforms pl ON pl.id = p.platform_id
-                WHERE pc.product_id = p.id
-                  AND pl.name <> 'amazon'
-                  AND pc.is_published = TRUE
-            """)
-
-            for p in products:
-                price = p["current_price"]
-                currency = p["currency"] or "COP"
-                price_display = f"{price:,.0f} {currency}" if price is not None else "Consultar"
-                cur.execute("""
-                    INSERT INTO published_cards (
-                        product_id, title, subtitle, price_display, image_url, product_url,
-                        sale_price, cost_price, profit_amount, profit_margin_pct,
-                        opportunity_score, footer, accent, is_published, published_at, updated_at
-                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,TRUE,NOW(),NOW())
-                    ON CONFLICT (product_id) DO UPDATE SET
-                        title=EXCLUDED.title, subtitle=EXCLUDED.subtitle,
-                        price_display=EXCLUDED.price_display,
-                        image_url=EXCLUDED.image_url, product_url=EXCLUDED.product_url,
-                        sale_price=EXCLUDED.sale_price, cost_price=EXCLUDED.cost_price,
-                        opportunity_score=EXCLUDED.opportunity_score,
-                        is_published=TRUE, published_at=NOW(), updated_at=NOW()
-                """, (
-                    p["id"], p["title"], "Producto real seleccionado por Central",
-                    price_display, p["image_url"], p["product_url"],
-                    price, price, 0, 0,
-                    p["opportunity_score"], "Disponible en Central", "#b6f23a"
-                ))
-
-        conn.commit()
-        print(f"== Tienda: {len(products)} productos Amazon reales publicados ==")
-    finally:
-        conn.close()
-
-
 def run_worker():
     print("Esperando a que la base de datos esté lista...")
     time.sleep(5)
@@ -212,6 +161,10 @@ def run_worker():
     run_pipeline()
     schedule.every(2).hours.do(run_pipeline)
     while True:
+        try:
+            process_marketplace_search_requests(limit=1)
+        except Exception as exc:
+            print(f"[marketplace-search] cola falló: {type(exc).__name__}: {str(exc)[:240]}")
         schedule.run_pending()
         time.sleep(30)
 

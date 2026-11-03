@@ -42,6 +42,34 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertIn("/agregar URL", send.call_args.args[2])
 
+    def test_search_command_queues_live_amazon_and_aliexpress_search(self):
+        send = MagicMock(return_value=True)
+
+        with (
+            patch.object(telegram_alert, "_enqueue_marketplace_search", return_value=17) as enqueue,
+            patch.object(telegram_alert, "_send", send),
+        ):
+            result = telegram_alert._handle("token", "chat", "/buscar auriculares")
+
+        self.assertTrue(result)
+        enqueue.assert_called_once_with("auriculares")
+        self.assertIn("Amazon y AliExpress", send.call_args.args[2])
+        self.assertIn("directamente en la tienda", send.call_args.args[2])
+
+    def test_enqueue_marketplace_search_creates_queue_and_returns_id(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = {"id": 23}
+
+        with patch.object(telegram_alert, "get_connection", return_value=connection):
+            request_id = telegram_alert._enqueue_marketplace_search("celulares")
+
+        self.assertEqual(request_id, 23)
+        self.assertIn("CREATE TABLE IF NOT EXISTS marketplace_search_requests", cursor.execute.call_args_list[0].args[0])
+        self.assertEqual(cursor.execute.call_args_list[2].args[1], ("celulares",))
+        connection.commit.assert_called_once()
+        connection.close.assert_called_once()
+
     def test_search_matches_category_as_well_as_title(self):
         connection = MagicMock()
         cursor = connection.cursor.return_value.__enter__.return_value
@@ -121,6 +149,30 @@ class TelegramApiResponseTests(unittest.TestCase):
             result = notifications._post_telegram("token", "sendMessage", {}, 5)
 
         self.assertFalse(result)
+
+    def test_publication_notification_sends_product_photo_price_and_seller(self):
+        with (
+            patch.object(notifications, "_config", return_value=("token", "chat")),
+            patch.object(notifications, "_post_telegram", return_value=True) as post,
+        ):
+            result = notifications.send_telegram_publication({
+                "title": "Auriculares",
+                "subtitle": "40% de descuento",
+                "description": "Cancelación de ruido",
+                "price_display": "60.00 USD",
+                "image_url": "https://m.media-amazon.com/images/I/photo.jpg",
+                "seller_name": "Amazon Marketplace",
+                "seller_url": "https://www.amazon.com",
+                "store_url": "https://central-7ykr.vercel.app/producto/auriculares-1",
+            })
+
+        self.assertTrue(result)
+        self.assertEqual(post.call_args.args[1], "sendPhoto")
+        payload = post.call_args.args[2]
+        self.assertEqual(payload["photo"], "https://m.media-amazon.com/images/I/photo.jpg")
+        self.assertIn("60.00 USD", payload["caption"])
+        self.assertIn("Amazon Marketplace", payload["caption"])
+        self.assertIn("Cancelación de ruido", payload["caption"])
 
     def test_promotion_alert_contains_discount_commission_sales_and_coupon(self):
         with (

@@ -29,6 +29,11 @@ def build_customer_offer(cost_price, reference_price, discount_pct=MIN_CUSTOMER_
 
 
 def publish_discounted_offer(conn, product_id, product, opportunity_score=None):
+    with conn.cursor() as cur:
+        cur.execute("SELECT storefront_excluded FROM products WHERE id = %s", (product_id,))
+        exclusion = cur.fetchone()
+    if exclusion and exclusion.get("storefront_excluded") is True:
+        return None
     offer = build_customer_offer(product.get("current_price"), product.get("previous_price"))
     if not offer or not product.get("title") or not product.get("image_url"):
         with conn.cursor() as cur:

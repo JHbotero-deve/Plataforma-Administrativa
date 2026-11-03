@@ -77,6 +77,55 @@ class StoreCommerceTests(unittest.TestCase):
         saved = cursor.execute.call_args_list[1].args[1]
         self.assertEqual(saved[2], "100 COP")
         self.assertEqual(saved[5:9], (100, 70, 30.0, 30.0))
+        self.assertIn("storefront_excluded", cursor.execute.call_args_list[2].args[0])
+        self.assertEqual(cursor.execute.call_args_list[2].args[1], (False, 42))
+
+    def test_admin_unpublish_keeps_product_excluded_from_future_automatic_refill(self):
+        connection = unittest.mock.MagicMock()
+        cursor = unittest.mock.MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        cursor.fetchone.side_effect = [
+            {
+                "product_id": 42,
+                "title": "Producto",
+                "image_url": "https://example.com/image.jpg",
+                "image_gallery": [],
+                "product_url": None,
+                "affiliate_url": None,
+                "current_price": 100,
+                "currency": "COP",
+                "platform": "personal",
+                "opportunity_score": None,
+            },
+            {"id": 8, "is_published": False},
+        ]
+        payload = PublicationPayload(
+            product_id=42,
+            title="Producto",
+            is_published=False,
+            sale_price=100,
+            cost_price=70,
+        )
+
+        with patch("publications.get_connection", return_value=connection):
+            publications.update_publication(8, payload)
+
+        self.assertEqual(cursor.execute.call_args_list[2].args[1], (True, 42))
+
+    def test_admin_delete_keeps_product_excluded_from_future_automatic_refill(self):
+        connection = unittest.mock.MagicMock()
+        cursor = unittest.mock.MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        cursor.fetchone.return_value = {"id": 8, "product_id": 42}
+
+        with patch("publications.get_connection", return_value=connection):
+            result = publications.delete_publication(8)
+
+        self.assertEqual(result, {"id": 8, "status": "deleted"})
+        self.assertIn("RETURNING id, product_id", cursor.execute.call_args_list[0].args[0])
+        self.assertIn("storefront_excluded = TRUE", cursor.execute.call_args_list[1].args[0])
+        self.assertEqual(cursor.execute.call_args_list[1].args[1], (42,))
+        connection.commit.assert_called_once()
 
     def test_wompi_checkout_rejects_products_without_personal_publications(self):
         connection = unittest.mock.MagicMock()
