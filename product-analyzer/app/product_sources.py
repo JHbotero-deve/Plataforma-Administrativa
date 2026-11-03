@@ -238,7 +238,7 @@ def enrich_product(product):
         if inferred_category:
             product["category"] = inferred_category
             metadata["category_source"] = "title_inference"
-    if product.get("title") and not str(product["title"]).startswith("Producto ") and product.get("price") and product.get("image_url") and product.get("category") and product.get("seller"):
+    if product.get("title") and not str(product["title"]).startswith("Producto ") and product.get("price") and product.get("image_url") and product.get("category") and (product.get("seller") or metadata.get("metadata_source") == "cli"):
         product["source_metadata"] = metadata
         return product
     try:
