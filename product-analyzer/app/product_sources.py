@@ -9,6 +9,8 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import requests
 
+from url_import import ASIN_RE
+
 MAX_REDIRECTS = 12
 ALLOWED_HOSTS = {
     "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "link.amazon", "amzn.to", "amzn.com", "a.co"),
@@ -243,6 +245,12 @@ def enrich_product(product):
         return product
     try:
         fresh = _public_product_page(url, platform)
+        resolved_url = fresh.get("resolved_url")
+        if platform == "amazon" and resolved_url:
+            asin = ASIN_RE.search(urlsplit(resolved_url).path)
+            if asin:
+                product["external_id"] = asin.group(1).upper()
+                product["product_url"] = resolved_url
         if fresh.get("title") and (not product.get("title") or str(product["title"]).startswith("Producto ")):
             product["title"] = fresh["title"]
         for key in ("price", "previous_price", "description", "image_url", "rating", "reviews_count"):
