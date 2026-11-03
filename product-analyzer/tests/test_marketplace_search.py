@@ -23,6 +23,8 @@ class MarketplaceSearchTests(unittest.TestCase):
             "currency": "USD",
             "image_url": "https://m.media-amazon.com/images/I/photo.jpg",
             "product_url": "https://www.amazon.com/dp/B012345678",
+            "description": "Auriculares con cancelación de ruido",
+            "seller": {"external_id": "seller-1", "name": "Amazon Marketplace"},
         }
         aliexpress_product = {
             "platform": "aliexpress",
@@ -34,6 +36,8 @@ class MarketplaceSearchTests(unittest.TestCase):
             "image_url": "https://ae-pic-a1.aliexpress-media.com/image.jpg",
             "product_url": "https://www.aliexpress.com/item/1005001234567890.html",
             "affiliate_url": "https://s.click.aliexpress.com/e/abc123",
+            "seller": {"external_id": "shop-2", "name": "Tienda AliExpress #shop-2"},
+            "source_metadata": {"seller_url": "https://www.aliexpress.com/store/2"},
         }
 
         with (
@@ -42,7 +46,8 @@ class MarketplaceSearchTests(unittest.TestCase):
             patch("marketplace_search._search_bucket", return_value=[aliexpress_product]) as aliexpress,
             patch("marketplace_search.upsert_product", side_effect=[1, 2]) as upsert,
             patch("marketplace_search.score_product", return_value=80),
-            patch("marketplace_search.publish_discounted_offer", side_effect=[{"sale_price": 60}, None]) as publish,
+            patch("marketplace_search.publish_discounted_offer", side_effect=[{"sale_price": 60, "discount_pct": 40}, None]) as publish,
+            patch("marketplace_search.send_telegram_publication") as telegram,
             patch.dict(os.environ, {
                 "ALIEXPRESS_APP_KEY": "key",
                 "ALIEXPRESS_APP_SECRET": "secret",
@@ -51,7 +56,10 @@ class MarketplaceSearchTests(unittest.TestCase):
         ):
             result = marketplace_search.search_and_publish("auriculares")
 
-        self.assertEqual(result, {"status": "completed", "found": 2, "published": 1, "errors": []})
+        self.assertEqual(result, {"status": "completed", "found": 2, "published": 1, "telegram_sent": 1, "errors": []})
+        self.assertEqual(telegram.call_count, 1)
+        self.assertEqual(telegram.call_args.args[0]["seller_name"], "Amazon Marketplace")
+        self.assertEqual(telegram.call_args.args[0]["image_url"], amazon_product["image_url"])
         amazon.assert_called_once_with("auriculares", "busquedas", limit=10, page=1)
         aliexpress.assert_called_once_with("busquedas", "auriculares", 1, review=False)
         self.assertEqual(upsert.call_count, 2)
@@ -69,7 +77,7 @@ class MarketplaceSearchTests(unittest.TestCase):
         with (
             patch("marketplace_search.get_connection", side_effect=[claimed, updated]),
             patch("marketplace_search.search_and_publish", return_value={
-                "status": "completed", "found": 5, "published": 2, "errors": []
+                "status": "completed", "found": 5, "published": 2, "telegram_sent": 2, "errors": []
             }),
         ):
             processed = marketplace_search.process_marketplace_search_requests(limit=1)
