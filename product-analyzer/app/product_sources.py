@@ -9,9 +9,12 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import requests
 
+from db import _affiliate_url
+from url_import import ASIN_RE
+
 MAX_REDIRECTS = 12
 ALLOWED_HOSTS = {
-    "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amzn.to", "amzn.com", "a.co"),
+    "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "link.amazon", "amzn.to", "amzn.com", "a.co"),
     "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub"),
 }
 ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"}
@@ -243,6 +246,12 @@ def enrich_product(product):
         return product
     try:
         fresh = _public_product_page(url, platform)
+        resolved_url = fresh.get("resolved_url")
+        if platform == "amazon" and resolved_url:
+            asin = ASIN_RE.search(urlsplit(resolved_url).path)
+            if asin:
+                product["external_id"] = asin.group(1).upper()
+                product["product_url"] = resolved_url
         if fresh.get("title") and (not product.get("title") or str(product["title"]).startswith("Producto ")):
             product["title"] = fresh["title"]
         for key in ("price", "previous_price", "description", "image_url", "rating", "reviews_count"):
@@ -302,6 +311,7 @@ def _enrich_pending_row(row):
         category = None
     product = {
         "platform": row["platform"],
+        "external_id": row.get("external_id"),
         "product_url": row["product_url"],
         "title": row["title"],
         "price": row["current_price"],
@@ -319,7 +329,7 @@ def _enrich_pending_row(row):
 
 def enrich_pending_products(conn, limit=80, max_workers=4):
     with conn.cursor() as cur:
-        cur.execute("""SELECT p.id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,pl.name AS platform,c.name AS category,p.source_metadata,s.external_id AS seller_external_id,s.name AS seller_name
+        cur.execute("""SELECT p.id,p.external_id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,pl.name AS platform,c.name AS category,p.source_metadata,s.external_id AS seller_external_id,s.name AS seller_name
             FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN sellers s ON s.id=p.seller_id
             WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL OR p.seller_id IS NULL)
             ORDER BY p.updated_at DESC LIMIT %s""", (max(limit, limit * 5),))
@@ -335,6 +345,8 @@ def enrich_pending_products(conn, limit=80, max_workers=4):
         gallery = enriched.get("gallery_urls") or row.get("image_gallery") or []
         seller = enriched.get("seller") or {}
         seller_id = None
+        candidate_external_id = enriched.get("external_id") if enriched.get("external_id") != row.get("external_id") else None
+        affiliate_url = _affiliate_url(enriched, row["platform"]) if enriched.get("product_url") != row["product_url"] else None
         if seller.get("external_id") and seller.get("name"):
             with conn.cursor() as cur:
                 cur.execute("""INSERT INTO sellers(platform_id,external_id,name)
@@ -345,6 +357,9 @@ def enrich_pending_products(conn, limit=80, max_workers=4):
                 seller_id = seller_row["id"] if seller_row else None
         with conn.cursor() as cur:
             cur.execute("""UPDATE products SET
+                external_id=CASE WHEN %s IS NOT NULL AND NOT EXISTS (SELECT 1 FROM products existing WHERE existing.platform_id=products.platform_id AND existing.external_id=%s AND existing.id<>products.id) THEN %s ELSE external_id END,
+                product_url=COALESCE(%s,product_url),
+                affiliate_url=COALESCE(%s,affiliate_url),
                 seller_id=COALESCE(%s,seller_id),
                 category_id=CASE WHEN %s THEN (SELECT id FROM categories WHERE name=%s) ELSE COALESCE(category_id,(SELECT id FROM categories WHERE name=%s)) END,
                 title=%s,
@@ -357,6 +372,9 @@ def enrich_pending_products(conn, limit=80, max_workers=4):
                 source_metadata=%s::jsonb,
                 updated_at=NOW()
                 WHERE id=%s""", (
+                candidate_external_id, candidate_external_id, candidate_external_id,
+                enriched.get("product_url") if enriched.get("product_url") != row["product_url"] else None,
+                affiliate_url,
                 seller_id,
                 bool(row["category"] == "accesorios" and (row["source_metadata"] or {}).get("metadata_source") == "url_only" and not (row["source_metadata"] or {}).get("category_source")),
                 enriched.get("category") if enriched.get("category") in ALLOWED_CATEGORIES else None,
