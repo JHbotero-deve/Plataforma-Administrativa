@@ -246,12 +246,17 @@ def normalize_item(item, category, marketplace="www.amazon.com"):
 
 
 
-def get_item_by_asin(asin, category=None):
+def get_item_by_asin(asin, category=None, marketplace=None):
     """Obtiene los datos de un ASIN mediante Amazon Creators API GetItems."""
     asin = str(asin or "").strip().upper()
     if not re.fullmatch(r"[A-Z0-9]{10}", asin):
         return None
     config = _configuration()
+    if marketplace:
+        marketplace = str(marketplace).strip().lower()
+        if not marketplace.startswith("www."):
+            marketplace = f"www.{marketplace}"
+        config = (*config[:5], marketplace)
     _, _, _, _, partner_tag, marketplace = config
     payload = {
         "itemIds": [asin],
