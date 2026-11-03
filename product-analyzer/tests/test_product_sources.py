@@ -388,8 +388,8 @@ class ProductSourcesTests(unittest.TestCase):
 
     def test_new_enrichment_version_retries_previously_blocked_products(self):
         future = (product_sources.datetime.now(product_sources.timezone.utc) + product_sources.timedelta(hours=24)).isoformat()
-        self.assertTrue(product_sources._retry_due({"enrichment_version": 1, "enrichment_retry_after": future}))
-        self.assertFalse(product_sources._retry_due({"enrichment_version": product_sources.ENRICHMENT_VERSION, "enrichment_retry_after": future}))
+        self.assertTrue(product_sources._retry_due({"enrichment_version": 3, "enrichment_retry_after": future}))
+        self.assertFalse(product_sources._retry_due({"enrichment_version": 4, "enrichment_retry_after": future}))
 
 if __name__ == "__main__":
     unittest.main()
