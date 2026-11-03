@@ -65,6 +65,29 @@ class ProductSourcesTests(unittest.TestCase):
         first.close.assert_called_once()
         second.close.assert_called_once()
 
+    def test_link_amazon_short_link_resolves_to_amazon_product(self):
+        first = MagicMock()
+        first.status_code = 302
+        first.headers = {"Location": "https://www.amazon.com/dp/B012345678"}
+        second = MagicMock()
+        second.status_code = 200
+        second.text = '<html><meta property="og:title" content="Producto Amazon"></html>'
+        with patch.object(product_sources.requests, "get", side_effect=[first, second]) as request:
+            result = product_sources._public_product_page("https://link.amazon/B06t7Yht8", "amazon")
+        self.assertEqual(result["resolved_url"], "https://www.amazon.com/dp/B012345678")
+        self.assertEqual(request.call_count, 2)
+        first.close.assert_called_once()
+        second.close.assert_called_once()
+
+    def test_link_amazon_redirect_outside_allowed_hosts_is_rejected(self):
+        response = MagicMock()
+        response.status_code = 302
+        response.headers = {"Location": "https://redirector.example/product"}
+        with patch.object(product_sources.requests, "get", return_value=response):
+            with self.assertRaisesRegex(ValueError, "fuera de los dominios permitidos"):
+                product_sources._public_product_page("https://link.amazon/B06t7Yht8", "amazon")
+        response.close.assert_called_once()
+
     def test_aliexpress_short_link_resolves_after_more_than_six_redirects(self):
         redirects = []
         for index in range(7):
