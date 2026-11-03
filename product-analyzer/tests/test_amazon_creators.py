@@ -92,8 +92,8 @@ class AmazonCreatorsTests(unittest.TestCase):
 
         self.assertEqual(post.call_count, 1)
         self.assertEqual(post.call_args.args[0], "https://api.amazon.com/auth/o2/token")
-        self.assertEqual(post.call_args.kwargs["data"]["scope"], "creatorsapi::default")
-        self.assertEqual(post.call_args.kwargs["headers"]["Content-Type"], "application/x-www-form-urlencoded")
+        self.assertEqual(post.call_args.kwargs["json"]["scope"], "creatorsapi::default")
+        self.assertEqual(post.call_args.kwargs["headers"]["Content-Type"], "application/json")
 
     def test_search_uses_creators_api_and_requests_product_images_features_and_price(self):
         with patch.dict(os.environ, {
