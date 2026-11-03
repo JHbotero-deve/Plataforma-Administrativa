@@ -26,6 +26,7 @@ RESOURCES = [
     "itemInfo.byLineInfo",
     "itemInfo.classifications",
     "offersV2.listings.price",
+    "offersV2.listings.merchantInfo",
 ]
 
 
@@ -184,6 +185,10 @@ def normalize_item(item, category, marketplace="www.amazon.com"):
                     gallery.append(candidate)
     listings = ((item.get("offersV2") or {}).get("listings") or [])
     listing = listings[0] if listings and isinstance(listings[0], dict) else {}
+    merchant = listing.get("merchantInfo") or {}
+    seller_name = str(merchant.get("name") or "").strip()
+    seller_id = str(merchant.get("id") or seller_name).strip()
+    seller = {"external_id": seller_id, "name": seller_name} if seller_name and seller_id else None
     price_data = listing.get("price") or {}
     current_price = _amount(price_data)
     saving_basis = price_data.get("savingBasis") or {}
@@ -217,12 +222,15 @@ def normalize_item(item, category, marketplace="www.amazon.com"):
         "reviews_count": 0,
         "sales_estimate": None,
         "category": category,
+        "seller": seller,
         "source_metadata": {
             "import_method": "amazon_creators_api",
             "metadata_source": "amazon_creators_api",
             "marketplace": marketplace,
             "search_query": category,
             "brand": str(brand)[:200] if brand else None,
+            "seller_name": seller_name[:200] if seller_name else None,
+            "seller_id": seller_id[:200] if seller_id else None,
             "list_price_source": saving_basis.get("savingBasisType") if isinstance(saving_basis, dict) else None,
         },
     }
