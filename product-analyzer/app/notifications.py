@@ -111,17 +111,27 @@ def send_telegram_publication(publication):
     if not token or not chat_id:
         raise RuntimeError("Configura TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID")
 
-    title = html.escape(str(publication.get("title") or "Producto")[:180])
-    subtitle = html.escape(str(publication.get("subtitle") or "")[:300])
-    price = html.escape(str(publication.get("price_display") or "Consultar")[:100])
+    title = html.escape(str(publication.get("title") or "Producto")[:120])
+    subtitle = html.escape(str(publication.get("subtitle") or "")[:100])
+    description = html.escape(str(publication.get("description") or "")[:120])
+    price = html.escape(str(publication.get("price_display") or "Consultar")[:60])
+    seller = html.escape(str(publication.get("seller_name") or "Vendedor no informado")[:70])
     url = _http_url(publication.get("store_url") or publication.get("product_url"))
+    seller_url = _http_url(publication.get("seller_url"))
     lines = [f"<b>{title}</b>"]
     if subtitle:
         lines.append(subtitle)
+    if description:
+        lines.append(description)
     lines.append(f"<b>Precio:</b> {price}")
-    if url:
+    lines.append(f"<b>Vendedor:</b> {seller}")
+    if url and len(url) <= 250:
         lines.append(f'<a href="{html.escape(url, quote=True)}">Ver producto</a>')
+    if seller_url and len(seller_url) <= 160:
+        lines.append(f'<a href="{html.escape(seller_url, quote=True)}">Tienda del vendedor</a>')
     caption = "\n".join(lines)
+    if len(caption) > 1024:
+        raise RuntimeError("La ficha supera el límite de texto de Telegram.")
 
     image_url = _http_url(publication.get("image_url"))
     method = "sendPhoto" if image_url else "sendMessage"
@@ -136,6 +146,7 @@ def send_telegram_publication(publication):
 
     if not _post_telegram(token, method, payload, timeout=15):
         raise RuntimeError("Telegram no pudo enviar la publicación.")
+    return True
 
 
 def send_store_sale_notification(order, invoice, items):
