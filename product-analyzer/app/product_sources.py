@@ -1,5 +1,6 @@
 """Enriquecimiento de productos desde metadatos públicos y exportaciones autorizadas."""
 import json
+import os
 import re
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
@@ -418,7 +419,7 @@ def enrich_product(product):
 
 
 def _retry_due(metadata):
-    if int((metadata or {}).get("enrichment_version") or 0) < ENRICHMENT_VERSION:
+    if (metadata or {}).get("enrichment_version") != ENRICHMENT_VERSION:
         return True
     retry_after = (metadata or {}).get("enrichment_retry_after")
     if not retry_after:
