@@ -104,11 +104,13 @@ def list_publications(
                        {customer_price} AS current_price, p.previous_price AS original_price,
                        CASE WHEN p.previous_price > 0 AND pc.sale_price > 0 THEN ROUND((p.previous_price - pc.sale_price) / p.previous_price * 100, 2) ELSE NULL END AS discount_pct,
                        p.currency, p.image_gallery, p.affiliate_url, p.external_id, p.sku,
-                       p.description, p.stock, pl.name AS platform, c.name AS category
+                       p.description, p.stock, pl.name AS platform, c.name AS category,
+                       seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url
                 FROM published_cards pc
                 JOIN products p ON p.id = pc.product_id
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
+                LEFT JOIN sellers seller ON seller.id = p.seller_id
                 WHERE p.is_active = TRUE {where}
                 ORDER BY {order_by}
                 LIMIT %s
