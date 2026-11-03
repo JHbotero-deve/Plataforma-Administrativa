@@ -73,7 +73,7 @@ def import_url(
         "platform": platform,
         "external_id": external_id,
         "title": final_title[:500],
-        "category": category if category in {"ropa", "calzado", "accesorios"} else None,
+        "category": category if category in {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"} else None,
         "image_url": final_image,
         "product_url": url,
         "price": final_price,
@@ -85,7 +85,7 @@ def import_url(
         "source_metadata": {
             "import_method": "authorized_cli_url",
             "metadata_source": "cli" if title or price is not None or image_url else "url_only",
-            "category_source": "user" if category in {"ropa", "calzado", "accesorios"} else None,
+            "category_source": "user" if category in {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"} else None,
             "original_url": url,
             "resolved_url": url,
             "gallery_urls": [final_image] if final_image else [],
