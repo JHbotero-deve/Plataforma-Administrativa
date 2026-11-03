@@ -332,7 +332,7 @@ class ProductSourcesTests(unittest.TestCase):
             patch.object(product_sources, "_public_product_page") as public_page,
         ):
             result = product_sources.enrich_product(product)
-        api.assert_called_once_with("B012345678", None)
+        api.assert_called_once_with("B012345678", None, "www.amazon.com")
         public_page.assert_not_called()
         self.assertEqual(result["title"], "Audífonos inalámbricos")
         self.assertEqual(result["price"], 39.99)
