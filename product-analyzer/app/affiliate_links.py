@@ -9,10 +9,58 @@ import requests
 
 
 ALIEXPRESS_API_URL = "https://api-sg.aliexpress.com/sync"
+ALIEXPRESS_LEGACY_API_URL = "https://eco.taobao.com/router/rest"
+
+
+def _raise_aliexpress_error(payload):
+    error = payload.get("error_response") if isinstance(payload, dict) else None
+    if not error:
+        return
+    if isinstance(error, dict):
+        code = error.get("code") or error.get("sub_code") or "unknown"
+        message = error.get("msg") or error.get("message") or error.get("sub_msg") or "sin descripción"
+        raise RuntimeError(f"AliExpress rechazó la solicitud ({code}: {str(message)[:180]}).")
+    raise RuntimeError("AliExpress rechazó la solicitud.")
+
+
+def _legacy_aliexpress_api_request(method, parameters, app_key, app_secret):
+    """Fallback al protocolo TOP oficial documentado por AliExpress."""
+    from datetime import datetime, timedelta, timezone
+
+    params = {
+        "app_key": app_key,
+        "method": method,
+        "sign_method": "hmac",
+        "timestamp": datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S"),
+        "format": "json",
+        "v": "2.0",
+        **parameters,
+    }
+    app_signature = os.getenv("ALIEXPRESS_APP_SIGNATURE", "").strip()
+    if app_signature:
+        params["app_signature"] = app_signature
+    canonical = "".join(key + str(params[key]) for key in sorted(params))
+    params["sign"] = hmac.new(
+        app_secret.encode("utf-8"),
+        canonical.encode("utf-8"),
+        hashlib.md5,
+    ).hexdigest().upper()
+    response = requests.post(
+        ALIEXPRESS_LEGACY_API_URL,
+        data=params,
+        headers={"Content-Type": "application/x-www-form-urlencoded;charset=utf-8"},
+        timeout=20,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict):
+        raise RuntimeError("AliExpress devolvió una respuesta API no válida.")
+    _raise_aliexpress_error(payload)
+    return payload
 
 
 def aliexpress_api_request(method: str, parameters: dict) -> dict:
-    """Call an AliExpress affiliate API using its signed Open Platform protocol."""
+    """Call AliExpress affiliate API; fallback to the documented TOP gateway on permission mismatch."""
     app_key = os.getenv("ALIEXPRESS_APP_KEY", "").strip()
     app_secret = os.getenv("ALIEXPRESS_APP_SECRET", "").strip()
     if not app_key or not app_secret:
@@ -30,9 +78,7 @@ def aliexpress_api_request(method: str, parameters: dict) -> dict:
     app_signature = os.getenv("ALIEXPRESS_APP_SIGNATURE", "").strip()
     if app_signature:
         params["app_signature"] = app_signature
-    canonical = "".join(
-        key + str(params[key]) for key in sorted(params)
-    )
+    canonical = "".join(key + str(params[key]) for key in sorted(params))
     params["sign"] = hmac.new(
         app_secret.encode("utf-8"),
         canonical.encode("utf-8"),
@@ -50,12 +96,10 @@ def aliexpress_api_request(method: str, parameters: dict) -> dict:
     if not isinstance(payload, dict):
         raise RuntimeError("AliExpress devolvió una respuesta API no válida.")
     error = payload.get("error_response")
-    if error:
-        if isinstance(error, dict):
-            code = error.get("code") or error.get("sub_code") or "unknown"
-            message = error.get("msg") or error.get("message") or error.get("sub_msg") or "sin descripción"
-            raise RuntimeError(f"AliExpress rechazó la solicitud ({code}: {str(message)[:180]}).")
-        raise RuntimeError("AliExpress rechazó la solicitud.")
+    code = str((error or {}).get("code") or (error or {}).get("sub_code") or "") if isinstance(error, dict) else ""
+    if code.casefold() in {"insufficientpermission", "isv.permission-api", "isv.invalid-app-permission"}:
+        return _legacy_aliexpress_api_request(method, parameters, app_key, app_secret)
+    _raise_aliexpress_error(payload)
     return payload
 
 

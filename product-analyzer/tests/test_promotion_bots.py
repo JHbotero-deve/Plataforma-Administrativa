@@ -55,6 +55,51 @@ class AliExpressPromotionBotTests(unittest.TestCase):
         self.assertTrue(params["timestamp"].isdigit())
         self.assertEqual(len(params["timestamp"]), 13)
 
+    def test_insufficient_permission_falls_back_to_official_top_gateway(self):
+        denied = unittest.mock.MagicMock()
+        denied.json.return_value = {
+            "error_response": {
+                "code": "InsufficientPermission",
+                "msg": "App does not have permission to access this api",
+            }
+        }
+        accepted = unittest.mock.MagicMock()
+        accepted.json.return_value = {
+            "aliexpress_affiliate_productdetail_get_response": {
+                "resp_result": {"resp_code": 200}
+            }
+        }
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "ALIEXPRESS_APP_KEY": "app-key",
+                    "ALIEXPRESS_APP_SECRET": "app-secret",
+                    "ALIEXPRESS_TRACKING_ID": "v1",
+                },
+                clear=True,
+            ),
+            patch.object(affiliate_links.requests, "post", side_effect=[denied, accepted]) as post,
+        ):
+            result = affiliate_links.aliexpress_api_request(
+                "aliexpress.affiliate.productdetail.get",
+                {"product_ids": "1005001234567890", "tracking_id": "v1"},
+            )
+        self.assertIn("aliexpress_affiliate_productdetail_get_response", result)
+        self.assertEqual(post.call_args_list[0].args[0], affiliate_links.ALIEXPRESS_API_URL)
+        self.assertEqual(post.call_args_list[1].args[0], affiliate_links.ALIEXPRESS_LEGACY_API_URL)
+        params = post.call_args_list[1].kwargs["data"]
+        self.assertEqual(params["sign_method"], "hmac")
+        self.assertEqual(len(params["sign"]), 32)
+        canonical = "".join(
+            key + str(value)
+            for key, value in sorted(params.items())
+            if key != "sign"
+        )
+        expected = hmac.new(b"app-secret", canonical.encode("utf-8"), hashlib.md5).hexdigest().upper()
+        self.assertEqual(params["sign"], expected)
+        self.assertEqual(len(params["timestamp"]), 19)
+
     def test_api_error_includes_safe_code_and_message_for_diagnostics(self):
         response = unittest.mock.MagicMock()
         response.json.return_value = {
