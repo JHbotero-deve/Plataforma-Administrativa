@@ -10,12 +10,11 @@ import requests
 from analysis import score_product
 from db import get_connection, upsert_product
 from url_import import detect_platform, import_url
-from product_sources import enrich_pending_products, enrich_product
+from product_sources import ALLOWED_CATEGORIES, enrich_pending_products, enrich_product
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
 ALLOWED_PLATFORMS = {"amazon", "aliexpress"}
-ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios"}
 
 
 def _env(name, default=""):
@@ -436,6 +435,17 @@ def _model_active_products():
             counts = cur.fetchone()
             eligible_total = int(counts["eligible"] or 0)
             active_total = int(counts["active_total"] or 0)
+            cur.execute("""
+                SELECT
+                    COUNT(*) FILTER (WHERE source_metadata->>'enrichment_status' = 'blocked') AS blocked,
+                    COUNT(*) FILTER (WHERE source_metadata->>'enrichment_status' IN ('retry','partial')) AS retry
+                FROM products
+                WHERE is_active = TRUE AND product_url IS NOT NULL
+                  AND (current_price IS NULL OR image_url IS NULL OR title LIKE 'Producto %%' OR category_id IS NULL)
+            """)
+            enrichment_counts = cur.fetchone() or {}
+            blocked = int(enrichment_counts.get("blocked") or 0)
+            retry = int(enrichment_counts.get("retry") or 0)
         scored = 0
         errors = 0
         for product in products:
@@ -447,7 +457,7 @@ def _model_active_products():
                 print(f"[telegram-bot] modelado fallido para producto {product['id']}: {type(exc).__name__}")
         missing_data = max(active_total - eligible_total, 0)
         remaining = max(eligible_total - len(products), 0)
-        return scored, missing_data, errors, remaining, enriched
+        return scored, missing_data, errors, remaining, enriched, blocked, retry
     finally:
         conn.close()
 
@@ -576,15 +586,17 @@ def _handle(token, chat_id, text):
     if command == "/modelar":
         if not argument.strip():
             try:
-                scored, missing_price, errors, remaining, enriched = _model_active_products()
+                scored, missing_price, errors, remaining, enriched, blocked, retry = _model_active_products()
                 return _send(
                     token, chat_id,
                     "<b>Modelado del catálogo</b>\n"
                     f"Productos puntuados: {scored}\n"
-                    f"Sin precio/categoría: {missing_price}\n"
+                    f"Sin datos suficientes: {missing_price}\n"
+                    f"Bloqueados por la tienda: {blocked}\n"
+                    f"Reintentos pendientes: {retry}\n"
                     f"Pendientes por límite de lote: {remaining}\n"
                     f"Datos recuperados desde URLs: {enriched}\n"
-                    f"Errores: {errors}\n"
+                    f"Errores al puntuar: {errors}\n"
                     "Importa enlaces con /agregar URL; el sistema lee únicamente los metadatos públicos de esas páginas."
                 )
             except Exception as exc:
