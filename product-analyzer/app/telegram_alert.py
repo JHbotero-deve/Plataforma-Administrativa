@@ -352,7 +352,7 @@ def _model_active_products():
     """Enriquece enlaces existentes y puntúa productos activos."""
     conn = get_connection()
     try:
-        enriched = enrich_pending_products(conn)
+        enriched = enrich_pending_products(conn, limit=120)
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -559,7 +559,7 @@ def _handle(token, chat_id, text):
                     f"Pendientes por límite de lote: {remaining}\n"
                     f"Datos recuperados desde URLs: {enriched}\n"
                     f"Errores al puntuar: {errors}\n"
-                    "Importa enlaces con /agregar URL; el sistema lee únicamente los metadatos públicos de esas páginas."
+                    "El sistema consulta las APIs oficiales de las tiendas cuando están configuradas y usa metadatos públicos como respaldo."
                 )
             except Exception as exc:
                 print(f"[telegram-bot] batch modeling error: {type(exc).__name__}: {exc}")

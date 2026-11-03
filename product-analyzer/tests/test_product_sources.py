@@ -96,7 +96,11 @@ class ProductSourcesTests(unittest.TestCase):
             "category": "accesorios",
             "resolved_url": "https://www.amazon.com/dp/B012345678",
         }
-        with patch.object(product_sources, "_public_product_page", return_value=fresh):
+        with (
+            patch.object(product_sources, "_resolve_product_url", return_value=fresh["resolved_url"]),
+            patch.object(product_sources, "_official_product_data", return_value=None),
+            patch.object(product_sources, "_public_product_page", return_value=fresh),
+        ):
             result = product_sources.enrich_product(product)
         self.assertEqual(result["external_id"], "B012345678")
         self.assertEqual(result["product_url"], fresh["resolved_url"])
@@ -112,7 +116,11 @@ class ProductSourcesTests(unittest.TestCase):
             "source_metadata": {},
         }
         fresh = {"title": "Producto", "resolved_url": "https://www.amazon.com/gp/redirect"}
-        with patch.object(product_sources, "_public_product_page", return_value=fresh):
+        with (
+            patch.object(product_sources, "_resolve_product_url", return_value=fresh["resolved_url"]),
+            patch.object(product_sources, "_official_product_data", return_value=None),
+            patch.object(product_sources, "_public_product_page", return_value=fresh),
+        ):
             result = product_sources.enrich_product(product)
         self.assertEqual(result["external_id"], "URL-SHORT-LINK")
         self.assertEqual(result["product_url"], "https://link.amazon/B06t7Yht8")
@@ -233,7 +241,10 @@ class ProductSourcesTests(unittest.TestCase):
             "title": "Producto AliExpress URL-123",
             "source_metadata": {},
         }
-        with patch.object(product_sources, "_public_product_page", side_effect=RuntimeError("La tienda devolvió un ciclo de redirección")):
+        with (
+            patch.object(product_sources, "_resolve_product_url", side_effect=RuntimeError("La tienda devolvió un ciclo de redirección")),
+            patch.object(product_sources, "_public_product_page", side_effect=RuntimeError("La tienda devolvió un ciclo de redirección")),
+        ):
             result = product_sources.enrich_product(product)
         self.assertEqual(result["product_url"], "https://s.click.aliexpress.com/e/_mOOSCcP")
         self.assertEqual(result["source_metadata"]["enrichment_status"], "blocked")
@@ -256,7 +267,10 @@ class ProductSourcesTests(unittest.TestCase):
             "rating": 4.8, "reviews_count": 120, "category": "accesorios",
             "resolved_url": "https://www.aliexpress.com/item/123.html",
         }
-        with patch.object(product_sources, "_public_product_page", return_value=fresh):
+        with (
+            patch.object(product_sources, "_official_product_data", return_value=None),
+            patch.object(product_sources, "_public_product_page", return_value=fresh),
+        ):
             recovered = product_sources.enrich_pending_products(connection, limit=1)
         self.assertEqual(recovered, 1)
         update = cursor.execute.call_args_list[-1]
@@ -291,6 +305,91 @@ class ProductSourcesTests(unittest.TestCase):
                 product_sources._public_product_page("https://www.aliexpress.com/item/123.html", "aliexpress")
         response.close.assert_called_once()
 
+
+
+    def test_amazon_product_enrichment_uses_creators_get_items(self):
+        fresh = {
+            "external_id": "B012345678",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+            "resolved_url": "https://www.amazon.com/dp/B012345678",
+            "title": "Audífonos inalámbricos",
+            "price": 39.99,
+            "currency": "USD",
+            "image_url": "https://m.media-amazon.com/images/I/product.jpg",
+            "gallery_urls": ["https://m.media-amazon.com/images/I/product.jpg"],
+            "category": "accesorios",
+            "source_metadata": {"metadata_source": "amazon_creators_api"},
+        }
+        product = {
+            "platform": "amazon",
+            "external_id": "B012345678",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+            "title": "Producto Amazon URL-123",
+            "source_metadata": {},
+        }
+        with (
+            patch("amazon_creators.get_item_by_asin", return_value=fresh) as api,
+            patch.object(product_sources, "_public_product_page") as public_page,
+        ):
+            result = product_sources.enrich_product(product)
+        api.assert_called_once_with("B012345678", None)
+        public_page.assert_not_called()
+        self.assertEqual(result["title"], "Audífonos inalámbricos")
+        self.assertEqual(result["price"], 39.99)
+        self.assertEqual(result["source_metadata"]["metadata_source"], "amazon_creators_api")
+
+    def test_aliexpress_product_detail_uses_official_affiliate_api(self):
+        raw = {
+            "product_id": "1005001234567890",
+            "product_title": "Smartphone Android",
+            "first_level_category_name": "Electronics",
+        }
+        payload = {
+            "aliexpress_affiliate_productdetail_get_response": {
+                "resp_result": {
+                    "resp_code": 200,
+                    "result": {"products": {"product": [raw]}},
+                }
+            }
+        }
+        normalized = {
+            "external_id": "1005001234567890",
+            "title": "Smartphone Android",
+            "product_url": "https://www.aliexpress.com/item/1005001234567890.html",
+            "affiliate_url": "https://s.click.aliexpress.com/e/example",
+            "price": 29.9,
+            "currency": "USD",
+            "image_url": "https://ae01.alicdn.com/product.jpg",
+            "gallery_urls": ["https://ae01.alicdn.com/product.jpg"],
+            "category": "tecnologia",
+            "seller": None,
+            "source_metadata": {},
+        }
+        with (
+            patch("affiliate_links.aliexpress_api_request", return_value=payload) as api,
+            patch("promotion_bots._normalize_product", return_value=normalized) as normalize,
+        ):
+            result = product_sources._aliexpress_product_data("1005001234567890")
+        api.assert_called_once()
+        self.assertEqual(api.call_args.args[0], "aliexpress.affiliate.productdetail.get")
+        self.assertEqual(api.call_args.args[1]["country"], "CO")
+        normalize.assert_called_once_with(raw, "tecnologia")
+        self.assertEqual(result["source_metadata"]["metadata_source"], "aliexpress_affiliate_api")
+
+    def test_short_aliexpress_link_resolves_even_when_product_page_is_blocked(self):
+        redirect = MagicMock(status_code=302, headers={"Location": "https://www.aliexpress.com/item/1005001234567890.html"})
+        blocked = MagicMock(status_code=403, headers={})
+        with patch.object(product_sources.requests, "get", side_effect=[redirect, blocked]) as request:
+            resolved = product_sources._resolve_product_url("https://s.click.aliexpress.com/e/_mqUkrBZ", "aliexpress")
+        self.assertEqual(resolved, "https://www.aliexpress.com/item/1005001234567890.html")
+        self.assertEqual(request.call_count, 2)
+        redirect.close.assert_called_once()
+        blocked.close.assert_called_once()
+
+    def test_new_enrichment_version_retries_previously_blocked_products(self):
+        future = (product_sources.datetime.now(product_sources.timezone.utc) + product_sources.timedelta(hours=24)).isoformat()
+        self.assertTrue(product_sources._retry_due({"enrichment_version": 1, "enrichment_retry_after": future}))
+        self.assertFalse(product_sources._retry_due({"enrichment_version": product_sources.ENRICHMENT_VERSION, "enrichment_retry_after": future}))
 
 if __name__ == "__main__":
     unittest.main()
