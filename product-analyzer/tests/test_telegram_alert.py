@@ -215,6 +215,14 @@ class SupportedMarketplaceTests(unittest.TestCase):
             "aliexpress",
         )
 
+    def test_manual_import_accepts_full_catalog_categories(self):
+        product = url_import.import_url(
+            "https://www.aliexpress.com/item/1005001234567890.html",
+            "tecnologia",
+        )
+        self.assertEqual(product["category"], "tecnologia")
+        self.assertEqual(product["source_metadata"]["category_source"], "user")
+
     def test_mercadolibre_urls_are_rejected(self):
         with self.assertRaises(ValueError):
             url_import.detect_platform("https://www.mercadolibre.com.co/item")
