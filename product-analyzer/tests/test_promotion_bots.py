@@ -126,6 +126,8 @@ class AliExpressPromotionBotTests(unittest.TestCase):
                     "products": [
                         {
                             "product_id": "33006951782",
+                            "shop_id": "3255036",
+                            "shop_url": "https://www.aliexpress.com/store/3255036",
                             "product_title": "Vestido",
                             "product_detail_url": "https://www.aliexpress.com/item/33006951782.html",
                             "promotion_link": "http://s.click.aliexpress.com/e/xxxxx",
@@ -154,6 +156,8 @@ class AliExpressPromotionBotTests(unittest.TestCase):
         product = promotion_bots._normalize_product(raw, "ropa")
 
         self.assertEqual(product["affiliate_url"], "https://s.click.aliexpress.com/e/_xxxxx")
+        self.assertEqual(product["seller"], {"external_id": "3255036", "name": "Tienda AliExpress #3255036"})
+        self.assertEqual(product["source_metadata"]["seller_url"], "https://www.aliexpress.com/store/3255036")
         self.assertEqual(product["commission_rate"], 10)
         self.assertEqual(product["gallery_urls"], [])
         self.assertFalse(promotion_bots._review_product(product))
