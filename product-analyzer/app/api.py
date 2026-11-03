@@ -41,6 +41,8 @@ from product_sources import enrich_product
 from pricing import publish_discounted_offer
 from wompi import router as wompi_router
 from notifications import _config as _config_telegram
+from telegram_alert import run_bot
+from main import run_pipeline
 
 API_VERSION = "1.3.0"
 logger = logging.getLogger(__name__)
@@ -53,26 +55,52 @@ app = FastAPI(
 
 
 notification_worker_task = None
+telegram_bot_task = None
+catalog_worker_task = None
 
 
 @app.on_event("startup")
 async def ensure_admin_draft_storage():
-    global notification_worker_task
+    global notification_worker_task, telegram_bot_task, catalog_worker_task
     ensure_draft_storage()
     ensure_storefront_section_storage()
     ensure_commerce_storage()
     ensure_aliexpress_oauth_storage()
     notification_worker_task = asyncio.create_task(notification_delivery_loop())
 
+    token, _ = _config_telegram()
+    if token and os.getenv("ENABLE_TELEGRAM_BOT", "true").lower() in ("true", "1", "yes"):
+        telegram_bot_task = asyncio.create_task(telegram_bot_delivery_loop())
+
+    if os.getenv("ENABLE_BACKGROUND_WORKER", "true").lower() in ("true", "1", "yes"):
+        catalog_worker_task = asyncio.create_task(catalog_pipeline_delivery_loop())
+
 
 @app.on_event("shutdown")
 async def stop_notification_delivery():
-    if notification_worker_task:
-        notification_worker_task.cancel()
+    for task in (notification_worker_task, telegram_bot_task, catalog_worker_task):
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+
+async def telegram_bot_delivery_loop():
+    try:
+        await asyncio.to_thread(run_bot)
+    except Exception:
+        logger.exception("Telegram bot background task failed")
+
+
+async def catalog_pipeline_delivery_loop():
+    while True:
         try:
-            await notification_worker_task
-        except asyncio.CancelledError:
-            pass
+            await asyncio.to_thread(run_pipeline)
+        except Exception:
+            logger.exception("Catalog background pipeline cycle failed")
+        await asyncio.sleep(7200)
 
 
 async def notification_delivery_loop():

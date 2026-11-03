@@ -19,9 +19,14 @@ ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 MAX_REDIRECTS = 12
 ALLOWED_HOSTS = {
     "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amazon.com.au", "amazon.in", "amazon.nl", "amazon.se", "amazon.pl", "amazon.ae", "amazon.sg", "amazon.com.tr", "amazon.com.br", "link.amazon", "amzn.to", "amzn.com", "a.co"),
-    "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub"),
+    "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub", "s.click.aliexpress.com"),
 }
 ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"}
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+}
 
 
 class _ProductHTML(HTMLParser):
@@ -128,7 +133,7 @@ def _public_product_page(url, platform):
         if normalized in seen_urls:
             raise RuntimeError("La tienda devolvió un ciclo de redirección, normalmente causado por un inicio de sesión obligatorio.")
         seen_urls.add(normalized)
-        response = requests.get(current, headers={"User-Agent": "Mozilla/5.0 (compatible; CentralRadar/1.0)", "Accept": "text/html,application/xhtml+xml"}, timeout=15, allow_redirects=False)
+        response = requests.get(current, headers=BROWSER_HEADERS, timeout=15, allow_redirects=False)
         if response.status_code in (301, 302, 303, 307, 308):
             redirect_hosts.append(host)
             location = response.headers.get("Location")
@@ -250,7 +255,7 @@ def _resolve_product_url(url, platform):
         seen.add(normalized)
         response = requests.get(
             current,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; CentralRadar/1.0)", "Accept": "text/html,application/xhtml+xml"},
+            headers=BROWSER_HEADERS,
             timeout=15,
             allow_redirects=False,
         )
@@ -460,14 +465,14 @@ def _enrich_pending_row(row):
     return enrich_product(product)
 
 
-def enrich_pending_products(conn, limit=80, max_workers=4):
+def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
     with conn.cursor() as cur:
         cur.execute("""SELECT p.id,p.external_id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,p.affiliate_url,pl.name AS platform,c.name AS category,p.source_metadata,s.external_id AS seller_external_id,s.name AS seller_name
             FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN sellers s ON s.id=p.seller_id
             WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL OR p.seller_id IS NULL)
             ORDER BY p.updated_at DESC LIMIT %s""", (max(limit, limit * 5),))
         candidates = cur.fetchall()
-    rows = [row for row in candidates if _retry_due(row.get("source_metadata") or {})][:limit]
+    rows = [row for row in candidates if force or _retry_due(row.get("source_metadata") or {})][:limit]
     if not rows:
         return 0
     with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(rows)))) as executor:

@@ -141,7 +141,9 @@ const HERO_INTERVAL=6000;
 
 function imageSrc(p){return p.image_url||((p.image_gallery||[]).find(Boolean)||"")}
 function modelSrc(p){const value=String(p.model_url||"").trim();return /^https:\/\/[^\s]+\.(?:glb|gltf)(?:[?#].*)?$/i.test(value)?value:""}
+function videoSrc(p){const metadata=p.source_metadata||{};const value=String(p.video_url||metadata.video_url||metadata.video||"").trim();return /^https?:\/\/[^\s]+\.(?:mp4|webm|ogv|mov)(?:[?#].*)?$/i.test(value)?value:""}
 function modelMarkup(p,cls){const src=modelSrc(p);return src?'<model-viewer class="'+cls+'" src="'+esc(src)+'" alt="'+esc(p.title||"Modelo 3D")+'" camera-controls auto-rotate rotation-per-second="18deg" shadow-intensity="1" exposure="1" ar ar-modes="webxr scene-viewer quick-look" loading="lazy"></model-viewer><span class="model-hint">Arrastra para girar · 360°</span>':""}
+function videoMarkup(p,cls){const src=videoSrc(p);return src?'<video class="'+cls+'" src="'+esc(src)+'" autoplay loop muted playsinline poster="'+esc(imageSrc(p))+'"></video>':""}
 function saveCart(){localStorage.setItem("central_cart",JSON.stringify(cart));renderCart()}
 function isOwn(p){return String(p.platform||"").toLowerCase()==="personal"}
 function cleanCart(){cart=cart.filter(x=>{const p=products.find(p=>String(p.product_id||p.id)===String(x.product_id));return p&&isOwn(p)});saveCart()}
@@ -187,8 +189,8 @@ function renderFeature(){
   active=p||null;
   const media=$("featureMedia");
   if(!p){media.innerHTML='<span class="feature-empty">No hay productos publicados</span>';$("featureTitle").textContent="Catálogo Central";$("featureDescription").textContent="Publica un producto desde Administración para verlo aquí.";return}
-  const src=imageSrc(p),model=modelMarkup(p,"feature-model");
-  media.innerHTML=model||(src?'<img class="feature-image" src="'+esc(src)+'" alt="'+esc(p.title)+'" referrerpolicy="no-referrer">' : '<span class="feature-empty">Imagen no disponible</span>');
+  const src=imageSrc(p),video=videoMarkup(p,"feature-video"),model=modelMarkup(p,"feature-model");
+  media.innerHTML=video||model||(src?'<img class="feature-image" src="'+esc(src)+'" alt="'+esc(p.title)+'" referrerpolicy="no-referrer">' : '<span class="feature-empty">Imagen no disponible</span>');
   $("featureSource").textContent="CENTRAL · "+String(p.platform||"producto").toUpperCase();
   $("featureTitle").textContent=p.title||"Producto";
   $("featureDescription").textContent=p.subtitle||p.description||"Producto publicado en Central.";
@@ -211,8 +213,8 @@ function card(p){
   if(own) main='<button class="btn primary wide add" data-id="'+esc(p.product_id||p.id)+'">Añadir · pagar con Wompi</button>';
   else if(ext) main='<a class="btn primary wide" href="'+esc(ext)+'" target="_blank" rel="nofollow sponsored noopener">Comprar en '+esc(purchaseChannel(p))+'</a>';
   else main='<a class="btn primary wide" href="'+productUrl(p)+'">Ver ficha</a>';
-  const visual=modelMarkup(p,"card-model")||(src?'<img src="'+esc(src)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer"><div class="no-image" hidden>Imagen no disponible</div>':'<div class="no-image">Imagen no disponible</div>');
-  return '<article class="card"><div class="card-media">'+visual+'<span class="badge">'+(modelSrc(p)?"MODELO 3D":discount>=40?Math.round(discount)+'% DTO':esc(p.platform||"Central"))+'</span></div><div class="card-body"><div class="category">'+esc(p.category||"Producto")+'</div><h3>'+esc(p.title)+'</h3><small>'+esc(p.subtitle||"Producto publicado por Central")+'</small><small>Vendedor: '+esc(p.seller_name||"No informado")+'</small><div class="card-price">'+esc(price)+'</div>'+(discount>=40&&original>0?'<small style="text-decoration:line-through;color:#888">Antes: '+esc(money(original,p.currency))+'</small>':'')+'<div class="card-actions">'+main+'<a class="btn" href="'+productUrl(p)+'">Ficha</a></div></div></article>'
+  const visual=videoMarkup(p,"card-video")||modelMarkup(p,"card-model")||(src?'<img src="'+esc(src)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer"><div class="no-image" hidden>Imagen no disponible</div>':'<div class="no-image">Imagen no disponible</div>');
+  return '<article class="card"><div class="card-media">'+visual+'<span class="badge">'+(videoSrc(p)?"VIDEO PROMO":modelSrc(p)?"MODELO 3D":discount>=40?Math.round(discount)+'% DTO':esc(p.platform||"Central"))+'</span></div><div class="card-body"><div class="category">'+esc(p.category||"Producto")+'</div><h3>'+esc(p.title)+'</h3><small>'+esc(p.subtitle||"Producto publicado por Central")+'</small><small>Vendedor: '+esc(p.seller_name||"No informado")+'</small><div class="card-price">'+esc(price)+'</div>'+(discount>=40&&original>0?'<small style="text-decoration:line-through;color:#888">Antes: '+esc(money(original,p.currency))+'</small>':'')+'<div class="card-actions">'+main+'<a class="btn" href="'+productUrl(p)+'">Ficha</a></div></div></article>'
 }
 function renderGrid(){
   const host=$("grid"),q=$("search").value.trim(),selected=$("category").value;

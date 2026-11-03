@@ -81,6 +81,19 @@ def _product_link(value):
     return url if len(url) <= 1000 and _is_http_url(url) else None
 
 
+def _product_images(product):
+    # Foto principal + galería, sin repetidas, máximo 5
+    gallery = product.get("image_gallery")
+    if not isinstance(gallery, (list, tuple)):
+        gallery = []
+    images = []
+    for value in [product.get("image_url"), *gallery]:
+        link = _product_link(value)
+        if link and link not in images:
+            images.append(link)
+    return images[:5]
+
+
 def _format_product(p):
     title = html.escape(str(p.get("title") or "Sin título")[:90])
     price = p.get("current_price")
@@ -95,6 +108,20 @@ def _format_product(p):
     demand_score = p.get("demand_score")
     trend_score = p.get("trend_score")
     url = _product_link(p.get("affiliate_url") or p.get("product_url"))
+    seller_name = str(p.get("seller_name") or "").strip()
+    seller_url = _product_link(p.get("seller_url"))
+    description = " ".join(str(p.get("description") or "").split())
+
+    # Datos que todavía no se pudieron obtener del producto
+    missing = []
+    if re.match(r"^(\d+\.\s*)?Producto ", str(p.get("title") or "")):
+        missing.append("título real")
+    if price is None:
+        missing.append("precio")
+    if not _product_images(p):
+        missing.append("imágenes")
+    if not seller_name:
+        missing.append("vendedor")
 
     lines = [
         f"<b>{title}</b>",
@@ -111,33 +138,76 @@ def _format_product(p):
         f"Plataforma: {platform}",
         f"Categoría: {category}",
     ]
+    if seller_name:
+        seller_text = html.escape(seller_name[:80])
+        if seller_url:
+            seller_text = f'<a href="{html.escape(seller_url, quote=True)}">{seller_text}</a>'
+        lines.append(f"Vendedor: {seller_text}")
+    if description:
+        lines.append(html.escape(description[:300]))
+    if missing:
+        lines.append("<b>Datos faltantes:</b> " + html.escape(", ".join(missing)))
     if url:
         lines.append(f'<a href="{html.escape(url, quote=True)}">Ver producto</a>')
     return "\n".join(lines)
 
 
 def _send_product(token, chat_id, product):
-    image_url = str(product.get("image_url") or "").strip()
+    images = _product_images(product)
     text = _format_product(product)
-    if _is_http_url(image_url) and len(text) <= 1024:
+    if images:
+        # Si el texto no cabe como pie de foto (1024), se envía aparte completo
+        caption = text if len(text) <= 1024 else None
+        if len(images) == 1:
+            method = "sendPhoto"
+            body = {"chat_id": chat_id, "photo": images[0]}
+            if caption:
+                body.update({"caption": caption, "parse_mode": "HTML"})
+        else:
+            method = "sendMediaGroup"
+            media = []
+            for index, image in enumerate(images):
+                item = {"type": "photo", "media": image}
+                if index == 0 and caption:
+                    item.update({"caption": caption, "parse_mode": "HTML"})
+                media.append(item)
+            body = {"chat_id": chat_id, "media": media}
         try:
             r = requests.post(
-                f"{API_BASE}/bot{token}/sendPhoto",
-                json={
-                    "chat_id": chat_id,
-                    "photo": image_url,
-                    "caption": text[:1024],
-                    "parse_mode": "HTML",
-                },
-                timeout=15,
+                f"{API_BASE}/bot{token}/{method}",
+                json=body,
+                timeout=20,
             )
             payload = r.json()
             if r.ok and isinstance(payload, dict) and payload.get("ok") is True:
-                return True
-            print(f"[telegram-bot] sendPhoto rejected: HTTP {r.status_code}")
+                return True if caption else _send(token, chat_id, text)
+            print(f"[telegram-bot] {method} rejected: HTTP {r.status_code}")
         except (requests.RequestException, ValueError) as exc:
-            print(f"[telegram-bot] sendPhoto error: {type(exc).__name__}")
+            print(f"[telegram-bot] {method} error: {type(exc).__name__}")
     return _send(token, chat_id, text)
+
+
+def _send_imported(token, chat_id, product_id, payload, score, header):
+    """Responde con la ficha completa leída de la base de datos."""
+    rows = _products_by_ids([product_id], limit=1)
+    if rows:
+        if not _send(token, chat_id, header):
+            return False
+        return _send_product(token, chat_id, rows[0])
+    score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score pendiente: completa precio y categoría con /agregar"
+    link = _product_link(payload.get("affiliate_url") or payload["product_url"])
+    message = (
+        header + "\n"
+        + html.escape(str(payload["title"])[:250]) + "\n"
+        + "Plataforma: " + html.escape(payload["platform"]) + "\n"
+        + score_text + "\n"
+        + (
+            '<a href="' + html.escape(link, quote=True) + '">Abrir producto original</a>'
+            if link
+            else "Enlace original no disponible"
+        )
+    )
+    return _send(token, chat_id, message)
 
 
 def _top_products(limit=25):
@@ -146,7 +216,8 @@ def _top_products(limit=25):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url,
+                SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url, p.image_gallery,
+                       p.description, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -156,6 +227,7 @@ def _top_products(limit=25):
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
+                LEFT JOIN sellers seller ON seller.id = p.seller_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
                   AND COALESCE(s.opportunity_score, 0) >= 60
@@ -180,7 +252,8 @@ def _search_products(term, limit=8):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url,
+                SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url, p.image_gallery,
+                       p.description, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -190,6 +263,7 @@ def _search_products(term, limit=8):
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
+                LEFT JOIN sellers seller ON seller.id = p.seller_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
                   AND (p.title ILIKE %s OR COALESCE(c.name, '') ILIKE %s)
@@ -214,7 +288,8 @@ def _products_by_ids(product_ids, limit=8):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url,
+                SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url, p.image_gallery,
+                       p.description, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -224,6 +299,7 @@ def _products_by_ids(product_ids, limit=8):
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
+                LEFT JOIN sellers seller ON seller.id = p.seller_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE AND p.id = ANY(%s)
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC
@@ -312,7 +388,7 @@ def _model_product(argument):
         if not math.isfinite(price) or price <= 0:
             return None, "El precio debe ser un número mayor que cero."
         if not parts[3] or parts[3].startswith("Producto ") or not parts[9]:
-            return None, "Para modelar se requiere título real e imagen del producto.", None
+            return None, "Para modelar se requiere título real e imagen del producto."
         product = {
             "external_id": parts[2],
             "title": parts[3],
@@ -352,7 +428,7 @@ def _model_active_products():
     """Enriquece enlaces existentes y puntúa productos activos."""
     conn = get_connection()
     try:
-        enriched = enrich_pending_products(conn, limit=120)
+        enriched = enrich_pending_products(conn, limit=120, force=True)
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -445,19 +521,7 @@ def _handle(token, chat_id, text):
             result, payload, score = _add_url(candidate)
             if result is None:
                 return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
-            score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score pendiente: completa precio y categoría con /agregar"
-            message = (
-                "<b>URL recibida e importada</b>\n"
-                + html.escape(str(payload["title"])[:250]) + "\n"
-                + "Plataforma: " + html.escape(payload["platform"]) + "\n"
-                + score_text + "\n"
-                + (
-                    '<a href="' + html.escape(link, quote=True) + '">Abrir producto original</a>'
-                    if (link := _product_link(payload.get("affiliate_url") or payload["product_url"]))
-                    else "Enlace original no disponible"
-                )
-            )
-            return _send(token, chat_id, message)
+            return _send_imported(token, chat_id, result, payload, score, "<b>URL recibida e importada</b>")
         return _send(token, chat_id, "Envía una URL válida de Amazon o AliExpress, o usa /help.")
 
     if command in ("/start", "/help"):
@@ -495,8 +559,7 @@ def _handle(token, chat_id, text):
             result, payload, score = _add_url(term)
             if result is None:
                 return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
-            price_text = "Precio: " + str(payload["price"]) + " " + str(payload["currency"]) if payload.get("price") is not None else "Precio pendiente; puedes completarlo con /agregar categoría|URL|precio|título|imagen|moneda"
-            return _send(token, chat_id, "<b>Producto importado desde URL</b>\n" + html.escape(str(payload["title"])[:250]) + "\n" + html.escape(price_text))
+            return _send_imported(token, chat_id, result, payload, score, "<b>Producto importado desde URL</b>")
         products = _search_products(term[:100], limit=8)
         if not products:
             return _send(token, chat_id, "No hay coincidencias en el catálogo importado. Para agregar uno, envía una URL individual de Amazon o AliExpress.")
@@ -519,23 +582,7 @@ def _handle(token, chat_id, text):
         result, payload, score = _add_url(argument.strip())
         if result is None:
             return _send(token, chat_id, f"<b>Error de importación</b>\n{html.escape(str(payload))}")
-        score_text = f"Score: {float(score):.1f}/100" if score is not None else "Score: pendiente (sin precio)"
-        link = _product_link(payload.get("affiliate_url") or payload["product_url"])
-        message = (
-            f"<b>Producto agregado</b>\n{html.escape(str(payload['title'])[:250])}\n"
-            f"Plataforma: {html.escape(payload['platform'])}\n{score_text}\n"
-            + (
-                f'<a href="{html.escape(link, quote=True)}">Abrir producto original</a>'
-                if link
-                else "Enlace original no disponible"
-            )
-        )
-        if not link:
-            message += "\nAfiliación pendiente: revisa las credenciales de la tienda."
-        image = _product_link(payload.get("image_url"))
-        if image:
-            message += f'\nImagen: <a href="{html.escape(image, quote=True)}">ver imagen</a>'
-        return _send(token, chat_id, message)
+        return _send_imported(token, chat_id, result, payload, score, "<b>Producto agregado</b>")
 
     if command == "/publicar":
         return _send(
@@ -700,3 +747,4 @@ def run_bot():
                 time.sleep(max(POLL_INTERVAL, 5))
     finally:
         lock_conn.close()
+        
