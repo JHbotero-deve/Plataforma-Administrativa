@@ -30,7 +30,7 @@ class TelegramCommandTests(unittest.TestCase):
         ):
             result = telegram_alert._model_active_products()
 
-        self.assertEqual(result, (1, 9, 0, 500, 0))
+        self.assertEqual(result, (1, 9, 0, 500, 0, 0, 0))
         connection.close.assert_called_once()
 
     def test_add_without_arguments_returns_usage_instead_of_import_error(self):
