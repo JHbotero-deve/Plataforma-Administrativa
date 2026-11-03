@@ -8,6 +8,7 @@
 <link rel="canonical" href="https://central-7ykr.vercel.app/tienda">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 <style>
 :root{--bg:#050607;--panel:#0d1015;--panel2:#11151c;--line:#252a31;--text:#f5f5f5;--muted:#989ba1;--dim:#5e636b;--accent:#ff8a00;--accent2:#ff5a1f;--good:#49d17d;--danger:#ff6874}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 Inter,system-ui,sans-serif;overflow-x:hidden}button,input,select{font:inherit}button,a{cursor:pointer}a{text-decoration:none;color:inherit}
@@ -35,6 +36,7 @@
 .card:hover{border-color:rgba(255,138,0,.5);box-shadow:0 34px 85px #000b,0 0 28px #ff8a0018}.card:hover:after{opacity:1}.card-media{transform:translateZ(24px);transform-style:preserve-3d}.card-media img{transform:translateZ(28px);backface-visibility:hidden}.card:hover .card-media img{transform:translateZ(38px) scale(1.06)}.card-body{transform:translateZ(12px);position:relative;z-index:2}
 @media(hover:none),(pointer:coarse){.card{transform:none!important;transition:border-color .25s,box-shadow .25s}.card:after{display:none}}
 @media(prefers-reduced-motion:reduce){.card{transition:none;transform:none!important}.card:after{display:none}}
+.card-model,.feature-model{width:100%;height:100%;min-height:250px;border:0;background:transparent;--poster-color:transparent;--progress-bar-color:var(--accent);--progress-bar-height:2px}.card-model{height:100%;min-height:280px}.feature-model{height:min(430px,78%);width:min(90%,520px);z-index:2;filter:drop-shadow(0 35px 38px #000)}.feature-media model-viewer,.card-media model-viewer{position:relative;z-index:2}.model-hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:4;padding:6px 10px;border:1px solid #ffffff22;border-radius:999px;background:#080a0dcc;color:#c5c9cf;font-size:9px;white-space:nowrap;pointer-events:none}
 </style>
 </head>
 <body>
@@ -133,6 +135,8 @@ let filtered=[], active=null, heroIndex=0, heroTimer=null, heroPaused=false;
 const HERO_INTERVAL=6000;
 
 function imageSrc(p){return p.image_url||((p.image_gallery||[]).find(Boolean)||"")}
+function modelSrc(p){const value=String(p.model_url||"").trim();return /^https:\/\/[^\s]+\.(?:glb|gltf)(?:[?#].*)?$/i.test(value)?value:""}
+function modelMarkup(p,cls){const src=modelSrc(p);return src?'<model-viewer class="'+cls+'" src="'+esc(src)+'" alt="'+esc(p.title||"Modelo 3D")+'" camera-controls auto-rotate rotation-per-second="18deg" shadow-intensity="1" exposure="1" ar ar-modes="webxr scene-viewer quick-look" loading="lazy"></model-viewer><span class="model-hint">Arrastra para girar · 360°</span>':""}
 function saveCart(){localStorage.setItem("central_cart",JSON.stringify(cart));renderCart()}
 function isOwn(p){return String(p.platform||"").toLowerCase()==="personal"}
 function cleanCart(){cart=cart.filter(x=>{const p=products.find(p=>String(p.product_id||p.id)===String(x.product_id));return p&&isOwn(p)});saveCart()}
@@ -178,8 +182,8 @@ function renderFeature(){
   active=p||null;
   const media=$("featureMedia");
   if(!p){media.innerHTML='<span class="feature-empty">No hay productos publicados</span>';$("featureTitle").textContent="Catálogo Central";$("featureDescription").textContent="Publica un producto desde Administración para verlo aquí.";return}
-  const src=imageSrc(p);
-  media.innerHTML=src?'<img class="feature-image" src="'+esc(src)+'" alt="'+esc(p.title)+'" referrerpolicy="no-referrer" onerror="this.remove();this.parentElement.innerHTML=\'<span class="feature-empty">Imagen no disponible</span>\'">':'<span class="feature-empty">Imagen no disponible</span>';
+  const src=imageSrc(p),model=modelMarkup(p,"feature-model");
+  media.innerHTML=model||(src?'<img class="feature-image" src="'+esc(src)+'" alt="'+esc(p.title)+'" referrerpolicy="no-referrer">' : '<span class="feature-empty">Imagen no disponible</span>');
   $("featureSource").textContent="CENTRAL · "+String(p.platform||"producto").toUpperCase();
   $("featureTitle").textContent=p.title||"Producto";
   $("featureDescription").textContent=p.subtitle||p.description||"Producto publicado en Central.";
@@ -202,7 +206,8 @@ function card(p){
   if(own) main='<button class="btn primary wide add" data-id="'+esc(p.product_id||p.id)+'">Añadir · pagar con Wompi</button>';
   else if(ext) main='<a class="btn primary wide" href="'+esc(ext)+'" target="_blank" rel="nofollow sponsored noopener">Comprar en '+esc(purchaseChannel(p))+'</a>';
   else main='<a class="btn primary wide" href="'+productUrl(p)+'">Ver ficha</a>';
-  return '<article class="card"><div class="card-media">'+(src?'<img src="'+esc(src)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer"><div class="no-image" hidden>Imagen no disponible</div>':'<div class="no-image">Imagen no disponible</div>')+'<span class="badge">'+(discount>=40?Math.round(discount)+'% DTO':esc(p.platform||"Central"))+'</span></div><div class="card-body"><div class="category">'+esc(p.category||"Producto")+'</div><h3>'+esc(p.title)+'</h3><small>'+esc(p.subtitle||"Producto publicado por Central")+'</small><small>Vendedor: '+esc(p.seller_name||"No informado")+'</small><div class="card-price">'+esc(price)+'</div>'+(discount>=40&&original>0?'<small style="text-decoration:line-through;color:#888">Antes: '+esc(money(original,p.currency))+'</small>':'')+'<div class="card-actions">'+main+'<a class="btn" href="'+productUrl(p)+'">Ficha</a></div></div></article>'
+  const visual=modelMarkup(p,"card-model")||(src?'<img src="'+esc(src)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer"><div class="no-image" hidden>Imagen no disponible</div>':'<div class="no-image">Imagen no disponible</div>');
+  return '<article class="card"><div class="card-media">'+visual+'<span class="badge">'+(modelSrc(p)?"MODELO 3D":discount>=40?Math.round(discount)+'% DTO':esc(p.platform||"Central"))+'</span></div><div class="card-body"><div class="category">'+esc(p.category||"Producto")+'</div><h3>'+esc(p.title)+'</h3><small>'+esc(p.subtitle||"Producto publicado por Central")+'</small><small>Vendedor: '+esc(p.seller_name||"No informado")+'</small><div class="card-price">'+esc(price)+'</div>'+(discount>=40&&original>0?'<small style="text-decoration:line-through;color:#888">Antes: '+esc(money(original,p.currency))+'</small>':'')+'<div class="card-actions">'+main+'<a class="btn" href="'+productUrl(p)+'">Ficha</a></div></div></article>'
 }
 function renderGrid(){
   const host=$("grid"),q=$("search").value.trim(),selected=$("category").value;
