@@ -372,6 +372,9 @@ def enrich_pending_products(conn, limit=80, max_workers=4):
                 source_metadata=%s::jsonb,
                 updated_at=NOW()
                 WHERE id=%s""", (
+                candidate_external_id, candidate_external_id, candidate_external_id,
+                enriched.get("product_url") if enriched.get("product_url") != row["product_url"] else None,
+                affiliate_url,
                 seller_id,
                 bool(row["category"] == "accesorios" and (row["source_metadata"] or {}).get("metadata_source") == "url_only" and not (row["source_metadata"] or {}).get("category_source")),
                 enriched.get("category") if enriched.get("category") in ALLOWED_CATEGORIES else None,
