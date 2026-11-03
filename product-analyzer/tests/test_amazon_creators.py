@@ -29,6 +29,7 @@ class AmazonCreatorsTests(unittest.TestCase):
             },
             "offersV2": {
                 "listings": [{
+                    "merchantInfo": {"id": "seller-1", "name": "Amazon Marketplace"},
                     "price": {
                         "money": {"amount": 30, "currency": "USD"},
                         "savingBasis": {
@@ -48,6 +49,7 @@ class AmazonCreatorsTests(unittest.TestCase):
         self.assertEqual(product["title"], "Auriculares inalámbricos")
         self.assertEqual(product["description"], "Marca: Central Audio · Cancelación de ruido · Bluetooth 5.3")
         self.assertEqual(product["source_metadata"]["brand"], "Central Audio")
+        self.assertEqual(product["seller"], {"external_id": "seller-1", "name": "Amazon Marketplace"})
         self.assertEqual(product["price"], 30)
         self.assertEqual(product["previous_price"], 60)
         self.assertEqual(product["currency"], "USD")
@@ -121,6 +123,7 @@ class AmazonCreatorsTests(unittest.TestCase):
         self.assertIn("itemInfo.features", payload["resources"])
         self.assertIn("itemInfo.byLineInfo", payload["resources"])
         self.assertIn("offersV2.listings.price", payload["resources"])
+        self.assertIn("offersV2.listings.merchantInfo", payload["resources"])
 
 
 if __name__ == "__main__":
