@@ -193,6 +193,7 @@ class TelegramApiResponseTests(unittest.TestCase):
 class SupportedMarketplaceTests(unittest.TestCase):
     def test_amazon_and_aliexpress_urls_are_supported(self):
         self.assertEqual(url_import.detect_platform("https://link.amazon/B06t7Yht8"), "amazon")
+        self.assertEqual(url_import._external_id("https://www.amazon.com/gp/aw/d/B000000002", "amazon"), "B000000002")
         self.assertEqual(
             url_import.detect_platform("https://www.amazon.com/dp/B000000001"),
             "amazon",
