@@ -13,12 +13,12 @@ import requests
 from db import _affiliate_url
 from url_import import ASIN_RE
 
-ENRICHMENT_VERSION = 2
+ENRICHMENT_VERSION = 3
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 MAX_REDIRECTS = 12
 ALLOWED_HOSTS = {
-    "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "link.amazon", "amzn.to", "amzn.com", "a.co"),
+    "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amazon.com.au", "amazon.in", "amazon.nl", "amazon.se", "amazon.pl", "amazon.ae", "amazon.sg", "amazon.com.tr", "amazon.com.br", "link.amazon", "amzn.to", "amzn.com", "a.co"),
     "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub"),
 }
 ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"}
@@ -319,7 +319,8 @@ def _official_product_data(url, platform, category=None):
         match = ASIN_RE.search(urlsplit(url).path)
         if match:
             from amazon_creators import get_item_by_asin
-            product = get_item_by_asin(match.group(1), category)
+            marketplace = urlsplit(url).hostname or "www.amazon.com"
+            product = get_item_by_asin(match.group(1), category, marketplace)
             if product:
                 product["resolved_url"] = product.get("product_url") or url
                 return product
