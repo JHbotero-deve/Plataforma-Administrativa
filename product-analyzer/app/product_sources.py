@@ -370,7 +370,9 @@ def enrich_product(product):
         if fresh.get("external_id"):
             product["external_id"] = fresh["external_id"]
         if resolved_url:
-            product["product_url"] = resolved_url
+            canonical_id = ASIN_RE.search(urlsplit(resolved_url).path) if platform == "amazon" else ALIEXPRESS_ITEM_RE.search(urlsplit(resolved_url).path)
+            if canonical_id:
+                product["product_url"] = resolved_url
         if fresh.get("affiliate_url"):
             product["affiliate_url"] = fresh["affiliate_url"]
         if fresh.get("title") and (not product.get("title") or str(product["title"]).startswith("Producto ")):
