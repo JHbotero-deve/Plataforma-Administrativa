@@ -428,10 +428,12 @@ def list_products(
                        p.current_price, p.currency, p.rating, p.reviews_count,
                        p.sales_estimate, p.image_url, p.image_gallery, p.product_url, p.affiliate_url, p.updated_at, p.source_metadata, p.description, p.previous_price, p.stock, p.sku,
                        p.catalog_expires_at, p.model_url, p.model_shape,
+                       seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
                        s.opportunity_score
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
+                LEFT JOIN sellers seller ON seller.id = p.seller_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
             """
@@ -465,9 +467,11 @@ def public_product(product_id: int):
                 COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) AS image_url,p.image_gallery,
                 COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) AS product_url,
                 p.affiliate_url,p.sku,p.external_id,p.stock,
-                pl.name AS platform,c.name AS category,p.rating,p.reviews_count,p.updated_at
+                pl.name AS platform,c.name AS category,p.rating,p.reviews_count,p.updated_at,
+                seller.name AS seller_name,p.source_metadata->>'seller_url' AS seller_url
                 FROM published_cards pc JOIN products p ON p.id=pc.product_id JOIN platforms pl ON pl.id=p.platform_id
                 LEFT JOIN categories c ON c.id=p.category_id
+                LEFT JOIN sellers seller ON seller.id=p.seller_id
                 WHERE pc.product_id=%s AND pc.is_published=TRUE AND p.is_active=TRUE""",(product_id,))
             row=cur.fetchone()
     finally: conn.close()
