@@ -69,6 +69,15 @@ def _access_token(config):
         timeout=20,
     )
     if not response.ok:
+        try:
+            error_payload = response.json()
+        except (ValueError, TypeError):
+            error_payload = {}
+        error_code = str(error_payload.get("error") or "").strip() if isinstance(error_payload, dict) else ""
+        error_detail = str(error_payload.get("error_description") or "").strip() if isinstance(error_payload, dict) else ""
+        if error_code or error_detail:
+            detail = ": ".join(part for part in (error_code, error_detail) if part)[:180]
+            raise RuntimeError(f"Amazon OAuth rechazó la autenticación ({detail}).")
         raise RuntimeError(f"Amazon OAuth rechazó la autenticación (HTTP {response.status_code}).")
     payload = response.json()
     token = payload.get("access_token") if isinstance(payload, dict) else None
