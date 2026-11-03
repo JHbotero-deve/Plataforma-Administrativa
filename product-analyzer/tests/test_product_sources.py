@@ -262,7 +262,7 @@ class ProductSourcesTests(unittest.TestCase):
         update = cursor.execute.call_args_list[-1]
         self.assertIn("image_gallery", update.args[0])
         self.assertIn("rating=COALESCE", update.args[0])
-        self.assertEqual(update.args[1][2], "accesorios")
+        self.assertEqual(update.args[1][7], "accesorios")
         self.assertIn("enrichment_status", update.args[1][-2])
         connection.commit.assert_called_once()
 
