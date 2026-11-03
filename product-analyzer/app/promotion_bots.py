@@ -21,6 +21,8 @@ SEARCH_BUCKETS = (
 PRODUCT_FIELDS = ",".join(
     (
         "product_id",
+        "shop_id",
+        "shop_url",
         "product_title",
         "product_detail_url",
         "promotion_link",
@@ -173,6 +175,10 @@ def _normalize_product(raw, category):
         else None
     )
     affiliate_url = promo_url or promotion_url
+    shop_id = str(raw.get("shop_id") or "").strip()
+    shop_url = _official_url(raw.get("shop_url"))
+    seller_name = f"Tienda AliExpress #{shop_id}" if shop_id else None
+    seller = {"external_id": shop_id, "name": seller_name} if shop_id else None
     gallery = raw.get("product_small_image_urls") or []
     if isinstance(gallery, dict):
         gallery = gallery.get("string") or gallery.get("url") or []
@@ -198,6 +204,7 @@ def _normalize_product(raw, category):
         "reviews_count": 0,
         "sales_estimate": int(volume or 0),
         "category": category,
+        "seller": seller,
         "discount": round(discount, 2),
         "original_price": original_price,
         "previous_price": original_price,
@@ -214,6 +221,9 @@ def _normalize_product(raw, category):
             "last_30_days_volume": int(volume),
             "commission_rate_pct": round(commission, 2),
             "promo_code": promo_code[:60] or None,
+            "seller_name": seller_name,
+            "seller_id": shop_id or None,
+            "seller_url": shop_url,
             "discovered_at": datetime.now(timezone.utc).isoformat(),
         },
     }
