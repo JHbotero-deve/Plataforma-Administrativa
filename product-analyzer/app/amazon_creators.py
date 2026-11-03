@@ -59,8 +59,8 @@ def _access_token(config):
         return TOKEN_CACHE["value"]
     response = requests.post(
         endpoint,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        data={
+        headers={"Content-Type": "application/json"},
+        json={
             "grant_type": "client_credentials",
             "client_id": credential_id,
             "client_secret": credential_secret,
