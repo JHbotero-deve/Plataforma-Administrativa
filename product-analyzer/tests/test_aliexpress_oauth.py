@@ -29,6 +29,33 @@ class AliExpressOAuthTests(unittest.TestCase):
         self.assertNotIn("private-code", response.text)
         self.assertEqual(response.headers["cache-control"], "no-store")
 
+    def test_start_uses_current_official_seller_authorization_endpoint(self):
+        request = MagicMock()
+        request.cookies = {aliexpress_oauth.ADMIN_COOKIE_NAME: "valid-session"}
+
+        with (
+            patch.object(aliexpress_oauth, "verify_session_token", return_value=True),
+            patch.object(aliexpress_oauth, "_create_oauth_state", return_value="one-time-state"),
+            patch.dict(
+                os.environ,
+                {
+                    "ALIEXPRESS_APP_KEY": "12345678",
+                    "ALIEXPRESS_CALLBACK_URL": "https://central.example/api/v1/aliexpress/oauth/callback",
+                },
+                clear=True,
+            ),
+        ):
+            response = aliexpress_oauth.start_oauth(request)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            response.headers["location"].startswith(
+                "https://api-sg.aliexpress.com/oauth/authorize?"
+            )
+        )
+        self.assertIn("client_id=12345678", response.headers["location"])
+        self.assertIn("state=one-time-state", response.headers["location"])
+
     def test_iop_signature_matches_documented_token_request_vector(self):
         params = {
             "app_key": "12345678",
