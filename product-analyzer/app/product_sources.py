@@ -157,6 +157,8 @@ def _public_product_page(url, platform):
     category = metadata.get("product:category") or metadata.get("og:category")
     rating = metadata.get("rating")
     reviews_count = metadata.get("review_count") or metadata.get("rating_count")
+    seller = None
+    seller_url = None
     gallery = []
     if image:
         gallery.append(urljoin(current, image))
@@ -195,6 +197,16 @@ def _public_product_page(url, platform):
             aggregate = product.get("aggregateRating") or {}
             rating = rating or (aggregate.get("ratingValue") if isinstance(aggregate, dict) else None)
             reviews_count = reviews_count or ((aggregate.get("reviewCount") or aggregate.get("ratingCount")) if isinstance(aggregate, dict) else None)
+            seller_data = product.get("seller") or (offers.get("seller") if isinstance(offers, dict) else None) or {}
+            if isinstance(seller_data, list):
+                seller_data = seller_data[0] if seller_data else {}
+            if isinstance(seller_data, dict):
+                seller_name = str(seller_data.get("name") or "").strip()
+                seller_url = seller_data.get("url") or seller_data.get("@id")
+            else:
+                seller_name = str(seller_data or "").strip()
+            if seller_name:
+                seller = {"external_id": str(seller_url or seller_name)[:255], "name": seller_name}
             break
     gallery = list(dict.fromkeys(item for item in gallery if isinstance(item, str) and item.startswith(("http://", "https://"))))[:10]
     image_url = gallery[0] if gallery else None
@@ -209,6 +221,8 @@ def _public_product_page(url, platform):
         "rating": _number(rating),
         "reviews_count": int(_number(reviews_count) or 0),
         "category": _category(category, title),
+        "seller": seller,
+        "seller_url": urljoin(current, seller_url) if seller_url else None,
         "resolved_url": current,
     }
 
@@ -224,7 +238,7 @@ def enrich_product(product):
         if inferred_category:
             product["category"] = inferred_category
             metadata["category_source"] = "title_inference"
-    if product.get("title") and not str(product["title"]).startswith("Producto ") and product.get("price") and product.get("image_url") and product.get("category"):
+    if product.get("title") and not str(product["title"]).startswith("Producto ") and product.get("price") and product.get("image_url") and product.get("category") and (product.get("seller") or metadata.get("metadata_source") == "cli"):
         product["source_metadata"] = metadata
         return product
     try:
@@ -239,6 +253,11 @@ def enrich_product(product):
         if not product.get("category") and fresh.get("category"):
             product["category"] = fresh["category"]
             metadata["category_source"] = "public_product_page"
+        if fresh.get("seller"):
+            product["seller"] = fresh["seller"]
+            metadata["seller_name"] = fresh["seller"].get("name")
+        if fresh.get("seller_url"):
+            metadata["seller_url"] = fresh["seller_url"]
         if fresh.get("gallery_urls"):
             product["gallery_urls"] = list(dict.fromkeys((product.get("gallery_urls") or []) + fresh["gallery_urls"]))[:10]
         metadata.update({
@@ -292,6 +311,7 @@ def _enrich_pending_row(row):
         "rating": row.get("rating"),
         "reviews_count": row.get("reviews_count"),
         "category": category,
+        "seller": {"external_id": row.get("seller_external_id"), "name": row.get("seller_name")} if row.get("seller_external_id") and row.get("seller_name") else None,
         "source_metadata": source_metadata,
     }
     return enrich_product(product)
@@ -299,9 +319,9 @@ def _enrich_pending_row(row):
 
 def enrich_pending_products(conn, limit=80, max_workers=4):
     with conn.cursor() as cur:
-        cur.execute("""SELECT p.id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,pl.name AS platform,c.name AS category,p.source_metadata
-            FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id
-            WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL)
+        cur.execute("""SELECT p.id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,pl.name AS platform,c.name AS category,p.source_metadata,s.external_id AS seller_external_id,s.name AS seller_name
+            FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN sellers s ON s.id=p.seller_id
+            WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL OR p.seller_id IS NULL)
             ORDER BY p.updated_at DESC LIMIT %s""", (max(limit, limit * 5),))
         candidates = cur.fetchall()
     rows = [row for row in candidates if _retry_due(row.get("source_metadata") or {})][:limit]
@@ -313,8 +333,19 @@ def enrich_pending_products(conn, limit=80, max_workers=4):
     for row, enriched in zip(rows, enriched_rows):
         metadata = enriched.get("source_metadata") or {}
         gallery = enriched.get("gallery_urls") or row.get("image_gallery") or []
+        seller = enriched.get("seller") or {}
+        seller_id = None
+        if seller.get("external_id") and seller.get("name"):
+            with conn.cursor() as cur:
+                cur.execute("""INSERT INTO sellers(platform_id,external_id,name)
+                    VALUES((SELECT id FROM platforms WHERE name=%s),%s,%s)
+                    ON CONFLICT(platform_id,external_id) DO UPDATE SET name=COALESCE(EXCLUDED.name,sellers.name)
+                    RETURNING id""", (row["platform"], str(seller["external_id"])[:255], str(seller["name"])[:255]))
+                seller_row = cur.fetchone()
+                seller_id = seller_row["id"] if seller_row else None
         with conn.cursor() as cur:
             cur.execute("""UPDATE products SET
+                seller_id=COALESCE(%s,seller_id),
                 category_id=CASE WHEN %s THEN (SELECT id FROM categories WHERE name=%s) ELSE COALESCE(category_id,(SELECT id FROM categories WHERE name=%s)) END,
                 title=%s,
                 current_price=COALESCE(%s,current_price),
@@ -326,6 +357,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4):
                 source_metadata=%s::jsonb,
                 updated_at=NOW()
                 WHERE id=%s""", (
+                seller_id,
                 bool(row["category"] == "accesorios" and (row["source_metadata"] or {}).get("metadata_source") == "url_only" and not (row["source_metadata"] or {}).get("category_source")),
                 enriched.get("category") if enriched.get("category") in ALLOWED_CATEGORIES else None,
                 enriched.get("category") if enriched.get("category") in ALLOWED_CATEGORIES else None,

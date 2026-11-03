@@ -28,6 +28,16 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(result["currency"], "USD")
         self.assertEqual(result["image_url"], "https://img.alicdn.com/bolso.jpg")
 
+    def test_public_page_extracts_seller_name_and_store_url(self):
+        response = MagicMock()
+        response.status_code = 200
+        response.text = '''<html><script type="application/ld+json">{"@type":"Product","name":"Bolso","offers":{"price":"25.50","priceCurrency":"USD","seller":{"@type":"Organization","name":"Tienda Central","url":"https://www.aliexpress.com/store/123"}}}</script></html>'''
+        with patch.object(product_sources.requests, "get", return_value=response):
+            result = product_sources._public_product_page("https://www.aliexpress.com/item/123.html", "aliexpress")
+        self.assertEqual(result["seller"]["name"], "Tienda Central")
+        self.assertEqual(result["seller"]["external_id"], "https://www.aliexpress.com/store/123")
+        self.assertEqual(result["seller_url"], "https://www.aliexpress.com/store/123")
+
     def test_public_page_extracts_original_price_and_description(self):
         response = MagicMock()
         response.status_code = 200
@@ -139,7 +149,7 @@ class ProductSourcesTests(unittest.TestCase):
         update = cursor.execute.call_args_list[-1]
         self.assertIn("image_gallery", update.args[0])
         self.assertIn("rating=COALESCE", update.args[0])
-        self.assertEqual(update.args[1][1], "accesorios")
+        self.assertEqual(update.args[1][2], "accesorios")
         self.assertIn("enrichment_status", update.args[1][-2])
         connection.commit.assert_called_once()
 
