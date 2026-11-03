@@ -241,10 +241,10 @@ def _public_product_page(url, platform):
 
 
 def _resolve_product_url(url, platform):
-    """Resuelve enlaces cortos sin depender de que la página final permita leer HTML."""
+    """Resuelve enlaces cortos de afiliado (s.click.aliexpress.com, amzn.to) siguiendo HTTP y redirecciones HTML/JS."""
     current = url
     seen = set()
-    for hop in range(MAX_REDIRECTS + 1):
+    for _ in range(MAX_REDIRECTS + 1):
         parsed = urlsplit(current)
         host = (parsed.hostname or "").lower().rstrip(".")
         if platform not in ALLOWED_HOSTS or parsed.scheme not in ("http", "https") or not _allowed_host(host, platform):
@@ -253,24 +253,40 @@ def _resolve_product_url(url, platform):
         if normalized in seen:
             raise RuntimeError("La tienda devolvió un ciclo de redirección.")
         seen.add(normalized)
-        response = requests.get(
-            current,
-            headers=BROWSER_HEADERS,
-            timeout=15,
-            allow_redirects=False,
-        )
-        if response.status_code in (301, 302, 303, 307, 308):
-            location = response.headers.get("Location")
+        try:
+            response = requests.get(
+                current,
+                headers=BROWSER_HEADERS,
+                timeout=15,
+                allow_redirects=True,
+            )
+            final_url = response.url
+            html_text = response.text[:200_000]
             response.close()
-            if not location:
-                raise RuntimeError("La tienda no entregó el destino del enlace.")
-            if hop >= MAX_REDIRECTS:
-                raise RuntimeError(f"La tienda excedió el límite de {MAX_REDIRECTS} redirecciones.")
-            current = urljoin(current, location)
+        except Exception:
+            return current
+
+        if ALIEXPRESS_ITEM_RE.search(urlsplit(final_url).path) or ASIN_RE.search(urlsplit(final_url).path):
+            return final_url
+
+        match_meta = re.search(r'content=["\'][^"\']*url=([^"\']+)["\']', html_text, re.I)
+        if match_meta:
+            target = match_meta.group(1)
+            current = urljoin(final_url, target)
             continue
-        response.close()
-        return current
-    raise RuntimeError(f"La tienda excedió el límite de {MAX_REDIRECTS} redirecciones.")
+
+        match_js = re.search(r'(?:window\.)?location\.href\s*=\s*["\']([^"\']+)["\']', html_text, re.I)
+        if match_js:
+            target = match_js.group(1)
+            current = urljoin(final_url, target)
+            continue
+
+        match_item = re.search(r'aliexpress\.com/item/(\d+)', html_text, re.I)
+        if match_item:
+            return f"https://www.aliexpress.com/item/{match_item.group(1)}.html"
+
+        return final_url
+    return current
 
 
 def _aliexpress_product_data(product_id, category=None):
