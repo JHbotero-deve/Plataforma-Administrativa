@@ -324,7 +324,7 @@ def start_oauth(request: Request, token: Optional[str] = Query(default=None)):
         raise HTTPException(status_code=503, detail="Configura ALIEXPRESS_APP_KEY.")
     callback_url = _configured_callback_url()
     state = _create_oauth_state()
-    authorization_url = "https://oauth.aliexpress.com/authorize?" + urlencode(
+    authorization_url = "https://api-sg.aliexpress.com/oauth/authorize?" + urlencode(
         {
             "response_type": "code",
             "force_auth": "true",
