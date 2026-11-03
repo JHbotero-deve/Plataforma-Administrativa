@@ -96,7 +96,11 @@ class ProductSourcesTests(unittest.TestCase):
             "category": "accesorios",
             "resolved_url": "https://www.amazon.com/dp/B012345678",
         }
-        with patch.object(product_sources, "_public_product_page", return_value=fresh):
+        with (
+            patch.object(product_sources, "_resolve_product_url", return_value=fresh["resolved_url"]),
+            patch.object(product_sources, "_official_product_data", return_value=None),
+            patch.object(product_sources, "_public_product_page", return_value=fresh),
+        ):
             result = product_sources.enrich_product(product)
         self.assertEqual(result["external_id"], "B012345678")
         self.assertEqual(result["product_url"], fresh["resolved_url"])
@@ -112,7 +116,11 @@ class ProductSourcesTests(unittest.TestCase):
             "source_metadata": {},
         }
         fresh = {"title": "Producto", "resolved_url": "https://www.amazon.com/gp/redirect"}
-        with patch.object(product_sources, "_public_product_page", return_value=fresh):
+        with (
+            patch.object(product_sources, "_resolve_product_url", return_value=fresh["resolved_url"]),
+            patch.object(product_sources, "_official_product_data", return_value=None),
+            patch.object(product_sources, "_public_product_page", return_value=fresh),
+        ):
             result = product_sources.enrich_product(product)
         self.assertEqual(result["external_id"], "URL-SHORT-LINK")
         self.assertEqual(result["product_url"], "https://link.amazon/B06t7Yht8")
@@ -233,7 +241,10 @@ class ProductSourcesTests(unittest.TestCase):
             "title": "Producto AliExpress URL-123",
             "source_metadata": {},
         }
-        with patch.object(product_sources, "_public_product_page", side_effect=RuntimeError("La tienda devolvió un ciclo de redirección")):
+        with (
+            patch.object(product_sources, "_resolve_product_url", side_effect=RuntimeError("La tienda devolvió un ciclo de redirección")),
+            patch.object(product_sources, "_public_product_page", side_effect=RuntimeError("La tienda devolvió un ciclo de redirección")),
+        ):
             result = product_sources.enrich_product(product)
         self.assertEqual(result["product_url"], "https://s.click.aliexpress.com/e/_mOOSCcP")
         self.assertEqual(result["source_metadata"]["enrichment_status"], "blocked")
@@ -256,7 +267,10 @@ class ProductSourcesTests(unittest.TestCase):
             "rating": 4.8, "reviews_count": 120, "category": "accesorios",
             "resolved_url": "https://www.aliexpress.com/item/123.html",
         }
-        with patch.object(product_sources, "_public_product_page", return_value=fresh):
+        with (
+            patch.object(product_sources, "_official_product_data", return_value=None),
+            patch.object(product_sources, "_public_product_page", return_value=fresh),
+        ):
             recovered = product_sources.enrich_pending_products(connection, limit=1)
         self.assertEqual(recovered, 1)
         update = cursor.execute.call_args_list[-1]
