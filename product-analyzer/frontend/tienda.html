@@ -29,6 +29,12 @@
 @media(max-width:380px){.top-actions{gap:5px}.top-btn{padding:0 10px;font-size:10px}.stage-product{width:64%;height:82%}.stage-product-title{font-size:14px}.stage-product-price{font-size:13px}.stage-arrow{width:32px;height:32px}}
 @media(prefers-reduced-motion:reduce){.stage-product{transition:none}.stage-progress span{animation:none;transform:scaleX(1)}}
 .catalog-sections{display:grid;gap:34px;padding-bottom:70px}.catalog-section{min-width:0}.catalog-section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;margin:0 0 14px}.catalog-section-head h2{font:600 clamp(22px,3vw,30px)/1.05 "Space Grotesk";margin:0;color:#fff}.catalog-section-head span{font-size:10px;color:#858b93;white-space:nowrap}.section-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.catalog-section .empty{min-height:80px;padding:22px}@media(max-width:1050px){.section-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.section-grid{grid-template-columns:1fr}}
+
+.card{transform-style:preserve-3d;transform:perspective(1200px) rotateX(var(--tilt-x,0deg)) rotateY(var(--tilt-y,0deg));transition:transform .18s ease,border-color .25s,box-shadow .25s;will-change:transform;position:relative;isolation:isolate}
+.card:after{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:radial-gradient(circle at var(--shine-x,50%) var(--shine-y,50%),rgba(255,255,255,.15),transparent 38%);opacity:0;transition:opacity .25s}
+.card:hover{border-color:rgba(255,138,0,.5);box-shadow:0 34px 85px #000b,0 0 28px #ff8a0018}.card:hover:after{opacity:1}.card-media{transform:translateZ(24px);transform-style:preserve-3d}.card-media img{transform:translateZ(28px);backface-visibility:hidden}.card:hover .card-media img{transform:translateZ(38px) scale(1.06)}.card-body{transform:translateZ(12px);position:relative;z-index:2}
+@media(hover:none),(pointer:coarse){.card{transform:none!important;transition:border-color .25s,box-shadow .25s}.card:after{display:none}}
+@media(prefers-reduced-motion:reduce){.card{transition:none;transform:none!important}.card:after{display:none}}
 </style>
 </head>
 <body>
@@ -255,6 +261,14 @@ $("checkout").onsubmit=async e=>{
   try{const r=await fetch(API+"/wompi/checkout/cart",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:cart.map(x=>({product_id:x.product_id,publication_id:x.publication_id,quantity:x.quantity})),customer_name:$("name").value.trim(),customer_email:$("email").value.trim(),customer_phone:$("phone").value.trim()||null})});const d=await r.json();if(!r.ok)throw Error(d.detail||"No fue posible iniciar el pago");location.href=d.checkout_url}catch(err){$("err").textContent=err.message}
 };
 renderCart();load();renderHeroCarousel();startHeroRotation();
+})();
+</script>
+
+<script>
+(()=>{if(window.matchMedia("(hover:none),(pointer:coarse)").matches||window.matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+const reset=card=>{card.style.setProperty("--tilt-x","0deg");card.style.setProperty("--tilt-y","0deg");card.style.setProperty("--shine-x","50%");card.style.setProperty("--shine-y","50%")};
+document.addEventListener("pointermove",e=>{const card=e.target.closest(".card");if(!card||e.pointerType==="touch")return;const r=card.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;card.style.setProperty("--tilt-x",((.5-y)*10).toFixed(2)+"deg");card.style.setProperty("--tilt-y",((x-.5)*12).toFixed(2)+"deg");card.style.setProperty("--shine-x",(x*100).toFixed(1)+"%");card.style.setProperty("--shine-y",(y*100).toFixed(1)+"%")});
+document.addEventListener("pointerout",e=>{const card=e.target.closest(".card");if(card&&!card.contains(e.relatedTarget))reset(card)});
 })();
 </script>
 </body>
