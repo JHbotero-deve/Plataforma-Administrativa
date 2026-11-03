@@ -150,6 +150,30 @@ class TelegramApiResponseTests(unittest.TestCase):
 
         self.assertFalse(result)
 
+    def test_publication_notification_sends_product_photo_price_and_seller(self):
+        with (
+            patch.object(notifications, "_config", return_value=("token", "chat")),
+            patch.object(notifications, "_post_telegram", return_value=True) as post,
+        ):
+            result = notifications.send_telegram_publication({
+                "title": "Auriculares",
+                "subtitle": "40% de descuento",
+                "description": "Cancelación de ruido",
+                "price_display": "60.00 USD",
+                "image_url": "https://m.media-amazon.com/images/I/photo.jpg",
+                "seller_name": "Amazon Marketplace",
+                "seller_url": "https://www.amazon.com",
+                "store_url": "https://central-7ykr.vercel.app/producto/auriculares-1",
+            })
+
+        self.assertTrue(result)
+        self.assertEqual(post.call_args.args[1], "sendPhoto")
+        payload = post.call_args.args[2]
+        self.assertEqual(payload["photo"], "https://m.media-amazon.com/images/I/photo.jpg")
+        self.assertIn("60.00 USD", payload["caption"])
+        self.assertIn("Amazon Marketplace", payload["caption"])
+        self.assertIn("Cancelación de ruido", payload["caption"])
+
     def test_promotion_alert_contains_discount_commission_sales_and_coupon(self):
         with (
             patch.object(notifications, "_config", return_value=("token", "chat")),
