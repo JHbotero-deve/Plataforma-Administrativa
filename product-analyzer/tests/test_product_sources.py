@@ -79,6 +79,44 @@ class ProductSourcesTests(unittest.TestCase):
         first.close.assert_called_once()
         second.close.assert_called_once()
 
+    def test_link_amazon_enrichment_uses_resolved_asin_and_product_url(self):
+        product = {
+            "platform": "amazon",
+            "external_id": "URL-SHORT-LINK",
+            "product_url": "https://link.amazon/B06t7Yht8",
+            "title": "Producto Amazon URL-SHORT-LINK",
+            "source_metadata": {"original_url": "https://link.amazon/B06t7Yht8"},
+        }
+        fresh = {
+            "title": "Audífonos inalámbricos",
+            "price": 39.99,
+            "currency": "USD",
+            "image_url": "https://images.example/product.jpg",
+            "gallery_urls": ["https://images.example/product.jpg"],
+            "category": "accesorios",
+            "resolved_url": "https://www.amazon.com/dp/B012345678",
+        }
+        with patch.object(product_sources, "_public_product_page", return_value=fresh):
+            result = product_sources.enrich_product(product)
+        self.assertEqual(result["external_id"], "B012345678")
+        self.assertEqual(result["product_url"], fresh["resolved_url"])
+        self.assertEqual(result["source_metadata"]["original_url"], "https://link.amazon/B06t7Yht8")
+        self.assertEqual(result["source_metadata"]["resolved_url"], fresh["resolved_url"])
+
+    def test_link_amazon_without_resolved_asin_keeps_original_identity(self):
+        product = {
+            "platform": "amazon",
+            "external_id": "URL-SHORT-LINK",
+            "product_url": "https://link.amazon/B06t7Yht8",
+            "title": "Producto Amazon URL-SHORT-LINK",
+            "source_metadata": {},
+        }
+        fresh = {"title": "Producto", "resolved_url": "https://www.amazon.com/gp/redirect"}
+        with patch.object(product_sources, "_public_product_page", return_value=fresh):
+            result = product_sources.enrich_product(product)
+        self.assertEqual(result["external_id"], "URL-SHORT-LINK")
+        self.assertEqual(result["product_url"], "https://link.amazon/B06t7Yht8")
+
     def test_link_amazon_redirect_outside_allowed_hosts_is_rejected(self):
         response = MagicMock()
         response.status_code = 302
