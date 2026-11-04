@@ -72,7 +72,7 @@ async def ensure_admin_draft_storage():
     if token and os.getenv("ENABLE_TELEGRAM_BOT", "true").lower() in ("true", "1", "yes"):
         telegram_bot_task = asyncio.create_task(telegram_bot_delivery_loop())
 
-    if os.getenv("ENABLE_BACKGROUND_WORKER", "true").lower() in ("true", "1", "yes"):
+    if os.getenv("ENABLE_BACKGROUND_WORKER", "false").lower() in ("true", "1", "yes"):
         catalog_worker_task = asyncio.create_task(catalog_pipeline_delivery_loop())
 
 
