@@ -49,6 +49,13 @@ jobs:
               store_code = "\n".join([script for script in store_scripts if script.strip()])
               Path("/tmp/central-store.js").write_text(store_code, encoding="utf-8")
               subprocess.run(["node", "--check", "/tmp/central-store.js"], check=True)
+              login_html = Path("product-analyzer/frontend/admin-login.html").read_text(encoding="utf-8")
+              login_scripts = re.findall(r"<script(?:\s[^>]*)?>([\s\S]*?)</script>", login_html)
+              login_code = "\n".join([script for script in login_scripts if script.strip()])
+              if 'window.location.replace("/admin")' not in login_code:
+                  raise SystemExit("Admin login must redirect to /admin after authentication.")
+              Path("/tmp/central-admin-login.js").write_text(login_code, encoding="utf-8")
+              subprocess.run(["node", "--check", "/tmp/central-admin-login.js"], check=True)
           PY
 
       - name: Build Figma showcase
@@ -157,8 +164,9 @@ jobs:
       - name: Test product discovery and enrichment
         shell: bash
         run: |
-          python -m pip install requests psycopg2-binary schedule fastapi
+          python -m pip install requests psycopg2-binary schedule fastapi==0.115.0 cryptography==46.0.3 httpx
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_product_sources.py'
+          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_aliexpress_oauth.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_pricing.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_amazon_creators.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_promotion_bots.py'

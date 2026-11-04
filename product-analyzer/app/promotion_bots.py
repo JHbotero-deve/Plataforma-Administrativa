@@ -248,8 +248,13 @@ def _review_product(product):
     minimum_quality = _number(_env("PROMOTION_MIN_EVALUATION") or 80)
     minimum_commission = _number(_env("PROMOTION_MIN_COMMISSION") or 3.0) # Buenas ganancias / comisión
     minimum_score = _number(_env("PROMOTION_MIN_SCORE") or 60)
+    original_price = _number(product.get("original_price"))
+    sale_price = _number(product.get("price"))
     return (
-        product["discount"] >= minimum_discount
+        original_price is not None
+        and sale_price is not None
+        and original_price > sale_price
+        and product["discount"] >= minimum_discount
         and product["sales_estimate"] >= minimum_volume
         and product["quality"] >= minimum_quality
         and product["commission_rate"] >= minimum_commission
