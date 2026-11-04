@@ -335,6 +335,63 @@ def _aliexpress_product_data(product_id, category=None):
     raise RuntimeError(f"AliExpress no devolvió datos utilizables para el producto ({code}).")
 
 
+def _aliexpress_product_by_title(title, category=None):
+    """Busca un enlace corto por su título en la API oficial de afiliados, sin abrir la página."""
+    title = " ".join(str(title or "").split())[:180]
+    if not title or title.casefold().startswith("producto "):
+        return None
+    tracking_id = os.getenv("ALIEXPRESS_TRACKING_ID", "").strip() or os.getenv("ALIEXPRESS_AFFILIATE_TRACKING_ID", "").strip()
+    if not (os.getenv("ALIEXPRESS_APP_KEY", "").strip() and os.getenv("ALIEXPRESS_APP_SECRET", "").strip() and tracking_id):
+        return None
+
+    normalized_title = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode().lower()
+    stopwords = {"para", "con", "por", "una", "uno", "the", "for", "with", "and", "men", "women", "man", "woman", "hombre", "mujer", "talla", "nivel"}
+    source_tokens = [token for token in re.findall(r"[a-z0-9]{3,}", normalized_title) if token not in stopwords]
+    source_set = set(source_tokens)
+    if len(source_set) < 2:
+        return None
+
+    from affiliate_links import aliexpress_api_request
+    from promotion_bots import PRODUCT_FIELDS, _normalize_product, _product_results
+
+    payload = aliexpress_api_request(
+        "aliexpress.affiliate.product.query",
+        {
+            "keywords": title,
+            "page_no": "1",
+            "page_size": "20",
+            "sort": "LAST_VOLUME_DESC",
+            "target_currency": "USD",
+            "target_language": "ES",
+            "ship_to_country": "CO",
+            "tracking_id": tracking_id,
+            "fields": PRODUCT_FIELDS,
+        },
+    )
+    matches = []
+    for raw in _product_results(payload):
+        candidate_title = str(raw.get("product_title") or "")
+        normalized_candidate = unicodedata.normalize("NFKD", candidate_title).encode("ascii", "ignore").decode().lower()
+        candidate_tokens = set(re.findall(r"[a-z0-9]{3,}", normalized_candidate)) - stopwords
+        overlap = source_set & candidate_tokens
+        if len(overlap) < 2:
+            continue
+        similarity = len(overlap) / max(1, min(len(source_set), len(candidate_tokens)))
+        brand_match = bool(source_tokens and source_tokens[0] in candidate_tokens)
+        if similarity < 0.4 and not brand_match:
+            continue
+        inferred = category or _category(
+            raw.get("first_level_category_name") or raw.get("second_level_category_name"),
+            candidate_title,
+        )
+        product = _normalize_product(raw, inferred)
+        if product:
+            product["source_metadata"]["metadata_source"] = "aliexpress_affiliate_api_search"
+            product["resolved_url"] = product.get("product_url")
+            matches.append((similarity + (0.25 if brand_match else 0), product))
+    return max(matches, key=lambda item: item[0])[1] if matches else None
+
+
 def _official_product_data(url, platform, category=None):
     if platform == "amazon":
         match = ASIN_RE.search(urlsplit(url).path)
@@ -368,7 +425,17 @@ def enrich_product(product):
         return product
     original_url = url
     has_product_id = bool(ASIN_RE.search(urlsplit(url).path) if platform == "amazon" else ALIEXPRESS_ITEM_RE.search(urlsplit(url).path))
-    if not has_product_id:
+    title_match = None
+    if platform == "aliexpress" and not has_product_id:
+        try:
+            title_match = _aliexpress_product_by_title(product.get("title"), product.get("category"))
+        except Exception as exc:
+            metadata["affiliate_title_lookup_error"] = type(exc).__name__
+    if title_match:
+        url = title_match.get("product_url") or url
+        product["product_url"] = url
+        metadata.setdefault("original_url", original_url)
+    elif not has_product_id:
         try:
             resolved = _resolve_product_url(url, platform)
             resolved_has_id = bool(ASIN_RE.search(urlsplit(resolved).path) if platform == "amazon" else ALIEXPRESS_ITEM_RE.search(urlsplit(resolved).path))
@@ -381,7 +448,7 @@ def enrich_product(product):
     try:
         api_error = None
         try:
-            fresh = _official_product_data(url, platform, product.get("category"))
+            fresh = title_match or _official_product_data(url, platform, product.get("category"))
         except Exception as exc:
             api_error = f"{type(exc).__name__}: {str(exc)[:180]}"
             fresh = None
