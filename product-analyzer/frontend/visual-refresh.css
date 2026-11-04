@@ -1,0 +1,141 @@
+/* CENTRAL · actualización visual del panel administrativo */
+:root{
+  --bg:#f3f6fb;
+  --panel:#ffffff;
+  --panel2:#edf2f8;
+  --line:#dce4ee;
+  --text:#142033;
+  --muted:#64748b;
+  --accent:#0f766e;
+  --accent-ink:#ffffff;
+  --accent2:#5967d8;
+  --danger:#c2414b;
+  --radius:18px;
+  --shadow:0 8px 28px rgba(15,23,42,.07);
+}
+body.admin-mode{
+  background:linear-gradient(180deg,#f7f9fc 0%,#eef3f8 100%);
+  color:var(--text);
+}
+.admin-header{
+  background:#0c1728;
+  color:#f8fafc;
+  border-bottom:1px solid rgba(255,255,255,.09);
+  box-shadow:0 5px 22px rgba(15,23,42,.14);
+}
+.admin-brand,.admin-top-actions a{color:#e2e8f0}
+.admin-brand strong{color:#a3e635;letter-spacing:.12em}
+.admin-brand span{color:#aab8ca}
+.admin-top-actions a:hover{color:#a3e635}
+.nav{
+  background:rgba(255,255,255,.92);
+  border-bottom:1px solid var(--line);
+  box-shadow:0 4px 18px rgba(15,23,42,.04);
+}
+.nav .wrap{min-height:68px}
+.brand{color:#142033;letter-spacing:.07em}
+.brand b{color:#0f766e}
+.navlinks{gap:14px}
+.navlinks a{color:#526176;font-weight:500}
+.navlinks a:hover{color:#0f766e}
+.status{color:#526176}
+header{
+  position:relative;
+  overflow:hidden;
+  isolation:isolate;
+  padding:clamp(58px,8vw,96px) 0 76px;
+  background:radial-gradient(circle at 82% 20%,rgba(20,184,166,.24),transparent 32%),linear-gradient(125deg,#0c1728 0%,#142c43 58%,#123c46 100%);
+  border:0;
+  color:#f8fafc;
+}
+header:after{
+  content:"";
+  position:absolute;
+  z-index:-1;
+  width:420px;
+  height:420px;
+  right:-150px;
+  bottom:-280px;
+  border:1px solid rgba(163,230,53,.28);
+  border-radius:50%;
+  box-shadow:0 0 0 38px rgba(163,230,53,.035),0 0 0 78px rgba(163,230,53,.025);
+}
+header .wrap{position:relative;z-index:1}
+header .eyebrow{color:#a3e635;letter-spacing:.14em}
+header h1{
+  max-width:850px;
+  color:#fff;
+  font-size:clamp(42px,6.4vw,76px);
+  letter-spacing:-.055em;
+  line-height:1.01;
+}
+header .hero-copy{max-width:700px;color:#c7d4e3;font-size:clamp(16px,1.6vw,19px)}
+header .actions{gap:12px}
+header .btn{
+  border-color:rgba(255,255,255,.22);
+  background:rgba(255,255,255,.08);
+  color:#f8fafc;
+  border-radius:12px;
+  padding:12px 18px;
+}
+header .btn.primary{
+  background:#a3e635;
+  border-color:#a3e635;
+  color:#142033;
+  box-shadow:0 8px 24px rgba(163,230,53,.18);
+}
+header .btn:hover{transform:translateY(-2px)}
+section{border-bottom-color:var(--line)}
+.section-head{margin-bottom:28px}
+.section-head h2{color:#142033;letter-spacing:-.035em;font-size:clamp(23px,3vw,30px)}
+.eyebrow{color:#0f766e}
+.card,.panel,.metric,.intel-card,.intel-panel,.quickbar{
+  border:1px solid var(--line);
+  border-radius:18px;
+  box-shadow:var(--shadow);
+}
+.card{transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.card:hover{
+  transform:translateY(-4px);
+  border-color:#b8c8d8;
+  box-shadow:0 16px 34px rgba(15,23,42,.11);
+}
+.card-media{background:linear-gradient(145deg,#f8fafc,#eaf0f6)}
+.card-body{padding:16px}
+.title{color:#17263a}
+.price{color:#0f766e}
+.score{color:#5967d8}
+.badge{border-color:#b9d8d1;color:#0f766e;background:#effaf7}
+.metric,.intel-card,.intel-panel,.panel,.quickbar{background:#fff}
+.metric,.intel-card{padding:20px}
+.metric strong,.intel-card strong{color:#142033}
+.field,select.field,input.field,textarea.field{
+  border:1px solid #d5dfeb;
+  border-radius:11px;
+  background:#fff;
+  color:#142033;
+  min-height:44px;
+}
+.field:focus{border-color:#0f766e;box-shadow:0 0 0 3px rgba(15,118,110,.12)}
+.btn{
+  border-radius:11px;
+  transition:transform .18s ease,box-shadow .18s ease,background .18s ease;
+}
+.btn:hover{transform:translateY(-1px);box-shadow:0 7px 18px rgba(15,23,42,.1)}
+.btn.primary{background:#0f766e;border-color:#0f766e;color:#fff}
+.table-wrap{border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+table{background:#fff}
+th{background:#f3f6fa;color:#526176}
+td,th{border-bottom-color:#e7edf4}
+.empty{border-radius:16px;background:rgba(255,255,255,.7)}
+@media(max-width:800px){
+  .nav .wrap{padding:10px 0;align-items:flex-start;flex-direction:column}
+  .navlinks{gap:10px 14px}
+  header{padding:54px 0 58px}
+  header h1{font-size:clamp(38px,10vw,56px)}
+  section{padding:42px 0}
+}
+@media(prefers-reduced-motion:reduce){
+  .card,.btn{transition:none}
+  .card:hover,.btn:hover{transform:none}
+}
