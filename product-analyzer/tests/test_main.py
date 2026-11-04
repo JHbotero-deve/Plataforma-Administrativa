@@ -25,6 +25,7 @@ class WorkerPipelineTests(unittest.TestCase):
         with (
             patch.object(main, "get_connection", return_value=connection),
             patch.object(main, "expire_catalog"),
+            patch.object(main, "run_marketplace_ingestion", return_value={}) as ingest,
             patch.object(main, "enrich_pending_products", return_value=12) as enrich,
             patch.object(main, "score_product", return_value=80) as score,
             patch.object(main, "send_telegram_alert") as alert,
@@ -32,7 +33,8 @@ class WorkerPipelineTests(unittest.TestCase):
         ):
             main.run_pipeline()
 
-        enrich.assert_called_once_with(connection, limit=20)
+        ingest.assert_called_once_with(target_per_platform=100)
+        enrich.assert_called_once_with(connection, limit=100)
         score.assert_called_once_with(connection, 7, 30.0)
         alert.assert_called_once()
         self.assertTrue(any("SELECT p.id" in call.args[0] for call in cursor.execute.call_args_list))
