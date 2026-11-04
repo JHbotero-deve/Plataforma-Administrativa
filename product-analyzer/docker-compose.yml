@@ -66,6 +66,9 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      ENABLE_TELEGRAM_BOT: "false"
+      ENABLE_BACKGROUND_WORKER: "false"
     ports:
       - "8000:8000"
     volumes:
