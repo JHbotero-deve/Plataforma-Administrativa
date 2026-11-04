@@ -28,6 +28,16 @@ El bot ofrece `/top`, `/buscar`, `/modelar`, `/estado` y `/agregar URL`.
 La importación por URL admite Amazon y AliExpress. Configura
 `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` en Railway para habilitarlo.
 
+## Requisitos operativos obligatorios
+
+- Telegram es solo la interfaz privada de entrada, consulta y notificación; no ejecuta ni controla el ciclo de análisis.
+- El trabajador de Railway procesa los productos ya guardados aunque Telegram esté detenido o no pueda enviar mensajes.
+- Los fallos de notificación nunca deben interrumpir la importación, el enriquecimiento ni la puntuación.
+- Los errores 401, 403, permisos de API, redirecciones o sesión se registran con su causa y permanecen en reintento; no se presentan como bloqueo definitivo de la tienda.
+- Los reintentos usan espera progresiva limitada y los productos pendientes se procesan por antigüedad para evitar que un grupo monopolice el lote.
+- El análisis no debe depender de exclusiones de publicación de la tienda. Una exclusión de escaparate no elimina ni bloquea el análisis del catálogo.
+- El worker debe recuperar automáticamente su ciclo después de errores transitorios de base de datos o de una ejecución individual.
+
 ## Desarrollo local
 
 Desde `product-analyzer`:

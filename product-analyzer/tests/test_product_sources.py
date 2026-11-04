@@ -286,9 +286,27 @@ class ProductSourcesTests(unittest.TestCase):
         ):
             result = product_sources.enrich_product(product)
         self.assertEqual(result["product_url"], "https://s.click.aliexpress.com/e/_mOOSCcP")
-        self.assertEqual(result["source_metadata"]["enrichment_status"], "blocked")
+        self.assertEqual(result["source_metadata"]["enrichment_status"], "retry")
         self.assertEqual(result["source_metadata"]["enrichment_error"], "login_or_redirect_required")
+        self.assertEqual(result["source_metadata"]["enrichment_attempts"], 1)
         self.assertTrue(result["source_metadata"]["enrichment_retry_after"])
+
+    def test_marketplace_401_403_errors_are_retryable_not_blocked(self):
+        product = {
+            "platform": "aliexpress",
+            "external_id": "1005012999805372",
+            "product_url": "https://www.aliexpress.com/item/1005012999805372.html",
+            "title": "Producto AliExpress 1005012999805372",
+            "source_metadata": {},
+        }
+        with (
+            patch.object(product_sources, "_official_product_data", side_effect=RuntimeError("AliExpress API 403 Forbidden")),
+            patch.object(product_sources, "_public_product_page", side_effect=RuntimeError("403 Client Error: Forbidden")),
+        ):
+            result = product_sources.enrich_product(product)
+        self.assertEqual(result["source_metadata"]["enrichment_status"], "retry")
+        self.assertEqual(result["source_metadata"]["enrichment_error"], "marketplace_access_error")
+        self.assertEqual(result["source_metadata"]["enrichment_attempts"], 1)
 
     def test_enrich_pending_persists_image_price_category_and_retry_metadata(self):
         connection = MagicMock()
@@ -466,7 +484,8 @@ class ProductSourcesTests(unittest.TestCase):
     def test_new_enrichment_version_retries_previously_blocked_products(self):
         future = (product_sources.datetime.now(product_sources.timezone.utc) + product_sources.timedelta(hours=24)).isoformat()
         self.assertTrue(product_sources._retry_due({"enrichment_version": 3, "enrichment_retry_after": future}))
-        self.assertFalse(product_sources._retry_due({"enrichment_version": 4, "enrichment_retry_after": future}))
+        self.assertTrue(product_sources._retry_due({"enrichment_version": 4, "enrichment_retry_after": future}))
+        self.assertFalse(product_sources._retry_due({"enrichment_version": 5, "enrichment_retry_after": future}))
 
 if __name__ == "__main__":
     unittest.main()

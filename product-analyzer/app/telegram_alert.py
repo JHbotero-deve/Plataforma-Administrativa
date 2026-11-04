@@ -477,14 +477,14 @@ def _model_active_products():
             active_total = int(counts["active_total"] or 0)
             cur.execute("""
                 SELECT
-                    COUNT(*) FILTER (WHERE source_metadata->>'enrichment_status' = 'blocked') AS blocked,
-                    COUNT(*) FILTER (WHERE source_metadata->>'enrichment_status' IN ('retry','partial')) AS retry
+                    COUNT(*) AS recovery,
+                    COUNT(*) FILTER (WHERE source_metadata->>'enrichment_status' IN ('retry','partial','blocked')) AS retry
                 FROM products
                 WHERE is_active = TRUE AND product_url IS NOT NULL
                   AND (current_price IS NULL OR image_url IS NULL OR title LIKE 'Producto %%' OR category_id IS NULL)
             """)
             enrichment_counts = cur.fetchone() or {}
-            blocked = int(enrichment_counts.get("blocked") or 0)
+            recovery = int(enrichment_counts.get("recovery") or 0)
             retry = int(enrichment_counts.get("retry") or 0)
         scored = 0
         errors = 0
@@ -497,7 +497,7 @@ def _model_active_products():
                 print(f"[telegram-bot] modelado fallido para producto {product['id']}: {type(exc).__name__}")
         missing_data = max(active_total - eligible_total, 0)
         remaining = max(eligible_total - len(products), 0)
-        return scored, missing_data, errors, remaining, enriched, blocked, retry
+        return scored, missing_data, errors, remaining, enriched, recovery, retry
     finally:
         conn.close()
 
@@ -604,13 +604,13 @@ def _handle(token, chat_id, text):
     if command == "/modelar":
         if not argument.strip():
             try:
-                scored, missing_price, errors, remaining, enriched, blocked, retry = _model_active_products()
+                scored, missing_price, errors, remaining, enriched, recovery, retry = _model_active_products()
                 return _send(
                     token, chat_id,
                     "<b>Modelado del catálogo</b>\n"
                     f"Productos puntuados: {scored}\n"
                     f"Sin datos suficientes: {missing_price}\n"
-                    f"Bloqueados por la tienda: {blocked}\n"
+                    f"Pendientes de recuperación: {recovery}\n"
                     f"Reintentos pendientes: {retry}\n"
                     f"Pendientes por límite de lote: {remaining}\n"
                     f"Datos recuperados desde URLs: {enriched}\n"

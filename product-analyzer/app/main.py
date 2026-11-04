@@ -46,7 +46,7 @@ def run_pipeline():
     conn = get_connection()
     try:
         print("[ingesta] se conservan las importaciones manuales y por CLI autorizado.")
-        enriched = enrich_pending_products(conn, limit=20)
+        enriched = enrich_pending_products(conn, limit=120, max_workers=4)
         print(f"[catalog] productos enriquecidos desde URLs públicas: {enriched}")
 
         averages = {}
@@ -99,13 +99,16 @@ def run_pipeline():
                     """, (product_id,))
                     product = cur.fetchone()
                 if product:
-                    send_telegram_alert({
-                        "title": product["title"],
-                        "price": product["current_price"],
-                        "url": build_url(product["title"], product["product_url"]),
-                        "score": round(score, 1),
-                        "platform": product["platform"],
-                    })
+                    try:
+                        send_telegram_alert({
+                            "title": product["title"],
+                            "price": product["current_price"],
+                            "url": build_url(product["title"], product["product_url"]),
+                            "score": round(score, 1),
+                            "platform": product["platform"],
+                        })
+                    except Exception as exc:
+                        print(f"[notifications] no se pudo enviar la alerta; el análisis continúa: {type(exc).__name__}")
     finally:
         conn.close()
 
@@ -121,20 +124,35 @@ def run_pipeline():
     print("== Ciclo completo ==")
 
 
+def _run_pipeline_safely():
+    try:
+        run_pipeline()
+    except Exception as exc:
+        print(f"[worker] ciclo fallido; el servicio permanece activo: {type(exc).__name__}: {str(exc)[:180]}")
+
+
 def run_worker():
     print("Esperando a que la base de datos esté lista...")
-    time.sleep(5)
-    init_database()
-    seeded = seed_catalog()
-    print(
-        f"== Catálogo inicial: Amazon {seeded['amazon']} | "
-        f"AliExpress por URL {seeded['aliexpress']} | Propios {seeded['personal']} =="
-    )
-    run_pipeline()
-    schedule.every(2).hours.do(run_pipeline)
+    while True:
+        try:
+            init_database()
+            break
+        except Exception as exc:
+            print(f"[worker] base de datos no disponible; nuevo intento en 30 s: {type(exc).__name__}")
+            time.sleep(30)
+    try:
+        seeded = seed_catalog()
+        print(
+            f"== Catálogo inicial: Amazon {seeded['amazon']} | "
+            f"AliExpress por URL {seeded['aliexpress']} | Propios {seeded['personal']} =="
+        )
+    except Exception as exc:
+        print(f"[worker] no se pudo precargar el catálogo; continúa el procesamiento: {type(exc).__name__}")
+    _run_pipeline_safely()
+    schedule.every(15).minutes.do(_run_pipeline_safely)
     while True:
         schedule.run_pending()
-        time.sleep(30)
+        time.sleep(10)
 
 
 if __name__ == "__main__":
