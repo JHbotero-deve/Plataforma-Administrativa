@@ -29,10 +29,6 @@ class WorkerPipelineTests(unittest.TestCase):
             patch.object(main, "score_product", return_value=80) as score,
             patch.object(main, "send_telegram_alert") as alert,
             patch.object(main, "creator_configured", return_value=False),
-            patch.object(main, "PROMOTION_API_ENABLED", False),
-            patch.object(main, "STOREFRONT_AUTO_REFILL_ENABLED", True),
-            patch.object(main, "run_amazon_storefront_refill", return_value={"published": 0}),
-            patch.object(main, "run_storefront_refill", return_value={"published": 0}),
         ):
             main.run_pipeline()
 

@@ -245,6 +245,58 @@ def normalize_item(item, category, marketplace="www.amazon.com"):
     }
 
 
+
+def get_item_by_asin(asin, category=None, marketplace=None):
+    """Obtiene los datos de un ASIN mediante Amazon Creators API GetItems."""
+    asin = str(asin or "").strip().upper()
+    if not re.fullmatch(r"[A-Z0-9]{10}", asin):
+        return None
+    config = _configuration()
+    if marketplace:
+        marketplace = str(marketplace).strip().lower()
+        if not marketplace.startswith("www."):
+            marketplace = f"www.{marketplace}"
+        config = (*config[:5], marketplace)
+    _, _, _, _, partner_tag, marketplace = config
+    payload = {
+        "itemIds": [asin],
+        "itemIdType": "ASIN",
+        "partnerTag": partner_tag,
+        "marketplace": marketplace,
+        "resources": RESOURCES,
+    }
+
+    def request():
+        return requests.post(
+            f"{API_URL}/catalog/v1/getItems",
+            headers={
+                "Authorization": f"Bearer {_access_token(config)}",
+                "Content-Type": "application/json",
+                "x-marketplace": marketplace,
+            },
+            json=payload,
+            timeout=30,
+        )
+
+    response = request()
+    if response.status_code == 401:
+        TOKEN_CACHE.update({"value": None, "expires_at": 0, "version": None})
+        response = request()
+    if not response.ok:
+        raise RuntimeError(f"Amazon Creators API GetItems respondió HTTP {response.status_code}.")
+    data = response.json()
+    if not isinstance(data, dict):
+        raise RuntimeError("Amazon Creators API GetItems devolvió una respuesta inválida.")
+    result = data.get("itemResults") or data.get("itemsResult") or {}
+    items = result.get("items") or [] if isinstance(result, dict) else []
+    item = next((value for value in items if str(value.get("asin") or "").upper() == asin), None)
+    if not item:
+        errors = data.get("errors") or []
+        code = errors[0].get("code") if errors and isinstance(errors[0], dict) else "ItemNotAccessible"
+        raise RuntimeError(f"Amazon Creators API no devolvió el ASIN solicitado ({code}).")
+    return normalize_item(item, category, marketplace)
+
+
 def search_products(keywords, category, limit=10, page=1):
     config = _configuration()
     return [

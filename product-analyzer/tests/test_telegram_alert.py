@@ -42,33 +42,21 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertIn("/agregar URL", send.call_args.args[2])
 
-    def test_search_command_queues_live_amazon_and_aliexpress_search(self):
+    def test_search_command_uses_only_the_local_catalog(self):
         send = MagicMock(return_value=True)
+        products = [{"title": "Auriculares", "current_price": 25, "currency": "USD"}]
 
         with (
-            patch.object(telegram_alert, "_enqueue_marketplace_search", return_value=17) as enqueue,
+            patch.object(telegram_alert, "_search_products", return_value=products) as search,
             patch.object(telegram_alert, "_send", send),
+            patch.object(telegram_alert, "_send_product", return_value=True) as send_product,
         ):
             result = telegram_alert._handle("token", "chat", "/buscar auriculares")
 
         self.assertTrue(result)
-        enqueue.assert_called_once_with("auriculares")
-        self.assertIn("Amazon y AliExpress", send.call_args.args[2])
-        self.assertIn("directamente en la tienda", send.call_args.args[2])
-
-    def test_enqueue_marketplace_search_creates_queue_and_returns_id(self):
-        connection = MagicMock()
-        cursor = connection.cursor.return_value.__enter__.return_value
-        cursor.fetchone.return_value = {"id": 23}
-
-        with patch.object(telegram_alert, "get_connection", return_value=connection):
-            request_id = telegram_alert._enqueue_marketplace_search("celulares")
-
-        self.assertEqual(request_id, 23)
-        self.assertIn("CREATE TABLE IF NOT EXISTS marketplace_search_requests", cursor.execute.call_args_list[0].args[0])
-        self.assertEqual(cursor.execute.call_args_list[2].args[1], ("celulares",))
-        connection.commit.assert_called_once()
-        connection.close.assert_called_once()
+        search.assert_called_once_with("auriculares", limit=8)
+        send_product.assert_called_once()
+        self.assertIn("Resultados del catálogo", send.call_args.args[2])
 
     def test_search_matches_category_as_well_as_title(self):
         connection = MagicMock()
@@ -204,6 +192,8 @@ class TelegramApiResponseTests(unittest.TestCase):
 
 class SupportedMarketplaceTests(unittest.TestCase):
     def test_amazon_and_aliexpress_urls_are_supported(self):
+        self.assertEqual(url_import.detect_platform("https://link.amazon/B06t7Yht8"), "amazon")
+        self.assertEqual(url_import._external_id("https://www.amazon.com/gp/aw/d/B000000002", "amazon"), "B000000002")
         self.assertEqual(
             url_import.detect_platform("https://www.amazon.com/dp/B000000001"),
             "amazon",

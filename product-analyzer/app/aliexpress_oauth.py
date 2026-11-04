@@ -6,6 +6,7 @@ import os
 import secrets
 import time
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from urllib.parse import urlencode, urlsplit
 
 import requests
@@ -13,7 +14,7 @@ from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from admin_auth import require_admin
+from admin_auth import verify_session_token, ADMIN_COOKIE_NAME
 from db import get_connection
 
 
@@ -299,13 +300,31 @@ def _save_tokens(data):
 
 
 @router.get("/start", include_in_schema=False)
-def start_oauth(_admin=Depends(require_admin)):
+def start_oauth(request: Request, token: Optional[str] = Query(default=None)):
+    is_admin = False
+    try:
+        cookie_token = request.cookies.get(ADMIN_COOKIE_NAME, "")
+        if cookie_token and verify_session_token(cookie_token):
+            is_admin = True
+    except Exception:
+        pass
+
+    if not is_admin and token:
+        if verify_session_token(token) or hmac.compare_digest(token, os.getenv("CENTRAL_ADMIN_PASSWORD", "")):
+            is_admin = True
+
+    if not is_admin:
+        raise HTTPException(
+            status_code=401,
+            detail="Se requiere autenticación de administrador. Inicia sesión en /admin o añade ?token=tu_password",
+        )
+
     app_key = _environment("ALIEXPRESS_APP_KEY")
     if not app_key:
         raise HTTPException(status_code=503, detail="Configura ALIEXPRESS_APP_KEY.")
     callback_url = _configured_callback_url()
     state = _create_oauth_state()
-    authorization_url = "https://oauth.aliexpress.com/authorize?" + urlencode(
+    authorization_url = "https://api-sg.aliexpress.com/oauth/authorize?" + urlencode(
         {
             "response_type": "code",
             "force_auth": "true",
@@ -326,9 +345,9 @@ def start_oauth(_admin=Depends(require_admin)):
 @router.get("/callback", include_in_schema=False)
 def oauth_callback(
     request: Request,
-    code: str | None = Query(default=None, max_length=512),
-    state: str | None = Query(default=None, max_length=256),
-    error: str | None = Query(default=None, max_length=100),
+    code: Optional[str] = Query(default=None, max_length=512),
+    state: Optional[str] = Query(default=None, max_length=256),
+    error: Optional[str] = Query(default=None, max_length=100),
 ):
     request.scope["query_string"] = b""
     headers = {

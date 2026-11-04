@@ -232,31 +232,31 @@ def _normalize_product(raw, category):
 def _promotion_score(discount, volume, quality, commission):
     discount_score = min(100, discount * 2)
     volume_score = min(100, volume / 5)
-    commission_score = min(100, commission * 10)
+    commission_score = min(100, commission * 15)
     return round(
-        discount_score * 0.4
-        + quality * 0.3
-        + volume_score * 0.2
-        + commission_score * 0.1,
+        discount_score * 0.45
+        + commission_score * 0.35
+        + quality * 0.1
+        + volume_score * 0.1,
         2,
     )
 
 
 def _review_product(product):
-    minimum_discount = _number(_env("PROMOTION_MIN_DISCOUNT") or 30)
-    minimum_volume = _number(_env("PROMOTION_MIN_30D_VOLUME") or 100)
-    minimum_quality = _number(
-        _env("PROMOTION_MIN_EVALUATION")
-        or _env("PROMOTION_MIN_EVALUATE_RATE")
-        or 90
-    )
-    minimum_commission = _number(_env("PROMOTION_MIN_COMMISSION") or 0)
-    minimum_score = _number(_env("PROMOTION_MIN_SCORE") or 55)
+    minimum_discount = 40.0  # REQUISITO OBLIGATORIO: Mínimo 40% de descuento en TODOS los productos
+    minimum_volume = _number(_env("PROMOTION_MIN_30D_VOLUME") or 30)
+    minimum_quality = _number(_env("PROMOTION_MIN_EVALUATION") or 80)
+    minimum_commission = _number(_env("PROMOTION_MIN_COMMISSION") or 3.0) # Buenas ganancias / comisión
+    minimum_score = _number(_env("PROMOTION_MIN_SCORE") or 60)
+    original_price = _number(product.get("original_price"))
+    sale_price = _number(product.get("price"))
     return (
-        product["discount"] >= minimum_discount
+        original_price is not None
+        and sale_price is not None
+        and original_price > sale_price
+        and product["discount"] >= minimum_discount
         and product["sales_estimate"] >= minimum_volume
         and product["quality"] >= minimum_quality
-        and product["commission_rate"] > 0
         and product["commission_rate"] >= minimum_commission
         and product["promotion_score"] >= minimum_score
     )
@@ -333,7 +333,7 @@ def _search_bucket(category, keyword, page_no=1, review=True):
     products = []
     for raw in _product_results(payload):
         normalized = _normalize_product(raw, category)
-        if normalized and (not review or _review_product(normalized)):
+        if normalized and normalized.get("discount", 0) >= 40.0 and (not review or _review_product(normalized)):
             products.append(normalized)
     return products
 
