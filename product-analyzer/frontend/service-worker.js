@@ -1,9 +1,10 @@
 "use strict";
 
-const CACHE_NAME = "central-admin-shell-v2";
+const CACHE_NAME = "central-admin-shell-v3";
 const APP_SHELL = [
   "/",
   "/index.html",
+  "/admin",
   "/central.css",
   "/admin-login.html",
   "/manifest.webmanifest",
@@ -38,11 +39,9 @@ self.addEventListener("fetch", event => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).then(response => {
+      fetch(request).then(async response => {
         if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-          return response;
+          await caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone())).catch(() => {});
         }
         return response;
       }).catch(async () =>
@@ -56,10 +55,9 @@ self.addEventListener("fetch", event => {
 
   // Network-first strategy for static assets to ensure code updates reflect immediately
   event.respondWith(
-    fetch(request).then(response => {
+    fetch(request).then(async response => {
       if (response.ok) {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
+        await caches.open(CACHE_NAME).then(cache => cache.put(request, response.clone())).catch(() => {});
       }
       return response;
     }).catch(() => caches.match(request))

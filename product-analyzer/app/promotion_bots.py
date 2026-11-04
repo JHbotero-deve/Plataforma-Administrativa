@@ -314,7 +314,7 @@ def _category_average(conn, category, currency, price):
     return float((row or {}).get("average") or price)
 
 
-def _search_bucket(category, keyword, page_no=1, review=True):
+def _search_bucket(category, keyword, page_no=1, review=True, minimum_discount=40):
     payload = aliexpress_api_request(
         "aliexpress.affiliate.product.query",
         {
@@ -333,7 +333,7 @@ def _search_bucket(category, keyword, page_no=1, review=True):
     products = []
     for raw in _product_results(payload):
         normalized = _normalize_product(raw, category)
-        if normalized and normalized.get("discount", 0) >= 40.0 and (not review or _review_product(normalized)):
+        if normalized and normalized.get("discount", 0) >= float(minimum_discount) and (not review or _review_product(normalized)):
             products.append(normalized)
     return products
 
