@@ -164,7 +164,7 @@ jobs:
       - name: Test product discovery and enrichment
         shell: bash
         run: |
-          python -m pip install requests psycopg2-binary schedule fastapi cryptography
+          python -m pip install requests psycopg2-binary schedule fastapi==0.115.0 cryptography==46.0.3 httpx
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_product_sources.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_aliexpress_oauth.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_pricing.py'
