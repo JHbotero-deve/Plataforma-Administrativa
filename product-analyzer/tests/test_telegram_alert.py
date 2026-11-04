@@ -33,6 +33,25 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertEqual(result, (1, 9, 0, 500, 0, 0, 0))
         connection.close.assert_called_once()
 
+    def test_plain_aliexpress_message_preserves_the_title_before_short_url(self):
+        message = (
+            "He encontrado esto en AliExpress: DAREVIE Maillot de Ciclismo "
+            "de manga larga para hombre y mujer, Jersey transpirable de talla pequeña "
+            "con FPS 50 +, nivel de entrenamiento\\n"
+            "https://s.click.aliexpress.com/e/_mLyQD6R"
+        )
+        with (
+            patch.object(telegram_alert, "_add_url", return_value=(7, {"title": "DAREVIE"}, 75)) as add,
+            patch.object(telegram_alert, "_send_imported", return_value=True) as send_imported,
+        ):
+            result = telegram_alert._handle("token", "chat", message)
+        self.assertTrue(result)
+        add.assert_called_once_with(
+            "https://s.click.aliexpress.com/e/_mLyQD6R",
+            title="DAREVIE Maillot de Ciclismo de manga larga para hombre y mujer, Jersey transpirable de talla pequeña con FPS 50 +, nivel de entrenamiento",
+        )
+        send_imported.assert_called_once()
+
     def test_add_without_arguments_returns_usage_instead_of_import_error(self):
         send = MagicMock(return_value=True)
 
