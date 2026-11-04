@@ -6,6 +6,7 @@ import schedule
 from analysis import score_product
 from db import get_connection
 from init_db import init_database
+from marketplace_ingestion import run_marketplace_ingestion
 from notifications import send_telegram_alert
 from product_sources import enrich_pending_products
 from seed_catalog import seed_catalog
@@ -39,14 +40,16 @@ def expire_catalog():
 
 
 def run_pipeline():
-    print("== Iniciando ciclo de análisis de catálogo por URL ==")
+    print("== Iniciando ciclo autónomo de búsqueda y análisis ==")
     expire_catalog()
-    print("[marketplaces] modo URL: no se ejecutan búsquedas ni reposiciones por API.")
+    try:
+        run_marketplace_ingestion(target_per_platform=100)
+    except Exception as exc:
+        print(f"[marketplaces] error de ingesta: {type(exc).__name__}: {str(exc)[:240]}")
 
     conn = get_connection()
     try:
-        print("[ingesta] se conservan las importaciones manuales y por CLI autorizado.")
-        enriched = enrich_pending_products(conn, limit=20)
+        enriched = enrich_pending_products(conn, limit=100)
         print(f"[catalog] productos enriquecidos desde URLs públicas: {enriched}")
 
         averages = {}
