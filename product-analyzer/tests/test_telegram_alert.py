@@ -37,7 +37,7 @@ class TelegramCommandTests(unittest.TestCase):
         message = (
             "He encontrado esto en AliExpress: DAREVIE Maillot de Ciclismo "
             "de manga larga para hombre y mujer, Jersey transpirable de talla pequeña "
-            "con FPS 50 +, nivel de entrenamiento\\n"
+            "con FPS 50 +, nivel de entrenamiento\n"
             "https://s.click.aliexpress.com/e/_mLyQD6R"
         )
         with (
