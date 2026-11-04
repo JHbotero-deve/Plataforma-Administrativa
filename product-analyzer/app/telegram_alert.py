@@ -512,16 +512,16 @@ def _handle(token, chat_id, text):
         command = command.lower().strip()
 
     if not command.startswith("/"):
-        url_match = re.search(r"https?://[^\\s<>]+", text or "", re.I)
+        url_match = re.search(r"https?://[^\s<>]+", text or "", re.I)
         if url_match:
             candidate = url_match.group(0).rstrip(".,;)")
             title = (text[:url_match.start()] + " " + text[url_match.end():]).strip()
             title = re.sub(
-                r"(?i)^.*?(?:he encontrado esto en|encontr[eé] esto en)\\s+(?:aliexpress|amazon)\\s*:\\s*",
+                r"(?i)^.*?(?:he encontrado esto en|encontr[eé] esto en)\s+(?:aliexpress|amazon)\s*:\s*",
                 "",
                 title,
             )
-            title = re.sub(r"^[\\s:–—-]+|[\\s:–—-]+$", "", title)
+            title = re.sub(r"^[\s:–—-]+|[\s:–—-]+$", "", title)
             title = title[:500] if title and not _is_http_url(title) else None
             try:
                 detect_platform(candidate)
@@ -529,7 +529,7 @@ def _handle(token, chat_id, text):
                 return _send(token, chat_id, "Envía una URL válida de Amazon o AliExpress, o usa /help.")
             result, payload, score = _add_url(candidate, title=title)
             if result is None:
-                return _send(token, chat_id, "<b>No pude importar el enlace</b>\\n" + html.escape(str(payload)))
+                return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
             return _send_imported(token, chat_id, result, payload, score, "<b>URL recibida e importada</b>")
         return _send(token, chat_id, "Envía una URL válida de Amazon o AliExpress, o usa /help.")
 
