@@ -51,7 +51,6 @@ def run_pipeline():
     try:
         print("[ingesta] se conservan las importaciones manuales y por CLI autorizado.")
         enriched = enrich_pending_products(conn, limit=120, max_workers=4)
-        enriched = enrich_pending_products(conn, limit=100)
         print(f"[catalog] productos enriquecidos desde URLs públicas: {enriched}")
 
         averages = {}
