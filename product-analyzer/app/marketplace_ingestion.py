@@ -172,7 +172,8 @@ def run_marketplace_ingestion(target_per_platform=DEFAULT_TARGET):
         + " | ".join(
             f"{platform}: solicitados={data['requested']} recibidos={data['received']} "
             f"guardados={data['saved']} publicados={data['published']} "
-            f"telegram={data['telegram_sent']} estado={data['status']}"
+            f"telegram={data['telegram_sent']} estado={data['status']} "
+            f"error={(data.get('error') or next(iter(data.get('errors') or []), 'ninguno'))[:240]}"
             for platform, data in results.items()
         )
     )
