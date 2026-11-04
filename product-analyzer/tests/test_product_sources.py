@@ -377,13 +377,17 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(result["source_metadata"]["metadata_source"], "aliexpress_affiliate_api")
 
     def test_short_aliexpress_link_resolves_even_when_product_page_is_blocked(self):
-        redirect = MagicMock(status_code=302, headers={"Location": "https://www.aliexpress.com/item/1005001234567890.html"})
-        blocked = MagicMock(status_code=403, headers={})
-        with patch.object(product_sources.requests, "get", side_effect=[redirect, blocked]) as request:
+        blocked = MagicMock(
+            status_code=403,
+            url="https://www.aliexpress.com/item/1005001234567890.html",
+            headers={},
+            text="",
+        )
+        with patch.object(product_sources.requests, "get", return_value=blocked) as request:
             resolved = product_sources._resolve_product_url("https://s.click.aliexpress.com/e/_mqUkrBZ", "aliexpress")
         self.assertEqual(resolved, "https://www.aliexpress.com/item/1005001234567890.html")
-        self.assertEqual(request.call_count, 2)
-        redirect.close.assert_called_once()
+        request.assert_called_once()
+        self.assertTrue(request.call_args.kwargs["allow_redirects"])
         blocked.close.assert_called_once()
 
     def test_new_enrichment_version_retries_previously_blocked_products(self):
