@@ -390,6 +390,51 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertTrue(request.call_args.kwargs["allow_redirects"])
         blocked.close.assert_called_once()
 
+    def test_aliexpress_short_link_uses_affiliate_title_search_before_redirect(self):
+        raw = {"product_title": "DAREVIE Cycling Jersey Long Sleeve", "product_id": "1005001234567890"}
+        payload = {
+            "aliexpress_affiliate_product_query_response": {
+                "resp_result": {"resp_code": 200, "result": {"products": {"product": [raw]}}}
+            }
+        }
+        normalized = {
+            "external_id": "1005001234567890",
+            "title": "DAREVIE Cycling Jersey Long Sleeve",
+            "product_url": "https://www.aliexpress.com/item/1005001234567890.html",
+            "affiliate_url": "https://s.click.aliexpress.com/e/example",
+            "price": 35.0,
+            "previous_price": 50.0,
+            "currency": "USD",
+            "image_url": "https://ae01.alicdn.com/product.jpg",
+            "gallery_urls": ["https://ae01.alicdn.com/product.jpg"],
+            "category": "ropa",
+            "seller": {"external_id": "shop-1", "name": "DAREVIE Store"},
+            "source_metadata": {},
+        }
+        product = {
+            "platform": "aliexpress",
+            "external_id": "URL-SHORT-LINK",
+            "product_url": "https://s.click.aliexpress.com/e/_mLyQD6R",
+            "title": "DAREVIE Maillot de Ciclismo Jersey transpirable",
+            "source_metadata": {},
+        }
+        with (
+            patch.dict("os.environ", {"ALIEXPRESS_APP_KEY": "key", "ALIEXPRESS_APP_SECRET": "secret", "ALIEXPRESS_TRACKING_ID": "central"}),
+            patch("affiliate_links.aliexpress_api_request", return_value=payload) as api,
+            patch("promotion_bots._normalize_product", return_value=normalized),
+            patch.object(product_sources, "_resolve_product_url") as resolve,
+            patch.object(product_sources, "_public_product_page") as public_page,
+        ):
+            result = product_sources.enrich_product(product)
+        api.assert_called_once()
+        self.assertEqual(api.call_args.args[0], "aliexpress.affiliate.product.query")
+        resolve.assert_not_called()
+        public_page.assert_not_called()
+        self.assertEqual(result["external_id"], "1005001234567890")
+        self.assertEqual(result["price"], 35.0)
+        self.assertEqual(result["image_url"], "https://ae01.alicdn.com/product.jpg")
+        self.assertEqual(result["source_metadata"]["metadata_source"], "aliexpress_affiliate_api_search")
+
     def test_new_enrichment_version_retries_previously_blocked_products(self):
         future = (product_sources.datetime.now(product_sources.timezone.utc) + product_sources.timedelta(hours=24)).isoformat()
         self.assertTrue(product_sources._retry_due({"enrichment_version": 3, "enrichment_retry_after": future}))

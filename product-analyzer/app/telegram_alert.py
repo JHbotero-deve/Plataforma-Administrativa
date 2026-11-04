@@ -312,7 +312,7 @@ def _products_by_ids(product_ids, limit=8):
         conn.close()
 
 
-def _add_url(argument):
+def _add_url(argument, title=None):
     parts = [part.strip() for part in (argument or "").split("|")]
     if not parts or not parts[0]:
         return None, (
@@ -339,7 +339,7 @@ def _add_url(argument):
         product = import_url(
             url,
             category,
-            title=details[1] if len(details) > 1 and details[1] else None,
+            title=title or (details[1] if len(details) > 1 and details[1] else None),
             price=price,
             image_url=details[2] if len(details) > 2 and details[2] else None,
             currency=details[3] if len(details) > 3 and details[3] else "USD",
@@ -512,13 +512,22 @@ def _handle(token, chat_id, text):
         command = command.lower().strip()
 
     if not command.startswith("/"):
-        for candidate in text.split():
-            candidate = candidate.strip().rstrip(".,;)")
+        url_match = re.search(r"https?://[^\s<>]+", text or "", re.I)
+        if url_match:
+            candidate = url_match.group(0).rstrip(".,;)")
+            title = (text[:url_match.start()] + " " + text[url_match.end():]).strip()
+            title = re.sub(
+                r"(?i)^.*?(?:he encontrado esto en|encontr[eé] esto en)\s+(?:aliexpress|amazon)\s*:\s*",
+                "",
+                title,
+            )
+            title = re.sub(r"^[\s:–—-]+|[\s:–—-]+$", "", title)
+            title = title[:500] if title and not _is_http_url(title) else None
             try:
                 detect_platform(candidate)
             except ValueError:
-                continue
-            result, payload, score = _add_url(candidate)
+                return _send(token, chat_id, "Envía una URL válida de Amazon o AliExpress, o usa /help.")
+            result, payload, score = _add_url(candidate, title=title)
             if result is None:
                 return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
             return _send_imported(token, chat_id, result, payload, score, "<b>URL recibida e importada</b>")
