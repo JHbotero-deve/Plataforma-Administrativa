@@ -291,7 +291,7 @@ def _resolve_product_url(url, platform):
 
 def _aliexpress_product_data(product_id, category=None):
     from affiliate_links import aliexpress_api_request
-    from promotion_bots import PRODUCT_FIELDS, _normalize_product
+    from promotion_bots import PRODUCT_FIELDS, _official_url
 
     tracking_id = os.getenv("ALIEXPRESS_TRACKING_ID", "").strip() or os.getenv("ALIEXPRESS_AFFILIATE_TRACKING_ID", "").strip()
     payload = aliexpress_api_request(
@@ -315,25 +315,73 @@ def _aliexpress_product_data(product_id, category=None):
     result = response.get("result") or {}
     products = result.get("products") or []
     if isinstance(products, dict):
-        products = products.get("product") or products.get("products") or []
+        products = products.get("product") or products.get("products") or products.get("product_detail") or []
     if isinstance(products, dict):
         products = [products]
     for raw in products if isinstance(products, list) else []:
-        if str(raw.get("product_id") or "") != str(product_id):
+        if not isinstance(raw, dict) or str(raw.get("product_id") or "") != str(product_id):
             continue
+        title = str(raw.get("product_title") or "").strip()[:500] or None
+        product_url = _official_url(raw.get("product_detail_url")) or f"https://www.aliexpress.com/item/{product_id}.html"
+        image = _official_url(raw.get("product_main_image_url"), image=True)
+        gallery = raw.get("product_small_image_urls") or []
+        if isinstance(gallery, dict):
+            gallery = gallery.get("string") or gallery.get("url") or []
+        if isinstance(gallery, str):
+            gallery = [gallery]
+        if not isinstance(gallery, list):
+            gallery = []
+        gallery = list(dict.fromkeys(
+            value for item in gallery
+            if (value := _official_url(item, image=True))
+        ))
+        if image and image not in gallery:
+            gallery.insert(0, image)
+        sale_price = _number(raw.get("target_sale_price") or raw.get("sale_price"))
+        original_price = _number(raw.get("target_original_price") or raw.get("original_price"))
         inferred = category or _category(
             raw.get("first_level_category_name") or raw.get("second_level_category_name"),
-            raw.get("product_title"),
+            title,
         )
-        product = _normalize_product(raw, inferred)
-        if product:
-            product["source_metadata"]["metadata_source"] = "aliexpress_affiliate_api"
-            product["resolved_url"] = product.get("product_url")
-            return product
+        shop_id = str(raw.get("shop_id") or "").strip()
+        shop_url = _official_url(raw.get("shop_url"))
+        seller_name = str(raw.get("shop_name") or raw.get("seller_name") or "").strip()
+        if not seller_name and shop_id:
+            seller_name = f"Tienda AliExpress #{shop_id}"
+        seller = {"external_id": shop_id or seller_name, "name": seller_name} if seller_name else None
+        promotion_link = _official_url(raw.get("promotion_link"))
+        if not title and sale_price is None and not image:
+            continue
+        return {
+            "external_id": str(product_id),
+            "title": title,
+            "product_url": product_url,
+            "resolved_url": product_url,
+            "affiliate_url": promotion_link,
+            "price": sale_price,
+            "previous_price": original_price,
+            "currency": str(raw.get("target_sale_price_currency") or raw.get("sale_price_currency") or "USD").upper()[:10],
+            "image_url": image or (gallery[0] if gallery else None),
+            "gallery_urls": gallery[:10],
+            "description": str(raw.get("product_description") or "").strip()[:5000] or None,
+            "rating": None,
+            "reviews_count": 0,
+            "sales_estimate": int(_number(raw.get("lastest_volume")) or 0),
+            "category": inferred,
+            "seller": seller,
+            "seller_url": shop_url,
+            "source_metadata": {
+                "metadata_source": "aliexpress_affiliate_api",
+                "import_method": "official_aliexpress_affiliate_productdetail_api",
+                "seller_name": seller_name or None,
+                "seller_id": shop_id or None,
+                "seller_url": shop_url,
+                "lastest_volume": int(_number(raw.get("lastest_volume")) or 0),
+            },
+        }
     errors = payload.get("error_response") if isinstance(payload, dict) else None
     code = errors.get("code") if isinstance(errors, dict) else "ProductNotAccessible"
     raise RuntimeError(f"AliExpress no devolvió datos utilizables para el producto ({code}).")
-
 
 def _aliexpress_product_by_title(title, category=None):
     """Busca un enlace corto por su título en la API oficial de afiliados, sin abrir la página."""
