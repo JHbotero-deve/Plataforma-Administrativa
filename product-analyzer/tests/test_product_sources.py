@@ -17,6 +17,45 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(result["image_url"], "https://images.example/tenis.jpg")
         response.close.assert_called_once()
 
+    def test_aliexpress_product_detail_accepts_core_fields_without_promotion_link_or_discount(self):
+        payload = {
+            "aliexpress_affiliate_productdetail_get_response": {
+                "resp_result": {
+                    "resp_code": 200,
+                    "result": {
+                        "products": {
+                            "product": [{
+                                "product_id": "1005012999805372",
+                                "product_title": "Miniexcavadora de 2.5 toneladas",
+                                "product_detail_url": "https://www.aliexpress.com/item/1005012999805372.html",
+                                "product_main_image_url": "https://ae01.alicdn.com/kf/excavator.jpg",
+                                "product_small_image_urls": {"string": ["https://ae01.alicdn.com/kf/excavator.jpg"]},
+                                "target_sale_price": "1299.00",
+                                "target_sale_price_currency": "USD",
+                                "target_original_price": "1599.00",
+                                "shop_id": "shop-123",
+                                "shop_url": "https://www.aliexpress.com/store/123",
+                                "lastest_volume": "18"
+                            }]
+                        }
+                    }
+                }
+            }
+        }
+        with patch.dict("os.environ", {"ALIEXPRESS_APP_KEY": "key", "ALIEXPRESS_APP_SECRET": "secret", "ALIEXPRESS_TRACKING_ID": "central"}):
+            with patch("affiliate_links.aliexpress_api_request", return_value=payload) as api:
+                product = product_sources._aliexpress_product_data("1005012999805372")
+        api.assert_called_once()
+        self.assertEqual(api.call_args.args[0], "aliexpress.affiliate.productdetail.get")
+        self.assertEqual(api.call_args.args[1]["country"], "CO")
+        self.assertEqual(product["title"], "Miniexcavadora de 2.5 toneladas")
+        self.assertEqual(product["price"], 1299.0)
+        self.assertEqual(product["previous_price"], 1599.0)
+        self.assertEqual(product["image_url"], "https://ae01.alicdn.com/kf/excavator.jpg")
+        self.assertEqual(product["sales_estimate"], 18)
+        self.assertEqual(product["seller"]["name"], "Tienda AliExpress #shop-123")
+        self.assertEqual(product["source_metadata"]["metadata_source"], "aliexpress_affiliate_api")
+
     def test_aliexpress_public_jsonld_extracts_product_metadata(self):
         response = MagicMock()
         response.status_code = 200
@@ -343,6 +382,9 @@ class ProductSourcesTests(unittest.TestCase):
             "product_id": "1005001234567890",
             "product_title": "Smartphone Android",
             "first_level_category_name": "Electronics",
+            "product_main_image_url": "https://ae01.alicdn.com/product.jpg",
+            "target_sale_price": "29.90",
+            "target_sale_price_currency": "USD",
         }
         payload = {
             "aliexpress_affiliate_productdetail_get_response": {
@@ -352,28 +394,14 @@ class ProductSourcesTests(unittest.TestCase):
                 }
             }
         }
-        normalized = {
-            "external_id": "1005001234567890",
-            "title": "Smartphone Android",
-            "product_url": "https://www.aliexpress.com/item/1005001234567890.html",
-            "affiliate_url": "https://s.click.aliexpress.com/e/example",
-            "price": 29.9,
-            "currency": "USD",
-            "image_url": "https://ae01.alicdn.com/product.jpg",
-            "gallery_urls": ["https://ae01.alicdn.com/product.jpg"],
-            "category": "tecnologia",
-            "seller": None,
-            "source_metadata": {},
-        }
-        with (
-            patch("affiliate_links.aliexpress_api_request", return_value=payload) as api,
-            patch("promotion_bots._normalize_product", return_value=normalized) as normalize,
-        ):
+        with patch("affiliate_links.aliexpress_api_request", return_value=payload) as api:
             result = product_sources._aliexpress_product_data("1005001234567890")
         api.assert_called_once()
         self.assertEqual(api.call_args.args[0], "aliexpress.affiliate.productdetail.get")
         self.assertEqual(api.call_args.args[1]["country"], "CO")
-        normalize.assert_called_once_with(raw, "tecnologia")
+        self.assertEqual(result["title"], "Smartphone Android")
+        self.assertEqual(result["price"], 29.9)
+        self.assertEqual(result["category"], "tecnologia")
         self.assertEqual(result["source_metadata"]["metadata_source"], "aliexpress_affiliate_api")
 
     def test_short_aliexpress_link_resolves_even_when_product_page_is_blocked(self):
