@@ -13,7 +13,7 @@ import requests
 from db import _affiliate_url
 from url_import import ASIN_RE
 
-ENRICHMENT_VERSION = 4
+ENRICHMENT_VERSION = 5
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 MAX_REDIRECTS = 12
@@ -532,26 +532,36 @@ def enrich_product(product):
             product["gallery_urls"] = list(dict.fromkeys((product.get("gallery_urls") or []) + fresh["gallery_urls"]))[:10]
         metadata.update(fresh.get("source_metadata") or {})
         source = metadata.get("metadata_source") or "public_product_page"
+        complete = bool(product.get("title") and product.get("price") and product.get("image_url") and product.get("category"))
+        attempted_at = datetime.now(timezone.utc)
         metadata.update({
             "metadata_source": source,
             "resolved_url": resolved_url or url,
-            "enrichment_status": "complete" if product.get("title") and product.get("price") and product.get("image_url") and product.get("category") else "partial",
+            "enrichment_status": "complete" if complete else "partial",
             "enrichment_version": ENRICHMENT_VERSION,
-            "enrichment_attempted_at": datetime.now(timezone.utc).isoformat(),
-            "enrichment_retry_after": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
+            "enrichment_attempted_at": attempted_at.isoformat(),
+            "enrichment_retry_after": (attempted_at + (timedelta(hours=24) if complete else timedelta(minutes=30))).isoformat(),
+            "enrichment_attempts": 0 if complete else int(metadata.get("enrichment_attempts") or 0),
         })
         if api_error:
             metadata["marketplace_api_error"] = api_error
+        else:
+            metadata.pop("marketplace_api_error", None)
         metadata.pop("enrichment_error", None)
     except Exception as exc:
         message = str(exc)
         login_loop = "ciclo de redirección" in message.lower() or "límite de" in message.lower() or "iniciar sesión" in message.lower() or "login" in message.lower()
+        access_error = bool(re.search(r"\b(?:401|403)\b", message))
+        attempts = int(metadata.get("enrichment_attempts") or 0) + 1
+        retry_minutes = min(5 * (2 ** min(attempts - 1, 6)), 360)
+        attempted_at = datetime.now(timezone.utc)
         metadata.update({
-            "enrichment_status": "blocked" if login_loop or "403" in message or "401" in message else "retry",
-            "enrichment_error": ("login_or_redirect_required" if login_loop else type(exc).__name__)[:80],
+            "enrichment_status": "retry",
+            "enrichment_error": ("marketplace_access_error" if access_error else "login_or_redirect_required" if login_loop else type(exc).__name__)[:80],
+            "enrichment_attempts": attempts,
             "enrichment_version": ENRICHMENT_VERSION,
-            "enrichment_attempted_at": datetime.now(timezone.utc).isoformat(),
-            "enrichment_retry_after": (datetime.now(timezone.utc) + timedelta(hours=24 if login_loop else 2)).isoformat(),
+            "enrichment_attempted_at": attempted_at.isoformat(),
+            "enrichment_retry_after": (attempted_at + timedelta(minutes=retry_minutes)).isoformat(),
         })
         print(f"[catalog] product URL enrichment unavailable ({platform}): {metadata['enrichment_error']} ({message[:180]})")
     product["source_metadata"] = metadata
@@ -601,7 +611,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
         cur.execute("""SELECT p.id,p.external_id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,p.affiliate_url,pl.name AS platform,c.name AS category,p.source_metadata,s.external_id AS seller_external_id,s.name AS seller_name
             FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN sellers s ON s.id=p.seller_id
             WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL OR p.seller_id IS NULL)
-            ORDER BY p.updated_at DESC LIMIT %s""", (max(limit, limit * 5),))
+            ORDER BY p.updated_at ASC LIMIT %s""", (max(limit, limit * 5),))
         candidates = cur.fetchall()
     rows = [row for row in candidates if force or _retry_due(row.get("source_metadata") or {})][:limit]
     if not rows:
