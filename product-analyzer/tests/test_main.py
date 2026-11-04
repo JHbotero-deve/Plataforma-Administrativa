@@ -34,7 +34,7 @@ class WorkerPipelineTests(unittest.TestCase):
             main.run_pipeline()
 
         ingest.assert_called_once_with(target_per_platform=100)
-        enrich.assert_called_once_with(connection, limit=100)
+        enrich.assert_called_once_with(connection, limit=120, max_workers=4)
         score.assert_called_once_with(connection, 7, 30.0)
         alert.assert_called_once()
         self.assertTrue(any("SELECT p.id" in call.args[0] for call in cursor.execute.call_args_list))
