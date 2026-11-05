@@ -56,7 +56,7 @@ class IndependentMarketplaceWorkerTests(unittest.TestCase):
         self.assertEqual(len(products), 100)
         self.assertEqual(pages, 2)
         self.assertEqual(search.call_count, 2)
-        self.assertTrue(all(call.kwargs["minimum_discount"] == 0 for call in search.call_args_list))
+        self.assertTrue(all(call.kwargs["minimum_discount"] == 40 for call in search.call_args_list))
 
     def test_telegram_failure_does_not_undo_saved_or_published_product(self):
         connection = MagicMock()
