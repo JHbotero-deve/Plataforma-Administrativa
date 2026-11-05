@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_NAME = "central-admin-shell-v3";
+const CACHE_NAME = "central-admin-shell-v4";
 const APP_SHELL = [
   "/",
   "/index.html",
