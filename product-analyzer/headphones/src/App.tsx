@@ -90,7 +90,19 @@ const mkId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 function isSafeExternalUrl(value: string) {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
+    const host = url.hostname.toLowerCase().replace(/\\.$/, "");
+    const marketplaceDomains = [
+      "amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de",
+      "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amazon.com.au",
+      "amazon.in", "amazon.nl", "amazon.se", "amazon.pl", "amazon.ae",
+      "amazon.sg", "amazon.com.tr", "amazon.com.br", "creatorsapi.amazon",
+      "media-amazon.com", "ssl-images-amazon.com", "images-amazon.com",
+      "amzn.to", "amzn.eu", "amzn.asia", "amzn.com", "amzn.ca", "amzn.de",
+      "amzn.co.uk", "a.co", "link.amazon", "aliexpress.com", "aliexpress.us",
+      "aliexpress.ru", "alii.pub", "taobao.com", "aliexpress-media.com", "alicdn.com",
+    ];
+    const isMarketplace = marketplaceDomains.some(domain => host === domain || host.endsWith("." + domain));
+    return !isMarketplace && (url.protocol === "https:" || url.protocol === "http:");
   } catch {
     return false;
   }
