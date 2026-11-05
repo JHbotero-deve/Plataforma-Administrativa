@@ -13,7 +13,7 @@ import requests
 from db import _affiliate_url
 from url_import import ASIN_RE
 
-ENRICHMENT_VERSION = 5
+ENRICHMENT_VERSION = 6
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 MAX_REDIRECTS = 12
@@ -458,6 +458,7 @@ def _official_product_data(url, platform, category=None):
 
 
 def enrich_product(product):
+    """Conserva los datos aportados y no consulta redes ni APIs de marketplaces."""
     url = str(product.get("product_url") or "")
     platform = product.get("platform")
     if platform not in ALLOWED_HOSTS or not url:
@@ -468,107 +469,25 @@ def enrich_product(product):
         if inferred_category:
             product["category"] = inferred_category
             metadata["category_source"] = "title_inference"
-    if product.get("title") and not str(product["title"]).startswith("Producto ") and product.get("price") and product.get("image_url") and product.get("category") and (product.get("seller") or metadata.get("metadata_source") == "cli"):
-        product["source_metadata"] = metadata
-        return product
-    original_url = url
-    has_product_id = bool(ASIN_RE.search(urlsplit(url).path) if platform == "amazon" else ALIEXPRESS_ITEM_RE.search(urlsplit(url).path))
-    title_match = None
-    if platform == "aliexpress" and not has_product_id:
-        try:
-            title_match = _aliexpress_product_by_title(product.get("title"), product.get("category"))
-        except Exception as exc:
-            metadata["affiliate_title_lookup_error"] = type(exc).__name__
-    if title_match:
-        url = title_match.get("product_url") or url
-        product["product_url"] = url
-        metadata.setdefault("original_url", original_url)
-    elif not has_product_id:
-        try:
-            resolved = _resolve_product_url(url, platform)
-            resolved_has_id = bool(ASIN_RE.search(urlsplit(resolved).path) if platform == "amazon" else ALIEXPRESS_ITEM_RE.search(urlsplit(resolved).path))
-            if resolved_has_id:
-                url = resolved
-                product["product_url"] = resolved
-                metadata.setdefault("original_url", original_url)
-        except Exception as exc:
-            metadata["redirect_resolution_error"] = type(exc).__name__
-    try:
-        api_error = None
-        try:
-            fresh = title_match or _official_product_data(url, platform, product.get("category"))
-        except Exception as exc:
-            api_error = f"{type(exc).__name__}: {str(exc)[:180]}"
-            fresh = None
-            print(f"[catalog] {platform} official API unavailable: {api_error}")
-        if not fresh:
-            fresh = _public_product_page(url, platform)
-        resolved_url = fresh.get("resolved_url") or fresh.get("product_url")
-        if fresh.get("external_id"):
-            product["external_id"] = fresh["external_id"]
-        if resolved_url:
-            canonical_id = ASIN_RE.search(urlsplit(resolved_url).path) if platform == "amazon" else ALIEXPRESS_ITEM_RE.search(urlsplit(resolved_url).path)
-            if canonical_id:
-                product["external_id"] = canonical_id.group(1).upper() if platform == "amazon" else canonical_id.group(1)
-                product["product_url"] = resolved_url
-        if fresh.get("affiliate_url"):
-            product["affiliate_url"] = fresh["affiliate_url"]
-        if fresh.get("title") and (not product.get("title") or str(product["title"]).startswith("Producto ")):
-            product["title"] = fresh["title"]
-        for key in ("price", "previous_price", "description", "image_url", "rating", "reviews_count"):
-            if fresh.get(key) is not None and (product.get(key) is None or key == "reviews_count" and not product.get(key)):
-                product[key] = fresh[key]
-        if fresh.get("price") is not None and fresh.get("currency") and not product.get("price"):
-            product["currency"] = fresh["currency"]
-        if not product.get("category") and fresh.get("category"):
-            product["category"] = fresh["category"]
-            metadata["category_source"] = "marketplace_api" if fresh.get("source_metadata", {}).get("metadata_source") else "public_product_page"
-        if fresh.get("seller"):
-            product["seller"] = fresh["seller"]
-            metadata["seller_name"] = fresh["seller"].get("name")
-        if fresh.get("seller_url"):
-            metadata["seller_url"] = fresh["seller_url"]
-        if fresh.get("gallery_urls"):
-            product["gallery_urls"] = list(dict.fromkeys((product.get("gallery_urls") or []) + fresh["gallery_urls"]))[:10]
-        metadata.update(fresh.get("source_metadata") or {})
-        source = metadata.get("metadata_source") or "public_product_page"
-        complete = bool(product.get("title") and product.get("price") and product.get("image_url") and product.get("category"))
-        attempted_at = datetime.now(timezone.utc)
-        metadata.update({
-            "metadata_source": source,
-            "resolved_url": resolved_url or url,
-            "enrichment_status": "complete" if complete else "partial",
-            "enrichment_version": ENRICHMENT_VERSION,
-            "enrichment_attempted_at": attempted_at.isoformat(),
-            "enrichment_retry_after": (attempted_at + (timedelta(hours=24) if complete else timedelta(minutes=30))).isoformat(),
-            "enrichment_attempts": 0 if complete else int(metadata.get("enrichment_attempts") or 0),
-        })
-        if api_error:
-            metadata["marketplace_api_error"] = api_error
-        else:
-            metadata.pop("marketplace_api_error", None)
-        metadata.pop("enrichment_error", None)
-    except Exception as exc:
-        message = str(exc)
-        login_loop = "ciclo de redirección" in message.lower() or "límite de" in message.lower() or "iniciar sesión" in message.lower() or "login" in message.lower()
-        access_error = bool(re.search(r"\b(?:401|403)\b", message))
-        attempts = int(metadata.get("enrichment_attempts") or 0) + 1
-        retry_minutes = min(5 * (2 ** min(attempts - 1, 6)), 360)
-        attempted_at = datetime.now(timezone.utc)
-        metadata.update({
-            "enrichment_status": "retry",
-            "enrichment_error": ("marketplace_access_error" if access_error else "login_or_redirect_required" if login_loop else type(exc).__name__)[:80],
-            "enrichment_attempts": attempts,
-            "enrichment_version": ENRICHMENT_VERSION,
-            "enrichment_attempted_at": attempted_at.isoformat(),
-            "enrichment_retry_after": (attempted_at + timedelta(minutes=retry_minutes)).isoformat(),
-        })
-        print(f"[catalog] product URL enrichment unavailable ({platform}): {metadata['enrichment_error']} ({message[:180]})")
+    path = urlsplit(url).path
+    match = ASIN_RE.search(path) if platform == "amazon" else ALIEXPRESS_ITEM_RE.search(path)
+    if match and (not product.get("external_id") or str(product["external_id"]).startswith("URL-")):
+        product["external_id"] = match.group(1).upper() if platform == "amazon" else match.group(1)
+    metadata.update({
+        "metadata_source": metadata.get("metadata_source") or "url_only",
+        "resolved_url": metadata.get("resolved_url") or url,
+        "enrichment_status": "paused",
+        "enrichment_version": ENRICHMENT_VERSION,
+        "network_enrichment_disabled": True,
+    })
+    metadata.pop("marketplace_api_error", None)
+    metadata.pop("enrichment_error", None)
     product["source_metadata"] = metadata
     return product
 
-
 def _retry_due(metadata):
+    if (metadata or {}).get("network_enrichment_disabled"):
+        return False
     if (metadata or {}).get("enrichment_version") != ENRICHMENT_VERSION:
         return True
     retry_after = (metadata or {}).get("enrichment_retry_after")
