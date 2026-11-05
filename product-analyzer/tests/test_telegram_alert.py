@@ -156,7 +156,7 @@ class TelegramApiResponseTests(unittest.TestCase):
 
         self.assertFalse(result)
 
-    def test_publication_notification_sends_product_photo_price_and_seller(self):
+    def test_publication_notification_uses_text_without_marketplace_media_or_preview(self):
         with (
             patch.object(notifications, "_config", return_value=("token", "chat")),
             patch.object(notifications, "_post_telegram", return_value=True) as post,
@@ -173,12 +173,28 @@ class TelegramApiResponseTests(unittest.TestCase):
             })
 
         self.assertTrue(result)
-        self.assertEqual(post.call_args.args[1], "sendPhoto")
+        self.assertEqual(post.call_args.args[1], "sendMessage")
         payload = post.call_args.args[2]
-        self.assertEqual(payload["photo"], "https://m.media-amazon.com/images/I/photo.jpg")
-        self.assertIn("60.00 USD", payload["caption"])
-        self.assertIn("Amazon Marketplace", payload["caption"])
-        self.assertIn("Cancelación de ruido", payload["caption"])
+        self.assertNotIn("photo", payload)
+        self.assertTrue(payload["disable_web_page_preview"])
+        self.assertIn("60.00 USD", payload["text"])
+        self.assertIn("Amazon Marketplace", payload["text"])
+        self.assertIn("Cancelación de ruido", payload["text"])
+
+    def test_telegram_product_images_are_not_attached_but_remain_catalog_metadata(self):
+        product = {
+            "image_url": "https://m.media-amazon.com/images/I/photo.jpg",
+            "image_gallery": ["https://ae01.alicdn.com/photo.jpg"],
+        }
+        self.assertEqual(telegram_alert._product_images(product), [])
+        self.assertTrue(telegram_alert._has_product_image(product))
+
+    def test_telegram_bot_messages_disable_link_previews(self):
+        response = MagicMock(ok=True, status_code=200)
+        response.json.return_value = {"ok": True}
+        with patch.object(telegram_alert.requests, "post", return_value=response) as post:
+            self.assertTrue(telegram_alert._send("token", "chat", "https://www.amazon.com/dp/B000000001"))
+        self.assertTrue(post.call_args.kwargs["json"]["disable_web_page_preview"])
 
     def test_promotion_alert_contains_discount_commission_sales_and_coupon(self):
         with (
@@ -206,6 +222,7 @@ class TelegramApiResponseTests(unittest.TestCase):
         self.assertIn("Comisión afiliada:</b> 5%", message)
         self.assertIn("Ventas últimos 30 días:</b> 1200", message)
         self.assertIn("<code>SAVE10</code>", message)
+        self.assertTrue(post.call_args.args[2]["disable_web_page_preview"])
 
 
 class SupportedMarketplaceTests(unittest.TestCase):
