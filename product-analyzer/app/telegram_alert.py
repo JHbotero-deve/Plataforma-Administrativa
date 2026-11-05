@@ -37,16 +37,19 @@ def _allowed_chat(chat_id):
     return str(chat_id) == str(configured).strip() or str(chat_id) == "6008260829"
 
 
-def _send(token, chat_id, text):
+def _send(token, chat_id, text, reply_markup=None):
     try:
+        body = {
+            "chat_id": chat_id,
+            "text": text[:4096],
+            "parse_mode": "HTML",
+            "disable_web_page_preview": True,
+        }
+        if reply_markup:
+            body["reply_markup"] = reply_markup
         r = requests.post(
             f"{API_BASE}/bot{token}/sendMessage",
-            json={
-                "chat_id": chat_id,
-                "text": text[:4096],
-                "parse_mode": "HTML",
-                "disable_web_page_preview": True,
-            },
+            json=body,
             timeout=10,
         )
         payload = r.json()
@@ -151,7 +154,17 @@ def _format_product(p):
 
 
 def _send_product(token, chat_id, product):
-    return _send(token, chat_id, _format_product(product))
+    url = _product_link(product.get("affiliate_url") or product.get("product_url"))
+    reply_markup = None
+    if url:
+        reply_markup = {
+            "inline_keyboard": [
+                [
+                    {"text": "🛒 Abrir Producto en Tienda", "url": url}
+                ]
+            ]
+        }
+    return _send(token, chat_id, _format_product(product), reply_markup=reply_markup)
 
 
 def _send_imported(token, chat_id, product_id, payload, score, header):
