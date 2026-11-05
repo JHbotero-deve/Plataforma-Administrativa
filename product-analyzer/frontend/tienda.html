@@ -1427,7 +1427,7 @@ function addToCart(p){
 }
 function renderCart(){
   const qty=cart.reduce((n,x)=>n+Number(x.quantity||0),0);$("cartCount").textContent=qty;$("cartCountTop").textContent=qty;
-  $("cartItems").innerHTML=cart.length?cart.map(x=>'<div class="cart-item"><img src="'+esc(x.image_url||"")+'" alt="'+esc(x.title)+'"><div><b>'+esc(x.title)+'</b><small>'+money(x.price,"COP")+'</small><div class="qty"><button data-minus="'+esc(x.product_id)+'">−</button><span>'+x.quantity+'</span><button data-plus="'+esc(x.product_id)+'">+</button></div></div><button class="close" data-remove="'+esc(x.product_id)+'">×</button></div>').join(""):'<p style="color:#777">Tu carrito está vacío.</p>';
+  $("cartItems").innerHTML=cart.length?cart.map(x=>'<div class="cart-item">'+(imageProxy(x.image_url)?'<img src="'+esc(imageProxy(x.image_url))+'" alt="'+esc(x.title)+'">':'<span class="no-image">Imagen no disponible</span>')+'<div><b>'+esc(x.title)+'</b><small>'+money(x.price,"COP")+'</small><div class="qty"><button data-minus="'+esc(x.product_id)+'">−</button><span>'+x.quantity+'</span><button data-plus="'+esc(x.product_id)+'">+</button></div></div><button class="close" data-remove="'+esc(x.product_id)+'">×</button></div>').join(""):'<p style="color:#777">Tu carrito está vacío.</p>';
   $("cartTotal").textContent=money(cart.reduce((n,x)=>n+Number(x.price)*Number(x.quantity),0),"COP");
 }
 async function load(){
