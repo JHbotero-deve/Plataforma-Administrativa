@@ -175,6 +175,7 @@ jobs:
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_telegram_alert.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_marketplace_search.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_main.py'
+          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_main_url_only.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_marketplace_safety.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_analysis.py'
           python -m unittest discover -s product-analyzer/tests -p 'test_catalog_cli.py'
