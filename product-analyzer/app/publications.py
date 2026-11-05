@@ -342,6 +342,7 @@ def publish_card(payload: PublicationPayload):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            cur.execute("UPDATE products SET is_active = TRUE, storefront_excluded = FALSE WHERE id = %s", (payload.product_id,))
             cur.execute(
                 """
                 SELECT p.id, p.image_url, p.product_url, p.current_price, p.currency,
@@ -350,7 +351,7 @@ def publish_card(payload: PublicationPayload):
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
-                WHERE p.id = %s AND p.is_active = TRUE
+                WHERE p.id = %s
                 """,
                 (payload.product_id,),
             )
@@ -547,22 +548,24 @@ def delete_publication(publication_id: int):
             cur.execute(
                 """
                 DELETE FROM published_cards
-                WHERE id = %s
+                WHERE id = %s OR product_id = %s
                 RETURNING id, product_id
                 """,
-                (publication_id,),
+                (publication_id, publication_id),
             )
             deleted = cur.fetchone()
-            if not deleted:
-                raise HTTPException(
-                    status_code=404, detail="Publicación no encontrada"
+            if deleted:
+                cur.execute(
+                    "UPDATE products SET storefront_excluded = TRUE WHERE id = %s",
+                    (deleted["product_id"],),
                 )
-            cur.execute(
-                "UPDATE products SET storefront_excluded = TRUE WHERE id = %s",
-                (deleted["product_id"],),
-            )
+            else:
+                cur.execute(
+                    "UPDATE products SET storefront_excluded = TRUE, is_active = FALSE WHERE id = %s",
+                    (publication_id,),
+                )
         conn.commit()
-        return {"id": deleted["id"], "status": "deleted"}
+        return {"id": publication_id, "status": "deleted"}
     except HTTPException:
         conn.rollback()
         raise
