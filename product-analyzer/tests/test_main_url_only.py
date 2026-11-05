@@ -11,22 +11,21 @@ import marketplace_ingestion
 
 
 class IndependentMarketplaceWorkerTests(unittest.TestCase):
-    def test_pipeline_searches_100_per_marketplace_and_enriches_100_urls(self):
+    def test_worker_does_not_start_marketplace_ingestion_or_url_enrichment(self):
         connection = MagicMock()
-        cursor = connection.cursor.return_value.__enter__.return_value
-        cursor.fetchall.return_value = []
+        connection.cursor.return_value.__enter__.return_value.fetchall.return_value = []
 
         with (
             patch.object(main, "expire_catalog"),
-            patch.object(main, "run_marketplace_ingestion", return_value={}) as ingest,
             patch.object(main, "get_connection", return_value=connection),
-            patch.object(main, "enrich_pending_products", return_value=0) as enrich,
             patch.object(main, "creator_configured", return_value=False),
+            patch("marketplace_ingestion.run_marketplace_ingestion") as ingest,
+            patch("product_sources.enrich_pending_products") as enrich,
         ):
             main.run_pipeline()
 
-        ingest.assert_called_once_with(target_per_platform=100)
-        enrich.assert_called_once_with(connection, limit=100)
+        ingest.assert_not_called()
+        enrich.assert_not_called()
         connection.close.assert_called_once()
 
     def test_amazon_search_paginates_to_100_unique_candidates(self):
@@ -57,7 +56,7 @@ class IndependentMarketplaceWorkerTests(unittest.TestCase):
         self.assertEqual(len(products), 100)
         self.assertEqual(pages, 2)
         self.assertEqual(search.call_count, 2)
-        self.assertTrue(all(call.kwargs["minimum_discount"] == 0 for call in search.call_args_list))
+        self.assertTrue(all(call.kwargs["minimum_discount"] == 40 for call in search.call_args_list))
 
     def test_telegram_failure_does_not_undo_saved_or_published_product(self):
         connection = MagicMock()

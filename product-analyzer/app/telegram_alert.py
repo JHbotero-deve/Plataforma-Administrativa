@@ -10,7 +10,7 @@ import requests
 from analysis import score_product
 from db import get_connection, upsert_product
 from url_import import detect_platform, import_url
-from product_sources import ALLOWED_CATEGORIES, enrich_pending_products, enrich_product
+from product_sources import ALLOWED_CATEGORIES, enrich_product
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
@@ -425,10 +425,10 @@ def _model_product(argument):
 
 
 def _model_active_products():
-    """Enriquece enlaces existentes y puntúa productos activos."""
+    """Puntúa el catálogo local sin consultar Amazon ni AliExpress."""
     conn = get_connection()
     try:
-        enriched = enrich_pending_products(conn, limit=120, force=True)
+        enriched = 0
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -538,7 +538,7 @@ def _handle(token, chat_id, text):
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
             "/buscar término — buscar en el catálogo ya importado\n"
-            "/modelar — leer metadatos públicos de URLs guardadas y puntuar\n"
+            "/modelar — puntuar productos del catálogo local sin consultar tiendas\n"
             "/agregar URL — importar Amazon o AliExpress; admite datos manuales\n"
             "Publicación — selecciona productos en Studio y usa «Publicar en Central»\n"
             "/estado — estado del catálogo\n"

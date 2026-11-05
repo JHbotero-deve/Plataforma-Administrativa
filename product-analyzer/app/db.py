@@ -1,6 +1,10 @@
 import os
 import re
 
+from marketplace_safety import install_marketplace_request_guard
+
+install_marketplace_request_guard()
+
 import requests
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
@@ -78,14 +82,10 @@ def _affiliate_url(product: dict, platform_name: str | None = None) -> str | Non
                 or host.endswith(".alii.pub")
             ):
                 return affiliate_url
-        try:
-            return generate_aliexpress_affiliate_url(url)
-        except (requests.RequestException, ValueError, RuntimeError) as exc:
-            print(f"[aliexpress] enlace afiliado no generado: {type(exc).__name__}")
-            return None
+        return None
     return None
 def upsert_product(conn, platform_name: str, category_name: str, product: dict):
-    # Generar el enlace fuera del cursor para no mantener una consulta abierta durante la llamada externa.
+    # Conservar enlaces afiliados existentes sin llamar a servicios de marketplace.
     affiliate_url = _affiliate_url(product, platform_name)
     product["affiliate_url"] = affiliate_url
     with conn.cursor() as cur:

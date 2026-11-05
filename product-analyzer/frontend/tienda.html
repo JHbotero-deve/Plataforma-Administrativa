@@ -1332,8 +1332,10 @@ let cart=JSON.parse(localStorage.getItem("central_cart")||"[]");
 let filtered=[], active=null, heroIndex=0, heroTimer=null, heroPaused=false;
 const HERO_INTERVAL=6000;
 
-function imageSrc(p){return p.image_url||((p.image_gallery||[]).find(Boolean)||"")}
-function modelSrc(p){const value=String(p.model_url||"").trim();return /^https:\/\/[^\s]+\.(?:glb|gltf)(?:[?#].*)?$/i.test(value)?value:""}
+function isMarketplaceImage(value){try{const host=new URL(String(value||"")).hostname.toLowerCase();return /(^|\.)amazon\./i.test(host)||/(^|\.)amazon$/i.test(host)||/(^|\.)media-amazon\.com$/i.test(host)||/(^|\.)ssl-images-amazon\.com$/i.test(host)||/(^|\.)images-amazon\.com$/i.test(host)||/(^|\.)amzn\.(?:to|eu|asia|com|ca|de|co\.uk)$/i.test(host)||host==="a.co"||/(^|\.)aliexpress\./i.test(host)||/(^|\.)alii\.pub$/i.test(host)||/(^|\.)taobao\.com$/i.test(host)||/(^|\.)aliexpress-media\.com$/i.test(host)||/(^|\.)alicdn\.com$/i.test(host)}catch{return false}}
+function imageProxy(value){const url=String(value||"").trim();return /^https?:\/\//i.test(url)&&!isMarketplaceImage(url)?"/api/v1/media/image?url="+encodeURIComponent(url):""}
+function imageSrc(p){return imageProxy(p.image_url)||imageProxy((p.image_gallery||[]).find(url=>url&&!isMarketplaceImage(url))||"")}
+function modelSrc(p){const value=String(p.model_url||"").trim();return !isMarketplaceImage(value)&&/^https:\/\/[^\s]+\.(?:glb|gltf)(?:[?#].*)?$/i.test(value)?imageProxy(value):""}
 function modelMarkup(p,cls){const src=modelSrc(p);return src?'<model-viewer class="'+cls+'" src="'+esc(src)+'" alt="'+esc(p.title||"Modelo 3D")+'" camera-controls auto-rotate rotation-per-second="18deg" shadow-intensity="1" exposure="1" ar ar-modes="webxr scene-viewer quick-look" loading="lazy"></model-viewer><span class="model-hint">Arrastra para girar · 360°</span>':""}
 function saveCart(){localStorage.setItem("central_cart",JSON.stringify(cart));renderCart()}
 function isOwn(p){return String(p.platform||"").toLowerCase()==="personal"}
@@ -1387,7 +1389,7 @@ function renderFeature(){
   $("featureDescription").textContent=p.subtitle||p.description||"Producto publicado en Central.";
   $("featurePrice").textContent=p.price_display||money(p.sale_price??p.current_price,p.currency);
   $("featureMeta").innerHTML=[p.brand,p.category,p.platform,p.seller_name?"Vendedor: "+p.seller_name:"Vendedor no informado"].filter(Boolean).map(x=>'<span class="pill">'+esc(x)+'</span>').join("")+(Number(p.discount_pct)>=40?'<span class="pill">'+Math.round(Number(p.discount_pct))+'% de descuento</span>':"");
-  const gallery=(p.image_gallery||[]).filter(Boolean);
+  const gallery=(p.image_gallery||[]).map(imageProxy).filter(Boolean);
   $("variants").innerHTML=gallery.length>1?gallery.slice(0,5).map((im,i)=>'<button class="variant '+(i===0?"active":"")+'" data-image="'+esc(im)+'" style="background-image:url(\''+esc(im).replace(/'/g,"%27")+'\');background-size:cover" aria-label="Imagen '+(i+1)+'"></button>').join(""):"";
   const own=isOwn(p), ext=externalUrl(p);
   const action=$("featureAction");
