@@ -12,7 +12,7 @@ from urllib.parse import urlencode, urlsplit
 import requests
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from admin_auth import verify_session_token, ADMIN_COOKIE_NAME
 from db import get_connection
@@ -342,13 +342,23 @@ def start_oauth(request: Request, token: Optional[str] = Query(default=None)):
     )
 
 
-@router.get("/callback", include_in_schema=False)
-def oauth_callback(
+@router.api_route("/callback", methods=["GET", "POST"], include_in_schema=False)
+@router.api_route("/receiveCallBack", methods=["GET", "POST"], include_in_schema=False)
+@router.api_route("/receiveCallBack.do", methods=["GET", "POST"], include_in_schema=False)
+async def oauth_callback(
     request: Request,
     code: Optional[str] = Query(default=None, max_length=512),
     state: Optional[str] = Query(default=None, max_length=256),
     error: Optional[str] = Query(default=None, max_length=100),
 ):
+    if request.method.upper() == "POST":
+        try:
+            body_bytes = await request.body()
+            body_str = body_bytes.decode("utf-8", errors="ignore")
+            logger.info("AliExpress push callback received: %s", body_str[:500])
+        except Exception:
+            pass
+        return Response(content="success", status_code=200, media_type="text/plain")
     request.scope["query_string"] = b""
     headers = {
         "Cache-Control": "no-store",
