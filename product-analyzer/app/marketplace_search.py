@@ -39,7 +39,7 @@ def search_and_publish(query):
             tracking_id = (os.getenv("ALIEXPRESS_TRACKING_ID") or os.getenv("ALIEXPRESS_AFFILIATE_TRACKING_ID") or "").strip()
             if not (os.getenv("ALIEXPRESS_APP_KEY", "").strip() and os.getenv("ALIEXPRESS_APP_SECRET", "").strip() and tracking_id):
                 raise RuntimeError("Faltan credenciales oficiales de búsqueda AliExpress.")
-            candidates.extend(_search_bucket(SEARCH_CATEGORY, query, 1, review=False)[:10])
+            candidates.extend(_search_bucket(SEARCH_CATEGORY, query, 1, review=True, minimum_discount=40)[:10])
         except Exception as exc:
             errors.append(f"AliExpress: {type(exc).__name__}: {str(exc)[:180]}")
         saved = 0
