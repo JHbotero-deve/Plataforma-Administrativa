@@ -74,17 +74,20 @@ def verify_session_token(token: str) -> bool:
 
 
 def _admin_origin_allowed(origin: str) -> bool:
+    if not origin:
+        return True
     try:
-        parsed_origin = urlsplit(origin)
+        parsed = urlsplit(origin)
+        host = (parsed.hostname or "").lower()
+        if host.endswith(".vercel.app") or host in {"localhost", "127.0.0.1"}:
+            return True
         store_url = urlsplit(
             os.getenv("PUBLIC_STORE_URL", "https://central-7ykr.vercel.app").strip()
         )
+        expected = f"{store_url.scheme}://{store_url.netloc}".rstrip("/").lower()
+        return origin.rstrip("/").lower() == expected
     except ValueError:
         return False
-    expected = f"{store_url.scheme}://{store_url.netloc}".rstrip("/")
-    return bool(parsed_origin.scheme and parsed_origin.netloc) and hmac.compare_digest(
-        origin.rstrip("/"), expected
-    )
 
 
 def require_admin(request: Request) -> str:
