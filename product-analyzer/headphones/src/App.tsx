@@ -90,7 +90,7 @@ const mkId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 function isSafeExternalUrl(value: string) {
   try {
     const url = new URL(value);
-    const host = url.hostname.toLowerCase().replace(/\\.$/, "");
+    const host = url.hostname.toLowerCase().replace(/\.$/, "");
     const marketplaceDomains = [
       "amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de",
       "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amazon.com.au",
