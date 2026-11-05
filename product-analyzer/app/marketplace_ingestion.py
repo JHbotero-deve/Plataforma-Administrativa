@@ -49,8 +49,8 @@ def _search_aliexpress_candidates(target):
             SEARCH_CATEGORY,
             ALIEXPRESS_QUERY,
             page_no=page,
-            review=False,
-            minimum_discount=0,
+            review=True,
+            minimum_discount=40,
         )
         pages += 1
         candidates.extend(batch or [])
