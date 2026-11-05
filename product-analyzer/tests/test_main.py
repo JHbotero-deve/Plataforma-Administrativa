@@ -10,7 +10,7 @@ import main
 
 
 class WorkerPipelineTests(unittest.TestCase):
-    def test_worker_scores_local_catalog_without_marketplace_requests(self):
+    def test_worker_continues_when_telegram_alert_fails(self):
         connection = MagicMock()
         cursor = connection.cursor.return_value.__enter__.return_value
         cursor.fetchall.side_effect = [
@@ -25,12 +25,16 @@ class WorkerPipelineTests(unittest.TestCase):
         with (
             patch.object(main, "get_connection", return_value=connection),
             patch.object(main, "expire_catalog"),
+            patch.object(main, "run_marketplace_ingestion", return_value={}) as ingest,
+            patch.object(main, "enrich_pending_products", return_value=12) as enrich,
             patch.object(main, "score_product", return_value=80) as score,
             patch.object(main, "send_telegram_alert", side_effect=RuntimeError("Telegram unavailable")) as alert,
             patch.object(main, "creator_configured", return_value=False),
         ):
             main.run_pipeline()
 
+        ingest.assert_called_once_with(target_per_platform=100)
+        enrich.assert_called_once_with(connection, limit=120, max_workers=4)
         score.assert_called_once_with(connection, 7, 30.0)
         alert.assert_called_once()
         self.assertTrue(any("SELECT p.id" in call.args[0] for call in cursor.execute.call_args_list))

@@ -60,11 +60,12 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertIn("/agregar URL", send.call_args.args[2])
 
-    def test_search_command_uses_only_the_local_catalog(self):
+    def test_search_command_queues_external_search_and_shows_local_catalog(self):
         send = MagicMock(return_value=True)
         products = [{"title": "Auriculares", "current_price": 25, "currency": "USD"}]
 
         with (
+            patch.object(telegram_alert, "_queue_marketplace_search", return_value=17) as queue,
             patch.object(telegram_alert, "_search_products", return_value=products) as search,
             patch.object(telegram_alert, "_send", send),
             patch.object(telegram_alert, "_send_product", return_value=True) as send_product,
@@ -72,9 +73,26 @@ class TelegramCommandTests(unittest.TestCase):
             result = telegram_alert._handle("token", "chat", "/buscar auriculares")
 
         self.assertTrue(result)
+        queue.assert_called_once_with("auriculares")
         search.assert_called_once_with("auriculares", limit=8)
         send_product.assert_called_once()
-        self.assertIn("Resultados del catálogo", send.call_args.args[2])
+        self.assertIn("Búsqueda registrada", send.call_args_list[0].args[2])
+        self.assertIn("Resultados del catálogo", send.call_args_list[1].args[2])
+
+    def test_search_command_queues_even_without_local_results(self):
+        send = MagicMock(return_value=True)
+
+        with (
+            patch.object(telegram_alert, "_queue_marketplace_search", return_value=18) as queue,
+            patch.object(telegram_alert, "_search_products", return_value=[]),
+            patch.object(telegram_alert, "_send", send),
+        ):
+            result = telegram_alert._handle("token", "chat", "/buscar teclado")
+
+        self.assertTrue(result)
+        queue.assert_called_once_with("teclado")
+        self.assertIn("Búsqueda registrada", send.call_args_list[0].args[2])
+        self.assertIn("quedó registrada", send.call_args_list[1].args[2])
 
     def test_search_matches_category_as_well_as_title(self):
         connection = MagicMock()

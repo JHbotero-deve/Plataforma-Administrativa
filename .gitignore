@@ -1,43 +1,39 @@
+gitignore
 # Python / Entornos virtuales
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*.egg-info/
 .venv/
 venv/
-*.egg-info/
 
-# Entornos y secretos: nunca versionar credenciales reales
+# Entornos y secretos
 .env
 .env.*
 !.env.example
 .evn
-*.env.local
-*.env.*.local
 *.pem
 *.key
 
-# Archivos de logs y Docker
+# Logs y Docker
 *.log
 docker-compose.override.yml
 
-# Archivos del Sistema Operativo
+# Sistema operativo
 .DS_Store
 Thumbs.db
 
-# Node.js y paquetes de Frontend
+# Node.js / Frontend
 node_modules/
 dist/
 build/
 .npm/
 
-# Archivos de IDE (IntelliJ / Android Studio)
+# IDE
 .idea/
 *.iml
 out/
 /shelf/
 /workspace.xml
 
-# Secretos locales
-.evn
-.env
-.vercel
+# Configuración local
+.vercel/

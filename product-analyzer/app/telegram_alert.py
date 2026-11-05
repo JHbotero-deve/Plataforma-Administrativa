@@ -470,6 +470,29 @@ def _model_active_products():
         conn.close()
 
 
+def _queue_marketplace_search(query):
+    normalized = " ".join(str(query or "").split())[:100]
+    if not normalized:
+        raise ValueError("La búsqueda está vacía")
+    connection = get_connection()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO marketplace_search_requests (query) VALUES (%s) RETURNING id",
+                (normalized,),
+            )
+            row = cursor.fetchone()
+        connection.commit()
+        if row is None:
+            raise RuntimeError("La base de datos no devolvió el ID de la búsqueda")
+        return row["id"] if isinstance(row, dict) else row[0]
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
 def _handle(token, chat_id, text):
     match = re.match(r"^\s*/\s*([a-zA-Z_]+)(?:@\w+)?(?:\s+(.*))?$", text or "")
     if match:
@@ -537,9 +560,28 @@ def _handle(token, chat_id, text):
             if result is None:
                 return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
             return _send_imported(token, chat_id, result, payload, score, "<b>Producto importado desde URL</b>")
+        try:
+            request_id = _queue_marketplace_search(term)
+        except Exception as exc:
+            print(f"[telegram-bot] No se pudo registrar la búsqueda: {type(exc).__name__}: {str(exc)[:200]}")
+            return _send(token, chat_id, "No fue posible registrar la búsqueda. Int?ntalo nuevamente.")
+
+        if not _send(
+            token,
+            chat_id,
+            f"<b>Búsqueda registrada</b> (solicitud #{request_id}). "
+            "El worker consultará Amazon y AliExpress.",
+        ):
+            return False
+
         products = _search_products(term[:100], limit=8)
         if not products:
-            return _send(token, chat_id, "No hay coincidencias en el catálogo importado. Para agregar uno, envía una URL individual de Amazon o AliExpress.")
+            return _send(
+                token,
+                chat_id,
+                "No hay coincidencias en el catálogo local. "
+                "La b?squeda externa quedó registrada y será procesada por el worker.",
+            )
         if not _send(token, chat_id, f"<b>Resultados del catálogo ({len(products)})</b>"):
             return False
         for index, product in enumerate(products, 1):

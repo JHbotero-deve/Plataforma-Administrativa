@@ -1,4 +1,5 @@
-# Secretos y Configuración
+gitignore
+# Secretos y configuración
 .env
 .env.*
 !.env.example
@@ -14,6 +15,7 @@ __pycache__/
 .venv/
 venv/
 ENV/
+*.egg-info/
 
 # IDEs
 .idea/
@@ -27,5 +29,8 @@ postgresql-data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Configuración local
 .agents/
 skills-lock.json
+.vercel/
