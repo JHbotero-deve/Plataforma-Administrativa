@@ -130,7 +130,7 @@ def send_telegram_publication(publication):
     if seller_url and len(seller_url) <= 160:
         lines.append(f'<a href="{html.escape(seller_url, quote=True)}">Tienda del vendedor</a>')
     caption = "\n".join(lines)
-    if len(caption) > 1024:
+    if len(caption) > 4096:
         raise RuntimeError("La ficha supera el límite de texto de Telegram.")
 
     payload = {
