@@ -361,7 +361,7 @@ def run_storefront_refill():
             pages_checked = 0
             for page_no in range(1, pages + 1):
                 try:
-                    candidates = _search_bucket(section["category_name"], section["search_keyword"], page_no, review=False)
+                    candidates = _search_bucket(section["category_name"], section["search_keyword"], page_no, review=True, minimum_discount=40)
                 except Exception as exc:
                     print(f"[storefront] búsqueda {section['slug']} página {page_no} falló: {type(exc).__name__}: {str(exc)[:240]}")
                     break
