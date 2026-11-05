@@ -89,6 +89,9 @@ class MarketplaceSafetyTests(unittest.TestCase):
         self.assertIn("isMarketplaceImage", store)
         self.assertIn("imageProxy(x.image_url)", store)
         self.assertNotIn('esc(x.image_url||"")', store)
+        showcase = (Path(__file__).resolve().parents[1] / "headphones" / "src" / "App.tsx").read_text(encoding="utf-8")
+        self.assertIn("const isMarketplace = marketplaceDomains.some", showcase)
+        self.assertIn('return !isMarketplace && (url.protocol === "https:" || url.protocol === "http:")', showcase)
 
 
 if __name__ == "__main__":
