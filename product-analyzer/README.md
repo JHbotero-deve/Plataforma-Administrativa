@@ -38,7 +38,7 @@ El bot mantiene /top, /buscar, /modelar y /estado. También acepta URLs de Amazo
 
 **Modo de protección de marketplaces:** el worker no ejecuta búsquedas ni enriquecimiento automático de Amazon o AliExpress. Un guard global en `requests.Session.send` bloquea las solicitudes HTTP a dominios de ambas tiendas, sus API, enlaces cortos y CDN de imágenes antes de que salgan de la aplicación. Las importaciones manuales conservan URLs y metadatos entregados por el usuario; no consultan las páginas de las tiendas. Los enlaces afiliados existentes y las credenciales se conservan, pero no se generan enlaces nuevos mediante API. Las imágenes alojadas en dominios de marketplaces no se cargan automáticamente en el panel ni en la tienda.
 
-Los módulos de Amazon Creators, AliExpress Affiliate y AE-Dropshipper se conservan para no borrar integraciones ni credenciales. Mientras el guard esté activo, cualquier solicitud HTTP del backend a esos dominios —incluido el intercambio OAuth— se rechaza antes de salir. Telegram, PostgreSQL, TikTok y los demás servicios no pertenecientes a Amazon/AliExpress siguen sus flujos independientes.
+Los módulos de Amazon Creators, AliExpress Affiliate y AE-Dropshipper se conservan para no borrar integraciones ni credenciales. Mientras el guard esté activo, cualquier solicitud HTTP del backend a esos dominios —incluido el intercambio OAuth— se rechaza antes de salir. Telegram conserva los comandos y notificaciones de texto, pero no adjunta imágenes de marketplace ni permite vistas previas de enlaces, para evitar que los servidores de Telegram descarguen páginas o imágenes de esas tiendas. PostgreSQL, TikTok y los demás servicios no pertenecientes a Amazon/AliExpress siguen sus flujos independientes.
 
 ## CLI autorizados
 
