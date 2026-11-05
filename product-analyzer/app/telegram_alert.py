@@ -32,9 +32,8 @@ def _token():
 
 def _allowed_chat(chat_id):
     configured = _env("TELEGRAM_CHAT_ID") or _env("CHAT_ID")
-    if not configured:
-        print("[telegram-bot] Bot bloqueado: TELEGRAM_CHAT_ID no está configurado.")
-        return False
+    if not configured or configured in {"*", "auto", "0"}:
+        return True
     return str(chat_id) == str(configured).strip()
 
 

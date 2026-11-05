@@ -1553,6 +1553,10 @@
           <div class="actions"><a class="btn primary small" href="https://central-7ykr.vercel.app/tarjetas">Crear
               tarjeta</a><a class="btn small" href="#importar">Importar producto</a></div>
         </div>
+        <div class="quickbar" style="background: linear-gradient(135deg, rgba(255,138,0,0.1), rgba(182,242,58,0.05)); border: 1px solid rgba(255,138,0,0.3); margin-top: 12px;">
+          <div><strong>🤖 Asistentes IA · Inyección de Productos</strong><br><span>Ejecuta una inyección inmediata de ofertas con descuento ≥ 40% usando los ayudantes y la API de AliExpress.</span></div>
+          <div class="actions"><button class="btn primary small" id="btnAdminInject" type="button">🚀 Inyectar ahora</button><span id="injectStatus" class="pub-meta" style="margin-left: 8px;"></span></div>
+        </div>
         <div class="intel">
           <div class="intel-card"><span>Productos activos</span><strong id="iProducts">—</strong><small id="iDemand">—
               con demanda</small></div>
@@ -2478,6 +2482,22 @@
         } catch (error) {
           if (!requireSession(error)) $("salesMessage").textContent = "No se pudieron reintentar los avisos: " + error.message;
         } finally { retryNotifications.disabled = false }
+      });
+
+      const btnAdminInject = $("btnAdminInject");
+      if (btnAdminInject) btnAdminInject.addEventListener("click", async () => {
+        btnAdminInject.disabled = true;
+        const status = $("injectStatus");
+        if (status) status.textContent = "Inyectando productos de inmediato…";
+        try {
+          const response = await fetch(API + "/admin/inject", requestOptions({ method: "POST", headers: adminHeaders({ Accept: "application/json" }) }));
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw Object.assign(new Error(data.detail || "No se pudo completar la inyección"), { status: response.status });
+          if (status) status.textContent = "¡Inyección exitosa! Publicados: " + Number(data.refill?.published || 0) + ".";
+          setTimeout(() => location.reload(), 2000);
+        } catch (error) {
+          if (!requireSession(error)) if (status) status.textContent = "No se pudo inyectar: " + error.message;
+        } finally { btnAdminInject.disabled = false }
       });
 
     })();
