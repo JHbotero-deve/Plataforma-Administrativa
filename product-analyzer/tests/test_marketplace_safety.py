@@ -87,6 +87,8 @@ class MarketplaceSafetyTests(unittest.TestCase):
         self.assertNotIn("this.src=a[i]", admin)
         self.assertIn("function imageProxy", store)
         self.assertIn("isMarketplaceImage", store)
+        self.assertIn("imageProxy(x.image_url)", store)
+        self.assertNotIn('esc(x.image_url||"")', store)
 
 
 if __name__ == "__main__":
