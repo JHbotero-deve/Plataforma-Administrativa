@@ -1333,7 +1333,7 @@ let filtered=[], active=null, heroIndex=0, heroTimer=null, heroPaused=false;
 const HERO_INTERVAL=6000;
 
 function isMarketplaceImage(value){try{const host=new URL(String(value||"")).hostname.toLowerCase();return /(^|\.)amazon\./i.test(host)||/(^|\.)amazon$/i.test(host)||/(^|\.)media-amazon\.com$/i.test(host)||/(^|\.)ssl-images-amazon\.com$/i.test(host)||/(^|\.)images-amazon\.com$/i.test(host)||/(^|\.)amzn\.(?:to|eu|asia|com|ca|de|co\.uk)$/i.test(host)||host==="a.co"||/(^|\.)aliexpress\./i.test(host)||/(^|\.)alii\.pub$/i.test(host)||/(^|\.)taobao\.com$/i.test(host)||/(^|\.)aliexpress-media\.com$/i.test(host)||/(^|\.)alicdn\.com$/i.test(host)}catch{return false}}
-function imageProxy(value){const url=String(value||"").trim();return /^https?:\/\//i.test(url)&&!isMarketplaceImage(url)?"/api/v1/media/image?url="+encodeURIComponent(url):""}
+function imageProxy(value){const url=String(value||"").trim();if(!url)return"";try{const parsed=new URL(url,location.origin);if(parsed.origin===location.origin&&parsed.pathname==="/api/v1/media/image"){const target=parsed.searchParams.get("url");return target&&!isMarketplaceImage(target)?url:""}if(/^https?:\/\//i.test(url)&&!isMarketplaceImage(url))return"/api/v1/media/image?url="+encodeURIComponent(url)}catch{}return""}
 function imageSrc(p){return imageProxy(p.image_url)||imageProxy((p.image_gallery||[]).find(url=>url&&!isMarketplaceImage(url))||"")}
 function modelSrc(p){const value=String(p.model_url||"").trim();return !isMarketplaceImage(value)&&/^https:\/\/[^\s]+\.(?:glb|gltf)(?:[?#].*)?$/i.test(value)?imageProxy(value):""}
 function modelMarkup(p,cls){const src=modelSrc(p);return src?'<model-viewer class="'+cls+'" src="'+esc(src)+'" alt="'+esc(p.title||"Modelo 3D")+'" camera-controls auto-rotate rotation-per-second="18deg" shadow-intensity="1" exposure="1" ar ar-modes="webxr scene-viewer quick-look" loading="lazy"></model-viewer><span class="model-hint">Arrastra para girar · 360°</span>':""}
@@ -1427,7 +1427,7 @@ function addToCart(p){
 }
 function renderCart(){
   const qty=cart.reduce((n,x)=>n+Number(x.quantity||0),0);$("cartCount").textContent=qty;$("cartCountTop").textContent=qty;
-  $("cartItems").innerHTML=cart.length?cart.map(x=>'<div class="cart-item"><img src="'+esc(x.image_url||"")+'" alt="'+esc(x.title)+'"><div><b>'+esc(x.title)+'</b><small>'+money(x.price,"COP")+'</small><div class="qty"><button data-minus="'+esc(x.product_id)+'">−</button><span>'+x.quantity+'</span><button data-plus="'+esc(x.product_id)+'">+</button></div></div><button class="close" data-remove="'+esc(x.product_id)+'">×</button></div>').join(""):'<p style="color:#777">Tu carrito está vacío.</p>';
+  $("cartItems").innerHTML=cart.length?cart.map(x=>'<div class="cart-item">'+(imageProxy(x.image_url)?'<img src="'+esc(imageProxy(x.image_url))+'" alt="'+esc(x.title)+'">':'<span class="no-image">Imagen no disponible</span>')+'<div><b>'+esc(x.title)+'</b><small>'+money(x.price,"COP")+'</small><div class="qty"><button data-minus="'+esc(x.product_id)+'">−</button><span>'+x.quantity+'</span><button data-plus="'+esc(x.product_id)+'">+</button></div></div><button class="close" data-remove="'+esc(x.product_id)+'">×</button></div>').join(""):'<p style="color:#777">Tu carrito está vacío.</p>';
   $("cartTotal").textContent=money(cart.reduce((n,x)=>n+Number(x.price)*Number(x.quantity),0),"COP");
 }
 async function load(){
