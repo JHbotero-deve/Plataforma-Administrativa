@@ -46,7 +46,7 @@ def _send(token, chat_id, text):
                 "chat_id": chat_id,
                 "text": text[:4096],
                 "parse_mode": "HTML",
-                "disable_web_page_preview": False,
+                "disable_web_page_preview": True,
             },
             timeout=10,
         )
@@ -82,16 +82,15 @@ def _product_link(value):
 
 
 def _product_images(product):
-    # Foto principal + galería, sin repetidas, máximo 5
+    """No adjunta fotos: Telegram podría descargarlas desde el marketplace."""
+    return []
+
+
+def _has_product_image(product):
     gallery = product.get("image_gallery")
     if not isinstance(gallery, (list, tuple)):
         gallery = []
-    images = []
-    for value in [product.get("image_url"), *gallery]:
-        link = _product_link(value)
-        if link and link not in images:
-            images.append(link)
-    return images[:5]
+    return bool(_product_link(product.get("image_url")) or any(_product_link(value) for value in gallery))
 
 
 def _format_product(p):
@@ -118,7 +117,7 @@ def _format_product(p):
         missing.append("título real")
     if price is None:
         missing.append("precio")
-    if not _product_images(p):
+    if not _has_product_image(p):
         missing.append("imágenes")
     if not seller_name:
         missing.append("vendedor")
