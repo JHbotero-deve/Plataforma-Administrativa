@@ -100,7 +100,7 @@ def send_telegram_alert(product_info):
             "chat_id": chat_id,
             "text": "\n".join(lines),
             "parse_mode": "HTML",
-            "disable_web_page_preview": False,
+            "disable_web_page_preview": True,
         },
         timeout=10,
     )
@@ -133,18 +133,13 @@ def send_telegram_publication(publication):
     if len(caption) > 1024:
         raise RuntimeError("La ficha supera el límite de texto de Telegram.")
 
-    image_url = _http_url(publication.get("image_url"))
-    method = "sendPhoto" if image_url else "sendMessage"
     payload = {
         "chat_id": chat_id,
+        "text": caption,
         "parse_mode": "HTML",
+        "disable_web_page_preview": True,
     }
-    if image_url:
-        payload.update({"photo": image_url, "caption": caption})
-    else:
-        payload.update({"text": caption, "disable_web_page_preview": False})
-
-    if not _post_telegram(token, method, payload, timeout=15):
+    if not _post_telegram(token, "sendMessage", payload, timeout=15):
         raise RuntimeError("Telegram no pudo enviar la publicación.")
     return True
 

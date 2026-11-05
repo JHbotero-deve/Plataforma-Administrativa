@@ -46,7 +46,7 @@ def _send(token, chat_id, text):
                 "chat_id": chat_id,
                 "text": text[:4096],
                 "parse_mode": "HTML",
-                "disable_web_page_preview": False,
+                "disable_web_page_preview": True,
             },
             timeout=10,
         )
@@ -82,16 +82,15 @@ def _product_link(value):
 
 
 def _product_images(product):
-    # Foto principal + galería, sin repetidas, máximo 5
+    """No adjunta fotos: Telegram podría descargarlas desde el marketplace."""
+    return []
+
+
+def _has_product_image(product):
     gallery = product.get("image_gallery")
     if not isinstance(gallery, (list, tuple)):
         gallery = []
-    images = []
-    for value in [product.get("image_url"), *gallery]:
-        link = _product_link(value)
-        if link and link not in images:
-            images.append(link)
-    return images[:5]
+    return bool(_product_link(product.get("image_url")) or any(_product_link(value) for value in gallery))
 
 
 def _format_product(p):
@@ -118,7 +117,7 @@ def _format_product(p):
         missing.append("título real")
     if price is None:
         missing.append("precio")
-    if not _product_images(p):
+    if not _has_product_image(p):
         missing.append("imágenes")
     if not seller_name:
         missing.append("vendedor")
@@ -153,38 +152,7 @@ def _format_product(p):
 
 
 def _send_product(token, chat_id, product):
-    images = _product_images(product)
-    text = _format_product(product)
-    if images:
-        # Si el texto no cabe como pie de foto (1024), se envía aparte completo
-        caption = text if len(text) <= 1024 else None
-        if len(images) == 1:
-            method = "sendPhoto"
-            body = {"chat_id": chat_id, "photo": images[0]}
-            if caption:
-                body.update({"caption": caption, "parse_mode": "HTML"})
-        else:
-            method = "sendMediaGroup"
-            media = []
-            for index, image in enumerate(images):
-                item = {"type": "photo", "media": image}
-                if index == 0 and caption:
-                    item.update({"caption": caption, "parse_mode": "HTML"})
-                media.append(item)
-            body = {"chat_id": chat_id, "media": media}
-        try:
-            r = requests.post(
-                f"{API_BASE}/bot{token}/{method}",
-                json=body,
-                timeout=20,
-            )
-            payload = r.json()
-            if r.ok and isinstance(payload, dict) and payload.get("ok") is True:
-                return True if caption else _send(token, chat_id, text)
-            print(f"[telegram-bot] {method} rejected: HTTP {r.status_code}")
-        except (requests.RequestException, ValueError) as exc:
-            print(f"[telegram-bot] {method} error: {type(exc).__name__}")
-    return _send(token, chat_id, text)
+    return _send(token, chat_id, _format_product(product))
 
 
 def _send_imported(token, chat_id, product_id, payload, score, header):
