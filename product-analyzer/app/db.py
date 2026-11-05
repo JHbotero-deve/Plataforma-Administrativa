@@ -85,7 +85,7 @@ def _affiliate_url(product: dict, platform_name: str | None = None) -> str | Non
         return None
     return None
 def upsert_product(conn, platform_name: str, category_name: str, product: dict):
-    # Generar el enlace fuera del cursor para no mantener una consulta abierta durante la llamada externa.
+    # Conservar enlaces afiliados existentes sin llamar a servicios de marketplace.
     affiliate_url = _affiliate_url(product, platform_name)
     product["affiliate_url"] = affiliate_url
     with conn.cursor() as cur:
