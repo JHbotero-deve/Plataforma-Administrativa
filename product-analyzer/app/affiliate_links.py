@@ -7,6 +7,10 @@ from urllib.parse import urlparse
 
 import requests
 
+from marketplace_safety import install_marketplace_request_guard
+
+install_marketplace_request_guard()
+
 
 ALIEXPRESS_API_URL = "https://api-sg.aliexpress.com/sync"
 ALIEXPRESS_LEGACY_API_URL = "https://eco.taobao.com/router/rest"
