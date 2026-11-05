@@ -118,35 +118,7 @@ class ProductSourcesTests(unittest.TestCase):
         first.close.assert_called_once()
         second.close.assert_called_once()
 
-    def test_link_amazon_enrichment_uses_resolved_asin_and_product_url(self):
-        product = {
-            "platform": "amazon",
-            "external_id": "URL-SHORT-LINK",
-            "product_url": "https://link.amazon/B06t7Yht8",
-            "title": "Producto Amazon URL-SHORT-LINK",
-            "source_metadata": {"original_url": "https://link.amazon/B06t7Yht8"},
-        }
-        fresh = {
-            "title": "Audífonos inalámbricos",
-            "price": 39.99,
-            "currency": "USD",
-            "image_url": "https://images.example/product.jpg",
-            "gallery_urls": ["https://images.example/product.jpg"],
-            "category": "accesorios",
-            "resolved_url": "https://www.amazon.com/dp/B012345678",
-        }
-        with (
-            patch.object(product_sources, "_resolve_product_url", return_value=fresh["resolved_url"]),
-            patch.object(product_sources, "_official_product_data", return_value=None),
-            patch.object(product_sources, "_public_product_page", return_value=fresh),
-        ):
-            result = product_sources.enrich_product(product)
-        self.assertEqual(result["external_id"], "B012345678")
-        self.assertEqual(result["product_url"], fresh["resolved_url"])
-        self.assertEqual(result["source_metadata"]["original_url"], "https://link.amazon/B06t7Yht8")
-        self.assertEqual(result["source_metadata"]["resolved_url"], fresh["resolved_url"])
-
-    def test_link_amazon_without_resolved_asin_keeps_original_identity(self):
+    def test_amazon_url_import_never_resolves_or_queries_marketplace(self):
         product = {
             "platform": "amazon",
             "external_id": "URL-SHORT-LINK",
@@ -154,33 +126,48 @@ class ProductSourcesTests(unittest.TestCase):
             "title": "Producto Amazon URL-SHORT-LINK",
             "source_metadata": {},
         }
-        fresh = {"title": "Producto", "resolved_url": "https://www.amazon.com/gp/redirect"}
         with (
-            patch.object(product_sources, "_resolve_product_url", return_value=fresh["resolved_url"]),
-            patch.object(product_sources, "_official_product_data", return_value=None),
-            patch.object(product_sources, "_public_product_page", return_value=fresh),
+            patch.object(product_sources, "_resolve_product_url") as resolve,
+            patch.object(product_sources, "_official_product_data") as official,
+            patch.object(product_sources, "_public_product_page") as public_page,
         ):
             result = product_sources.enrich_product(product)
+        resolve.assert_not_called()
+        official.assert_not_called()
+        public_page.assert_not_called()
+        self.assertEqual(result["product_url"], product["product_url"])
         self.assertEqual(result["external_id"], "URL-SHORT-LINK")
-        self.assertEqual(result["product_url"], "https://link.amazon/B06t7Yht8")
+        self.assertTrue(result["source_metadata"]["network_enrichment_disabled"])
+        self.assertEqual(result["source_metadata"]["enrichment_status"], "paused")
 
-    def test_pending_enrichment_persists_resolved_asin_url_and_affiliate(self):
-        row = {
-            "id": 7,
-            "external_id": "URL-SHORT-LINK",
+    def test_amazon_asin_is_extracted_locally_without_network(self):
+        product = {
             "platform": "amazon",
-            "product_url": "https://link.amazon/B06t7Yht8",
-            "title": "Producto Amazon URL-SHORT-LINK",
-            "current_price": None,
-            "currency": "USD",
-            "image_url": None,
-            "image_gallery": [],
-            "rating": None,
-            "reviews_count": 0,
-            "category": None,
+            "product_url": "https://www.amazon.com/dp/B012345678",
+            "title": "Producto Amazon B012345678",
             "source_metadata": {},
-            "seller_external_id": None,
-            "seller_name": None,
+        }
+        with (
+            patch.object(product_sources, "_resolve_product_url") as resolve,
+            patch.object(product_sources, "_official_product_data") as official,
+            patch.object(product_sources, "_public_product_page") as public_page,
+        ):
+            result = product_sources.enrich_product(product)
+        resolve.assert_not_called()
+        official.assert_not_called()
+        public_page.assert_not_called()
+        self.assertEqual(result["external_id"], "B012345678")
+        self.assertEqual(result["product_url"], product["product_url"])
+        self.assertEqual(result["source_metadata"]["metadata_source"], "url_only")
+
+    def test_pending_enrichment_pauses_without_network_or_affiliate_generation(self):
+        row = {
+            "id": 7, "external_id": "URL-SHORT-LINK", "platform": "amazon",
+            "product_url": "https://link.amazon/B06t7Yht8",
+            "title": "Producto Amazon URL-SHORT-LINK", "current_price": None,
+            "currency": "USD", "image_url": None, "image_gallery": [],
+            "rating": None, "reviews_count": 0, "category": None,
+            "source_metadata": {}, "seller_external_id": None, "seller_name": None,
         }
         select_cursor = MagicMock()
         select_cursor.fetchall.return_value = [row]
@@ -190,30 +177,22 @@ class ProductSourcesTests(unittest.TestCase):
             MagicMock(__enter__=MagicMock(return_value=select_cursor), __exit__=MagicMock(return_value=False)),
             MagicMock(__enter__=MagicMock(return_value=update_cursor), __exit__=MagicMock(return_value=False)),
         ]
-        enriched = {
-            "platform": "amazon",
-            "external_id": "B012345678",
-            "product_url": "https://www.amazon.com/dp/B012345678",
-            "title": "Audífonos inalámbricos",
-            "price": 39.99,
-            "currency": "USD",
-            "image_url": "https://images.example/product.jpg",
-            "gallery_urls": ["https://images.example/product.jpg"],
-            "rating": None,
-            "reviews_count": 0,
-            "category": "accesorios",
-            "seller": None,
-            "source_metadata": {"metadata_source": "public_product_page"},
-        }
-        with patch.object(product_sources, "_retry_due", return_value=True), patch.object(product_sources, "_enrich_pending_row", return_value=enriched), patch.object(product_sources, "_affiliate_url", return_value="https://www.amazon.com/dp/B012345678?tag=central-20"):
-            recovered = product_sources.enrich_pending_products(conn)
-        self.assertEqual(recovered, 1)
-        sql = update_cursor.execute.call_args.args[0]
+        with (
+            patch.object(product_sources, "_resolve_product_url") as resolve,
+            patch.object(product_sources, "_official_product_data") as official,
+            patch.object(product_sources, "_public_product_page") as public_page,
+            patch.object(product_sources, "_affiliate_url") as affiliate,
+        ):
+            recovered = product_sources.enrich_pending_products(conn, limit=1)
+        self.assertEqual(recovered, 0)
+        resolve.assert_not_called()
+        official.assert_not_called()
+        public_page.assert_not_called()
+        affiliate.assert_not_called()
         values = update_cursor.execute.call_args.args[1]
-        self.assertIn("external_id=CASE", sql)
-        self.assertIn("product_url=COALESCE", sql)
-        self.assertIn("affiliate_url=COALESCE", sql)
-        self.assertEqual(values[:5], ("B012345678", "B012345678", "B012345678", enriched["product_url"], "https://www.amazon.com/dp/B012345678?tag=central-20"))
+        self.assertIsNone(values[3])
+        self.assertIsNone(values[4])
+        self.assertIn('"network_enrichment_disabled": true', values[-2])
         conn.commit.assert_called_once()
 
     def test_link_amazon_redirect_outside_allowed_hosts_is_rejected(self):
@@ -273,7 +252,7 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(product_sources._category("Phone case"), "accesorios")
         self.assertIsNone(product_sources._category("Uncategorized product"))
 
-    def test_enrichment_failure_records_retry_without_replacing_original_url(self):
+    def test_url_import_pauses_enrichment_without_retrying_marketplace(self):
         product = {
             "platform": "aliexpress",
             "product_url": "https://s.click.aliexpress.com/e/_mOOSCcP",
@@ -281,17 +260,20 @@ class ProductSourcesTests(unittest.TestCase):
             "source_metadata": {},
         }
         with (
-            patch.object(product_sources, "_resolve_product_url", side_effect=RuntimeError("La tienda devolvió un ciclo de redirección")),
-            patch.object(product_sources, "_public_product_page", side_effect=RuntimeError("La tienda devolvió un ciclo de redirección")),
+            patch.object(product_sources, "_resolve_product_url") as resolve,
+            patch.object(product_sources, "_official_product_data") as official,
+            patch.object(product_sources, "_public_product_page") as public_page,
         ):
             result = product_sources.enrich_product(product)
-        self.assertEqual(result["product_url"], "https://s.click.aliexpress.com/e/_mOOSCcP")
-        self.assertEqual(result["source_metadata"]["enrichment_status"], "retry")
-        self.assertEqual(result["source_metadata"]["enrichment_error"], "login_or_redirect_required")
-        self.assertEqual(result["source_metadata"]["enrichment_attempts"], 1)
-        self.assertTrue(result["source_metadata"]["enrichment_retry_after"])
+        resolve.assert_not_called()
+        official.assert_not_called()
+        public_page.assert_not_called()
+        self.assertEqual(result["product_url"], product["product_url"])
+        self.assertEqual(result["source_metadata"]["enrichment_status"], "paused")
+        self.assertTrue(result["source_metadata"]["network_enrichment_disabled"])
+        self.assertFalse(product_sources._retry_due(result["source_metadata"]))
 
-    def test_marketplace_401_403_errors_are_retryable_not_blocked(self):
+    def test_marketplace_api_403_is_never_requested_during_url_import(self):
         product = {
             "platform": "aliexpress",
             "external_id": "1005012999805372",
@@ -300,15 +282,16 @@ class ProductSourcesTests(unittest.TestCase):
             "source_metadata": {},
         }
         with (
-            patch.object(product_sources, "_official_product_data", side_effect=RuntimeError("AliExpress API 403 Forbidden")),
-            patch.object(product_sources, "_public_product_page", side_effect=RuntimeError("403 Client Error: Forbidden")),
+            patch.object(product_sources, "_official_product_data", side_effect=AssertionError("API call attempted")) as official,
+            patch.object(product_sources, "_public_product_page", side_effect=AssertionError("HTTP call attempted")) as public_page,
         ):
             result = product_sources.enrich_product(product)
-        self.assertEqual(result["source_metadata"]["enrichment_status"], "retry")
-        self.assertEqual(result["source_metadata"]["enrichment_error"], "marketplace_access_error")
-        self.assertEqual(result["source_metadata"]["enrichment_attempts"], 1)
+        official.assert_not_called()
+        public_page.assert_not_called()
+        self.assertEqual(result["source_metadata"]["enrichment_status"], "paused")
+        self.assertTrue(result["source_metadata"]["network_enrichment_disabled"])
 
-    def test_enrich_pending_persists_image_price_category_and_retry_metadata(self):
+    def test_pending_enrichment_does_not_fetch_marketplace_data(self):
         connection = MagicMock()
         cursor = connection.cursor.return_value.__enter__.return_value
         cursor.fetchall.return_value = [{
@@ -316,25 +299,20 @@ class ProductSourcesTests(unittest.TestCase):
             "currency": "USD", "image_url": None, "image_gallery": [], "rating": None,
             "reviews_count": 0, "product_url": "https://www.aliexpress.com/item/123.html",
             "platform": "aliexpress", "category": None, "source_metadata": {},
+            "external_id": None, "seller_external_id": None, "seller_name": None,
         }]
-        fresh = {
-            "title": "Bolso de viaje", "price": 19.9, "currency": "USD",
-            "image_url": "https://img.alicdn.com/bolso.jpg",
-            "gallery_urls": ["https://img.alicdn.com/bolso.jpg"],
-            "rating": 4.8, "reviews_count": 120, "category": "accesorios",
-            "resolved_url": "https://www.aliexpress.com/item/123.html",
-        }
         with (
-            patch.object(product_sources, "_official_product_data", return_value=None),
-            patch.object(product_sources, "_public_product_page", return_value=fresh),
+            patch.object(product_sources, "_official_product_data") as official,
+            patch.object(product_sources, "_public_product_page") as public_page,
+            patch.object(product_sources, "_aliexpress_product_by_title") as title_search,
         ):
             recovered = product_sources.enrich_pending_products(connection, limit=1)
-        self.assertEqual(recovered, 1)
+        self.assertEqual(recovered, 0)
+        official.assert_not_called()
+        public_page.assert_not_called()
+        title_search.assert_not_called()
         update = cursor.execute.call_args_list[-1]
-        self.assertIn("image_gallery", update.args[0])
-        self.assertIn("rating=COALESCE", update.args[0])
-        self.assertEqual(update.args[1][7], "accesorios")
-        self.assertIn("enrichment_status", update.args[1][-2])
+        self.assertIn('"network_enrichment_disabled": true', update.args[1][-2])
         connection.commit.assert_called_once()
 
     def test_complete_cli_product_uses_title_category_without_fetching_page(self):
@@ -364,36 +342,24 @@ class ProductSourcesTests(unittest.TestCase):
 
 
 
-    def test_amazon_product_enrichment_uses_creators_get_items(self):
-        fresh = {
-            "external_id": "B012345678",
-            "product_url": "https://www.amazon.com/dp/B012345678",
-            "resolved_url": "https://www.amazon.com/dp/B012345678",
-            "title": "Audífonos inalámbricos",
-            "price": 39.99,
-            "currency": "USD",
-            "image_url": "https://m.media-amazon.com/images/I/product.jpg",
-            "gallery_urls": ["https://m.media-amazon.com/images/I/product.jpg"],
-            "category": "accesorios",
-            "source_metadata": {"metadata_source": "amazon_creators_api"},
-        }
+    def test_amazon_url_import_does_not_call_creators_api(self):
         product = {
             "platform": "amazon",
             "external_id": "B012345678",
             "product_url": "https://www.amazon.com/dp/B012345678",
-            "title": "Producto Amazon URL-123",
+            "title": "Producto Amazon B012345678",
             "source_metadata": {},
         }
         with (
-            patch("amazon_creators.get_item_by_asin", return_value=fresh) as api,
+            patch("amazon_creators.get_item_by_asin") as api,
             patch.object(product_sources, "_public_product_page") as public_page,
         ):
             result = product_sources.enrich_product(product)
-        api.assert_called_once_with("B012345678", None, "www.amazon.com")
+        api.assert_not_called()
         public_page.assert_not_called()
-        self.assertEqual(result["title"], "Audífonos inalámbricos")
-        self.assertEqual(result["price"], 39.99)
-        self.assertEqual(result["source_metadata"]["metadata_source"], "amazon_creators_api")
+        self.assertEqual(result["title"], "Producto Amazon B012345678")
+        self.assertEqual(result["external_id"], "B012345678")
+        self.assertTrue(result["source_metadata"]["network_enrichment_disabled"])
 
     def test_aliexpress_product_detail_uses_official_affiliate_api(self):
         raw = {
@@ -436,27 +402,7 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertTrue(request.call_args.kwargs["allow_redirects"])
         blocked.close.assert_called_once()
 
-    def test_aliexpress_short_link_uses_affiliate_title_search_before_redirect(self):
-        raw = {"product_title": "DAREVIE Cycling Jersey Long Sleeve", "product_id": "1005001234567890"}
-        payload = {
-            "aliexpress_affiliate_product_query_response": {
-                "resp_result": {"resp_code": 200, "result": {"products": {"product": [raw]}}}
-            }
-        }
-        normalized = {
-            "external_id": "1005001234567890",
-            "title": "DAREVIE Cycling Jersey Long Sleeve",
-            "product_url": "https://www.aliexpress.com/item/1005001234567890.html",
-            "affiliate_url": "https://s.click.aliexpress.com/e/example",
-            "price": 35.0,
-            "previous_price": 50.0,
-            "currency": "USD",
-            "image_url": "https://ae01.alicdn.com/product.jpg",
-            "gallery_urls": ["https://ae01.alicdn.com/product.jpg"],
-            "category": "ropa",
-            "seller": {"external_id": "shop-1", "name": "DAREVIE Store"},
-            "source_metadata": {},
-        }
+    def test_aliexpress_short_link_import_does_not_search_or_resolve(self):
         product = {
             "platform": "aliexpress",
             "external_id": "URL-SHORT-LINK",
@@ -465,27 +411,23 @@ class ProductSourcesTests(unittest.TestCase):
             "source_metadata": {},
         }
         with (
-            patch.dict("os.environ", {"ALIEXPRESS_APP_KEY": "key", "ALIEXPRESS_APP_SECRET": "secret", "ALIEXPRESS_TRACKING_ID": "central"}),
-            patch("affiliate_links.aliexpress_api_request", return_value=payload) as api,
-            patch("promotion_bots._normalize_product", return_value=normalized),
+            patch("affiliate_links.aliexpress_api_request") as api,
             patch.object(product_sources, "_resolve_product_url") as resolve,
             patch.object(product_sources, "_public_product_page") as public_page,
         ):
             result = product_sources.enrich_product(product)
-        api.assert_called_once()
-        self.assertEqual(api.call_args.args[0], "aliexpress.affiliate.product.query")
+        api.assert_not_called()
         resolve.assert_not_called()
         public_page.assert_not_called()
-        self.assertEqual(result["external_id"], "1005001234567890")
-        self.assertEqual(result["price"], 35.0)
-        self.assertEqual(result["image_url"], "https://ae01.alicdn.com/product.jpg")
-        self.assertEqual(result["source_metadata"]["metadata_source"], "aliexpress_affiliate_api_search")
+        self.assertEqual(result["product_url"], product["product_url"])
+        self.assertEqual(result["external_id"], "URL-SHORT-LINK")
+        self.assertTrue(result["source_metadata"]["network_enrichment_disabled"])
 
-    def test_new_enrichment_version_retries_previously_blocked_products(self):
+    def test_paused_url_only_products_are_not_retried(self):
         future = (product_sources.datetime.now(product_sources.timezone.utc) + product_sources.timedelta(hours=24)).isoformat()
-        self.assertTrue(product_sources._retry_due({"enrichment_version": 3, "enrichment_retry_after": future}))
-        self.assertTrue(product_sources._retry_due({"enrichment_version": 4, "enrichment_retry_after": future}))
-        self.assertFalse(product_sources._retry_due({"enrichment_version": 5, "enrichment_retry_after": future}))
+        self.assertTrue(product_sources._retry_due({"enrichment_version": 5, "enrichment_retry_after": future}))
+        self.assertFalse(product_sources._retry_due({"enrichment_version": 6, "enrichment_retry_after": future}))
+        self.assertFalse(product_sources._retry_due({"network_enrichment_disabled": True}))
 
 if __name__ == "__main__":
     unittest.main()
