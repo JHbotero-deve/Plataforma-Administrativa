@@ -61,7 +61,7 @@ class MarketplaceSearchTests(unittest.TestCase):
         self.assertEqual(telegram.call_args.args[0]["seller_name"], "Amazon Marketplace")
         self.assertEqual(telegram.call_args.args[0]["image_url"], amazon_product["image_url"])
         amazon.assert_called_once_with("auriculares", "busquedas", limit=10, page=1)
-        aliexpress.assert_called_once_with("busquedas", "auriculares", 1, review=False)
+        aliexpress.assert_called_once_with("busquedas", "auriculares", 1, review=True, minimum_discount=40)
         self.assertEqual(upsert.call_count, 2)
         self.assertEqual(publish.call_count, 2)
         connection.commit.assert_called_once()
