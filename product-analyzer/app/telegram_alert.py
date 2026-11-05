@@ -152,38 +152,7 @@ def _format_product(p):
 
 
 def _send_product(token, chat_id, product):
-    images = _product_images(product)
-    text = _format_product(product)
-    if images:
-        # Si el texto no cabe como pie de foto (1024), se envía aparte completo
-        caption = text if len(text) <= 1024 else None
-        if len(images) == 1:
-            method = "sendPhoto"
-            body = {"chat_id": chat_id, "photo": images[0]}
-            if caption:
-                body.update({"caption": caption, "parse_mode": "HTML"})
-        else:
-            method = "sendMediaGroup"
-            media = []
-            for index, image in enumerate(images):
-                item = {"type": "photo", "media": image}
-                if index == 0 and caption:
-                    item.update({"caption": caption, "parse_mode": "HTML"})
-                media.append(item)
-            body = {"chat_id": chat_id, "media": media}
-        try:
-            r = requests.post(
-                f"{API_BASE}/bot{token}/{method}",
-                json=body,
-                timeout=20,
-            )
-            payload = r.json()
-            if r.ok and isinstance(payload, dict) and payload.get("ok") is True:
-                return True if caption else _send(token, chat_id, text)
-            print(f"[telegram-bot] {method} rejected: HTTP {r.status_code}")
-        except (requests.RequestException, ValueError) as exc:
-            print(f"[telegram-bot] {method} error: {type(exc).__name__}")
-    return _send(token, chat_id, text)
+    return _send(token, chat_id, _format_product(product))
 
 
 def _send_imported(token, chat_id, product_id, payload, score, header):
