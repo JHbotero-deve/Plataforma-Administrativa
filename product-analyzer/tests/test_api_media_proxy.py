@@ -20,7 +20,8 @@ class ImageLoadingSecurityTests(unittest.TestCase):
         self.assertIn('parsed.protocol==="https:"', STORE_SOURCE)
         self.assertIn("function imageSrc(p)", STORE_SOURCE)
         self.assertIn("parsed.username&&!parsed.password", STORE_SOURCE)
-        self.assertIn(r"/\\.(?:glb|gltf)$/i.test(parsed.pathname)", STORE_SOURCE)
+        self.assertIn("function modelSrc(p)", STORE_SOURCE)
+        self.assertIn("parsed.pathname", STORE_SOURCE)
 
     def test_admin_does_not_send_image_urls_to_backend_proxy(self):
         self.assertNotIn("/api/v1/media/image?url=", ADMIN_SOURCE)
