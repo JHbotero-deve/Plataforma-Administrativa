@@ -7,6 +7,8 @@ from analysis import score_product
 from db import get_connection
 from init_db import init_database
 from notifications import send_telegram_alert
+from pricing import publish_catalog_product
+from product_sources import enrich_pending_products
 from seed_catalog import seed_catalog
 from tiktok_creator import creator_configured, sync_showcase
 
@@ -42,7 +44,29 @@ def run_pipeline():
     expire_catalog()
     conn = get_connection()
     try:
-        print("[marketplaces] búsquedas y enriquecimiento automáticos desactivados.")
+        recovered = enrich_pending_products(conn, limit=80, max_workers=4)
+        print(f"[url-enrichment] productos enriquecidos desde sus URLs públicas: {recovered}")
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT p.id, p.title, p.current_price, p.currency, p.image_url,
+                       p.product_url, p.affiliate_url, pl.name AS platform,
+                       COALESCE(s.opportunity_score, 0) AS opportunity_score
+                FROM products p
+                JOIN platforms pl ON pl.id = p.platform_id
+                LEFT JOIN product_scores s ON s.product_id = p.id
+                WHERE p.is_active = TRUE AND p.current_price > 0
+                  AND p.image_url IS NOT NULL AND p.image_url <> ''
+                  AND p.product_url IS NOT NULL AND p.product_url <> ''
+                  AND p.title IS NOT NULL AND p.title NOT LIKE 'Producto %%'
+                  AND pl.name IN ('amazon', 'aliexpress')
+                ORDER BY p.updated_at DESC LIMIT 1000
+            """)
+            catalog_rows = cur.fetchall()
+        published = 0
+        for row in catalog_rows:
+            if publish_catalog_product(conn, row["id"], row, row["opportunity_score"]):
+                published += 1
+        print(f"[storefront] productos reales elegibles publicados/actualizados: {published}")
 
         averages = {}
         with conn.cursor() as cur:
