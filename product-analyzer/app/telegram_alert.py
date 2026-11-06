@@ -92,7 +92,8 @@ def _has_product_image(product):
     gallery = product.get("image_gallery")
     if not isinstance(gallery, (list, tuple)):
         gallery = []
-    return bool(_product_link(product.get("image_url")) or any(_product_link(value) for value in gallery))
+    usable = lambda value: bool(_product_link(value) and not _is_placeholder_image_url(value))
+    return bool(usable(product.get("image_url")) or any(usable(value) for value in gallery))
 
 
 def _format_product(p):
