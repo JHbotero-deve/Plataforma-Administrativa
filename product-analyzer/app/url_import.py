@@ -128,7 +128,7 @@ def import_url(
         "price": final_price,
         "currency": final_currency,
         "rating": None,
-        "reviews_count": 0,
+        "reviews_count": None,
         "gallery_urls": [final_image] if final_image else [],
         "sales_estimate": None,
         "source_metadata": {
@@ -139,5 +139,14 @@ def import_url(
             "resolved_url": resolved_url or url,
             "gallery_urls": [final_image] if final_image else [],
             "missing_fields": missing_fields,
+            "field_sources": {
+                key: "user" for key, supplied in (
+                    ("title", bool(raw_title)),
+                    ("price", final_price is not None),
+                    ("currency", bool(currency)),
+                    ("image_url", bool(final_image)),
+                    ("category", bool(final_category)),
+                ) if supplied
+            },
         },
     }
