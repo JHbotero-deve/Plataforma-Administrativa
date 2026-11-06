@@ -13,7 +13,7 @@ import requests
 from db import _affiliate_url
 from url_import import ASIN_RE
 
-ENRICHMENT_VERSION = 6
+ENRICHMENT_VERSION = 7
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 MAX_REDIRECTS = 12
@@ -458,36 +458,76 @@ def _official_product_data(url, platform, category=None):
 
 
 def enrich_product(product):
-    """Conserva los datos aportados y no consulta redes ni APIs de marketplaces."""
-    url = str(product.get("product_url") or "")
+    """Enriquece desde la página pública de la URL, sin APIs de búsqueda de marketplaces."""
+    url = str(product.get("product_url") or "").strip()
     platform = product.get("platform")
     if platform not in ALLOWED_HOSTS or not url:
         return product
     metadata = dict(product.get("source_metadata") or {})
+    title = str(product.get("title") or "").strip()
+    complete = bool(title and not title.casefold().startswith("producto ") and product.get("price") and product.get("image_url") and product.get("category"))
+    if complete and metadata.get("enrichment_version") == ENRICHMENT_VERSION:
+        metadata["enrichment_status"] = "complete"
+        product["source_metadata"] = metadata
+        return product
+    try:
+        page = _public_product_page(url, platform)
+        resolved_url = page.get("resolved_url") or url
+        for field, key in (("title", "title"), ("price", "price"), ("previous_price", "previous_price"), ("currency", "currency"), ("image_url", "image_url"), ("description", "description"), ("rating", "rating"), ("reviews_count", "reviews_count"), ("category", "category")):
+            current = product.get(field)
+            missing_title = field == "title" and (not current or str(current).casefold().startswith("producto "))
+            if (current is None or current == "" or missing_title) and page.get(key) is not None:
+                product[field] = page[key]
+        product["gallery_urls"] = list(dict.fromkeys((product.get("gallery_urls") or []) + (page.get("gallery_urls") or [])))[:10]
+        if not product.get("image_url") and product["gallery_urls"]:
+            product["image_url"] = product["gallery_urls"][0]
+        if not product.get("seller") and page.get("seller"):
+            product["seller"] = page["seller"]
+        original_url = metadata.get("original_url") or url
+        product["product_url"] = resolved_url
+        metadata.update({
+            "original_url": original_url,
+            "resolved_url": resolved_url,
+            "metadata_source": "public_product_page" if any(page.get(key) for key in ("title", "price", "image_url", "description")) else metadata.get("metadata_source", "url_only"),
+            "enrichment_status": "complete" if product.get("title") and not str(product["title"]).casefold().startswith("producto ") and product.get("price") and product.get("image_url") else "partial",
+            "enrichment_version": ENRICHMENT_VERSION,
+            "enriched_at": datetime.now(timezone.utc).isoformat(),
+        })
+        metadata.pop("network_enrichment_disabled", None)
+        metadata.pop("enrichment_error", None)
+        metadata.pop("enrichment_retry_after", None)
+    except Exception as exc:
+        metadata.update({
+            "original_url": metadata.get("original_url") or url,
+            "enrichment_status": "partial",
+            "enrichment_version": ENRICHMENT_VERSION,
+            "enrichment_error": f"{type(exc).__name__}: {str(exc)[:180]}",
+            "enrichment_retry_after": (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat(),
+        })
+        metadata.pop("network_enrichment_disabled", None)
     if not product.get("category"):
         inferred_category = _category(None, product.get("title"))
         if inferred_category:
             product["category"] = inferred_category
             metadata["category_source"] = "title_inference"
-    path = urlsplit(url).path
+    path = urlsplit(str(product.get("product_url") or url)).path
     match = ASIN_RE.search(path) if platform == "amazon" else ALIEXPRESS_ITEM_RE.search(path)
     if match and (not product.get("external_id") or str(product["external_id"]).startswith("URL-")):
         product["external_id"] = match.group(1).upper() if platform == "amazon" else match.group(1)
-    metadata.update({
-        "metadata_source": metadata.get("metadata_source") or "url_only",
-        "resolved_url": metadata.get("resolved_url") or url,
-        "enrichment_status": "paused",
-        "enrichment_version": ENRICHMENT_VERSION,
-        "network_enrichment_disabled": True,
-    })
-    metadata.pop("marketplace_api_error", None)
-    metadata.pop("enrichment_error", None)
+    missing = []
+    if not product.get("title") or str(product.get("title")).casefold().startswith("producto "):
+        missing.append("title")
+    if not product.get("price"):
+        missing.append("price")
+    if not product.get("category"):
+        missing.append("category")
+    if not product.get("image_url"):
+        missing.append("image_url")
+    metadata["missing_fields"] = missing
     product["source_metadata"] = metadata
     return product
 
 def _retry_due(metadata):
-    if (metadata or {}).get("network_enrichment_disabled"):
-        return False
     if (metadata or {}).get("enrichment_version") != ENRICHMENT_VERSION:
         return True
     retry_after = (metadata or {}).get("enrichment_retry_after")
