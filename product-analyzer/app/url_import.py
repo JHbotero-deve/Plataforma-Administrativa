@@ -105,8 +105,11 @@ def import_url(
 
     if final_image:
         image = urlparse(final_image)
+        image_host = (image.hostname or "").lower().rstrip(".")
         if image.scheme not in ("http", "https") or not image.hostname:
             raise ValueError("La imagen debe ser una URL HTTP o HTTPS válida.")
+        if image_host in {"enlace-de-la-imagen.jpg", "example.com", "www.example.com", "placeholder.com"} or "placeholder" in image.path.casefold():
+            final_image = None
 
     missing_fields = []
     if not raw_title:
@@ -136,7 +139,7 @@ def import_url(
         "source_metadata": {
             "import_method": "authorized_cli_url",
             "metadata_source": "cli" if title or price is not None or image_url or final_category or currency else "url_only",
-            "manual_fields": [field for field, supplied in (("title", title), ("price", price), ("image_url", image_url), ("currency", currency), ("category", final_category)) if supplied is not None and supplied != ""],
+            "manual_fields": [field for field, supplied in (("title", title), ("price", price), ("image_url", final_image), ("currency", currency), ("category", final_category)) if supplied is not None and supplied != ""],
             "category_source": "user" if final_category else None,
             "original_url": url,
             "resolved_url": resolved_url or url,
