@@ -222,7 +222,14 @@ def _top_products(limit=25):
                 WHERE p.is_active = TRUE
                   AND COALESCE(s.opportunity_score, 0) >= 60
                   AND p.current_price > 0 AND p.currency NOT IN ('UNK', 'N/D') AND p.category_id IS NOT NULL
-                  AND p.title NOT LIKE 'Producto %%' AND p.image_url IS NOT NULL
+                  AND LOWER(p.title) NOT LIKE 'producto amazon %%'
+                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) <> 'producto'
+                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
+                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
+                  AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
+                  AND LOWER(p.title) NOT LIKE '%nombre real del producto%' AND p.image_url IS NOT NULL
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                   AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
@@ -259,7 +266,14 @@ def _search_products(term, limit=8):
                 LEFT JOIN sellers seller ON seller.id = p.seller_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
-                  AND p.title NOT LIKE 'Producto %%'
+                  AND LOWER(p.title) NOT LIKE 'producto amazon %%'
+                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) <> 'producto'
+                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
+                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
+                  AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
+                  AND LOWER(p.title) NOT LIKE '%nombre real del producto%'
                   AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
                   AND LOWER(p.title) NOT LIKE '%producto verificado con%'
                   AND (p.title ILIKE %s OR COALESCE(c.name, '') ILIKE %s)
@@ -458,7 +472,14 @@ def _model_active_products():
                   AND p.currency NOT IN ('UNK', 'N/D')
                   AND p.category_id IS NOT NULL
                   AND p.title IS NOT NULL
-                  AND p.title NOT LIKE 'Producto %%'
+                  AND LOWER(p.title) NOT LIKE 'producto amazon %%'
+                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) <> 'producto'
+                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
+                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
+                  AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
+                  AND LOWER(p.title) NOT LIKE '%nombre real del producto%'
                   AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
                   AND p.image_url IS NOT NULL
                   AND p.image_url <> ''
@@ -476,7 +497,14 @@ def _model_active_products():
                           AND currency NOT IN ('UNK', 'N/D')
                           AND category_id IS NOT NULL
                           AND title IS NOT NULL
-                          AND title NOT LIKE 'Producto %%'
+                          AND LOWER(title) NOT LIKE 'producto amazon %%'
+                          AND LOWER(title) NOT LIKE 'producto aliexpress %%'
+                          AND LOWER(title) NOT LIKE 'producto url-%%'
+                          AND LOWER(title) <> 'producto'
+                          AND LOWER(title) NOT LIKE '%oferta destacada global%'
+                          AND LOWER(title) NOT LIKE '%producto verificado con%'
+                          AND LOWER(title) NOT LIKE '%titulo real del producto%'
+                          AND LOWER(title) NOT LIKE '%nombre real del producto%'
                           AND LOWER(title) NOT LIKE '%oferta destacada global%'
                           AND image_url IS NOT NULL
                           AND image_url <> ''
