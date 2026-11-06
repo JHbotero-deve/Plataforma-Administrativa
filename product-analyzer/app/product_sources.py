@@ -240,7 +240,7 @@ def _public_product_page(url, platform):
         "description": str(description).strip()[:5000] or None,
         "currency": str(currency).upper()[:10] if currency else None,
         "rating": _number(rating),
-        "reviews_count": int(_number(reviews_count) or 0),
+        "reviews_count": int(_number(reviews_count)) if _number(reviews_count) is not None else None,
         "category": _category(category, title),
         "seller": seller,
         "seller_url": urljoin(current, seller_url) if seller_url else None,
