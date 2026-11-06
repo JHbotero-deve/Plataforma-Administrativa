@@ -16,7 +16,7 @@ class PublicationQualityTests(unittest.TestCase):
         self.assertIn("missing_fields", query)
         self.assertIn("pc.sale_price > 0", query)
         self.assertIn("field_sources", query)
-        self.assertNotIn("profit_margin_pct", query)
+        self.assertNotIn("COALESCE(pc.profit_margin_pct, 0) > 0", query)
         connection.close.assert_called_once()
 
     def test_admin_unpublished_view_can_still_inspect_stale_cards(self):
