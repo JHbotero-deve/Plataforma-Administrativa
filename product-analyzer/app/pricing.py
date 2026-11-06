@@ -57,7 +57,6 @@ def publish_discounted_offer(conn, product_id, product, opportunity_score=None):
 
     with conn.cursor() as cur:
         cur.execute("UPDATE products SET is_active = TRUE WHERE id = %s", (product_id,))
-    conn.commit()
 
     currency = str(product.get("currency") or "USD").upper()
     price_display = f"{offer['sale_price']:,.2f} {currency}"
