@@ -271,12 +271,16 @@ def enrich_product(product, force=False):
         return product
     metadata = dict(product.get("source_metadata") or {})
     manual_fields = set(metadata.get("manual_fields") or [])
+    field_sources = dict(metadata.get("field_sources") or {})
     if _is_placeholder_title(product.get("title")):
         manual_fields.discard("title")
+        field_sources.pop("title", None)
     if _is_placeholder_image_url(product.get("image_url")):
         product["image_url"] = None
         manual_fields.discard("image_url")
+        field_sources.pop("image_url", None)
     metadata["manual_fields"] = sorted(manual_fields)
+    metadata["field_sources"] = field_sources
     if not product.get("category"):
         inferred_category = _category(None, product.get("title"))
         if inferred_category:
