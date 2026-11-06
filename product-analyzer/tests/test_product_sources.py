@@ -93,6 +93,7 @@ class ProductSourcesTests(unittest.TestCase):
             "price": 19.9,
             "image_url": "https://img.example/shoes.jpg",
             "category": "calzado",
+            "currency": "USD",
             "source_metadata": {"enrichment_version": product_sources.ENRICHMENT_VERSION},
         }
         with patch.object(product_sources, "_public_product_page") as fetch:
