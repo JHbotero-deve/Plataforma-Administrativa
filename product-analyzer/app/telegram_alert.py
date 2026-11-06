@@ -554,8 +554,6 @@ def _handle(token, chat_id, text):
             return _send(token, chat_id, "No hay coincidencias en el catálogo importado. Envía la URL del producto o usa /agregar URL para incorporarlo.")
         if not _send(token, chat_id, f"<b>Resultados del catálogo ({len(products)})</b>"):
             return False
-        if not _send(token, chat_id, f"<b>Resultados del catálogo ({len(products)})</b>"):
-            return False
         for index, product in enumerate(products, 1):
             product["title"] = f"{index}. {product['title']}"
             if not _send_product(token, chat_id, product):
