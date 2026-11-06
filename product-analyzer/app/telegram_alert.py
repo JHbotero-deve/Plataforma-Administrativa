@@ -10,7 +10,7 @@ import requests
 from analysis import score_product
 from db import get_connection, upsert_product
 from url_import import detect_platform, import_url
-from product_sources import ALLOWED_CATEGORIES, enrich_product
+from product_sources import ALLOWED_CATEGORIES, enrich_product, _is_placeholder_title
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
@@ -343,7 +343,7 @@ def _add_url(argument, title=None):
         try:
             product_id = upsert_product(conn, product["platform"], category, product)
             score = None
-            if product.get("price") is not None and category and product.get("image_url") and product.get("title") and not product["title"].startswith("Producto "):
+            if product.get("price") is not None and product.get("currency") not in (None, "", "UNK") and category and product.get("image_url") and product.get("title") and not _is_placeholder_title(product["title"]):
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -389,6 +389,18 @@ def _model_product(argument):
             "reviews_count": int(parts[7] or 0),
             "sales_estimate": int(parts[8] or 0),
             "image_url": parts[9] or None,
+            "source_metadata": {
+                "metadata_source": "telegram_manual",
+                "field_sources": {
+                    "title": "user",
+                    "price": "user",
+                    "currency": "user",
+                    "rating": "user" if parts[6] else None,
+                    "reviews_count": "user" if parts[7] else None,
+                    "sales_estimate": "user" if parts[8] else None,
+                    "image_url": "user",
+                },
+            },
         }
         conn = get_connection()
         try:
