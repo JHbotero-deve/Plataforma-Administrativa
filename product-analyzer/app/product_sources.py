@@ -464,6 +464,11 @@ def enrich_product(product):
     if platform not in ALLOWED_HOSTS or not url:
         return product
     metadata = dict(product.get("source_metadata") or {})
+    if not product.get("category"):
+        inferred_category = _category(None, product.get("title"))
+        if inferred_category:
+            product["category"] = inferred_category
+            metadata["category_source"] = "title_inference"
     title = str(product.get("title") or "").strip()
     complete = bool(title and not title.casefold().startswith("producto ") and product.get("price") and product.get("image_url") and product.get("category"))
     if complete and metadata.get("enrichment_version") == ENRICHMENT_VERSION:
