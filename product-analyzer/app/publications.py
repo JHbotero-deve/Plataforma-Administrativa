@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from admin_auth import require_admin
 from db import get_connection
+from storefront_sections import PUBLIC_CARD_QUALITY_FILTER
 from notifications import send_telegram_publication
 
 router = APIRouter(tags=["publications"])
@@ -80,7 +81,7 @@ def list_publications(
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            where = "" if include_unpublished else "AND pc.is_published = TRUE"
+            where = "" if include_unpublished else "AND pc.is_published = TRUE " + PUBLIC_CARD_QUALITY_FILTER
             private_fields = (
                 "pc.cost_price, pc.profit_amount, pc.profit_margin_pct"
                 if include_unpublished else

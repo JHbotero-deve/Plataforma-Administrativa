@@ -436,14 +436,16 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 (p.is_active=TRUE AND (p.current_price IS NULL OR p.currency IS NULL OR p.currency = 'UNK' OR p.image_url IS NULL OR LOWER(p.title) LIKE 'producto amazon %%' OR LOWER(p.title) LIKE 'producto aliexpress %%' OR LOWER(p.title) LIKE 'producto url-%%' OR LOWER(p.title) IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url') OR LOWER(p.title) LIKE '%titulo real del producto%' OR LOWER(p.title) LIKE '%nombre real del producto%' OR LOWER(p.title) LIKE '%oferta destacada global%' OR LOWER(p.title) LIKE '%producto verificado con%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%enlace-de-la-imagen.jpg%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%placeholder%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%example.com%' OR p.category_id IS NULL))
                 OR (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW())
                 OR (p.is_active=TRUE AND (LOWER(p.title) LIKE '%oferta destacada global%' OR LOWER(p.title) LIKE '%producto verificado con%'))
+                OR (p.is_active=TRUE AND COALESCE(p.source_metadata->>'enrichment_version', '') <> %s)
+                OR (COALESCE(p.source_metadata->>'catalog_status', '') = 'stale')
             )
-            ORDER BY (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) DESC,p.catalog_expires_at ASC NULLS LAST,p.updated_at ASC LIMIT %s""", (max(limit, limit * 5),))
+            ORDER BY (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) DESC,p.catalog_expires_at ASC NULLS LAST,p.updated_at ASC LIMIT %s""", (str(ENRICHMENT_VERSION), max(limit, limit * 5)))
         candidates = cur.fetchall()
     rows = [row for row in candidates if force or row.get("catalog_expired") or _retry_due(row.get("source_metadata") or {})][:limit]
     if not rows:
         return 0
     with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(rows)))) as executor:
-        enriched_rows = list(executor.map(_enrich_pending_row, rows, [bool(force or row.get("catalog_expired")) for row in rows]))
+        enriched_rows = list(executor.map(_enrich_pending_row, rows, [bool(force or row.get("catalog_expired") or str((row.get("source_metadata") or {}).get("enrichment_version") or "") != str(ENRICHMENT_VERSION)) for row in rows]))
     recovered = 0
     for row, enriched in zip(rows, enriched_rows):
         metadata = enriched.get("source_metadata") or {}
