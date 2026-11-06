@@ -1,7 +1,5 @@
 """Customer offer rules; internal costs and margins never belong in public responses."""
 import math
-from urllib.parse import urlsplit
-
 from product_sources import _is_placeholder_image_url, _is_placeholder_title
 
 MIN_CUSTOMER_DISCOUNT_PCT = 40.0
