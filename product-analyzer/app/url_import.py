@@ -37,7 +37,11 @@ def _host_matches(host: str, domains) -> bool:
 def detect_platform(url: str) -> str:
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().rstrip(".")
-    if parsed.username or parsed.password or parsed.port not in (None, 80, 443):
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("La URL contiene un puerto no válido.") from exc
+    if parsed.username or parsed.password or port not in (None, 80, 443):
         raise ValueError("La URL contiene credenciales o un puerto no permitido.")
     if _host_matches(host, AMAZON_DOMAINS) or host in AMAZON_SHORTLINKS:
         return "amazon"
