@@ -11,8 +11,6 @@ from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
-from affiliate_links import generate_aliexpress_affiliate_url
-
 def _database_url() -> str:
     db_url = (os.getenv("DATABASE_URL") or "").strip()
     if not db_url:
