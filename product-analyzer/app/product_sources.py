@@ -407,6 +407,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
             WHERE p.product_url IS NOT NULL AND (
                 (p.is_active=TRUE AND (p.current_price IS NULL OR p.currency IS NULL OR p.currency = 'UNK' OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL))
                 OR (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW())
+                OR (p.is_active=TRUE AND (LOWER(p.title) LIKE '%oferta destacada global%' OR LOWER(p.title) LIKE '%producto verificado con%'))
             )
             ORDER BY (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) DESC,p.catalog_expires_at ASC NULLS LAST,p.updated_at ASC LIMIT %s""", (max(limit, limit * 5),))
         candidates = cur.fetchall()
@@ -414,7 +415,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
     if not rows:
         return 0
     with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(rows)))) as executor:
-        enriched_rows = list(executor.map(_enrich_pending_row, rows, [bool(row.get("catalog_expired")) for row in rows]))
+        enriched_rows = list(executor.map(_enrich_pending_row, rows, [bool(force or row.get("catalog_expired")) for row in rows]))
     recovered = 0
     for row, enriched in zip(rows, enriched_rows):
         metadata = enriched.get("source_metadata") or {}
@@ -448,7 +449,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 rating=COALESCE(%s,rating),
                 reviews_count=COALESCE(%s,reviews_count),
                 source_metadata=%s::jsonb,
-                is_active=CASE WHEN %s THEN TRUE WHEN %s THEN FALSE ELSE is_active END,
+                is_active=CASE WHEN %s THEN TRUE ELSE is_active END,
                 catalog_expires_at=CASE WHEN %s THEN NOW()+INTERVAL '48 hours' WHEN %s THEN NOW()+INTERVAL '12 hours' ELSE catalog_expires_at END,
                 updated_at=NOW()
                 WHERE id=%s""", (
@@ -465,9 +466,8 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 enriched.get("rating"), enriched.get("reviews_count"),
                 json.dumps(metadata),
                 bool(metadata.get("catalog_refresh_verified")),
-                bool(row.get("catalog_expired")),
                 bool(metadata.get("catalog_refresh_verified")),
-                bool(row.get("catalog_expired")) and not bool(metadata.get("catalog_refresh_verified")),
+                bool(row.get("catalog_expired")),
                 row["id"],
             ))
         if metadata.get("metadata_source") == "public_product_page" and any(enriched.get(key) for key in ("price", "image_url")):
