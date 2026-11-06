@@ -90,7 +90,7 @@ def publish_discounted_offer(conn, product_id, product, opportunity_score=None):
     return offer
 
 
-def publish_catalog_product(conn, product_id, product, opportunity_score=None):
+def publish_catalog_product(conn, product_id, product, opportunity_score=None, commit=True):
     """Publica productos externos a su precio real, sin inventar descuentos ni costes."""
     with conn.cursor() as cur:
         cur.execute("SELECT storefront_excluded FROM products WHERE id = %s", (product_id,))
@@ -128,5 +128,6 @@ def publish_catalog_product(conn, product_id, product, opportunity_score=None):
             f"{price:,.2f} {currency}", image, product_url, price,
             opportunity_score or 0, "Precio de referencia del comercio · compra externa", "#b6f23a",
         ))
-    conn.commit()
+    if commit:
+        conn.commit()
     return {"sale_price": price, "discount_pct": None, "publication_type": "catalog"}
