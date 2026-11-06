@@ -106,6 +106,16 @@ class ProductSourcesTests(unittest.TestCase):
         fetch.assert_not_called()
         self.assertEqual(result["source_metadata"]["enrichment_status"], "complete")
 
+    def test_enrich_pending_products_retries_old_versions_and_stale_rows(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = []
+        self.assertEqual(product_sources.enrich_pending_products(connection, limit=3), 0)
+        query, parameters = cursor.execute.call_args.args
+        self.assertIn("enrichment_version", query)
+        self.assertIn("catalog_status", query)
+        self.assertEqual(parameters, (str(product_sources.ENRICHMENT_VERSION), 15))
+
     def test_failed_public_page_keeps_product_partial_and_retryable(self):
         product = {
             "platform": "amazon",

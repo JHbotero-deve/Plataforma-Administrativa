@@ -1,5 +1,7 @@
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+from pathlib import Path
 
 from storefront_sections import DEFAULT_SECTIONS, normalize_target_count
 
@@ -32,6 +34,24 @@ class StorefrontSectionTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     normalize_target_count(value)
+
+    def test_featured_section_counts_all_current_publications_not_only_margin_products(self):
+        import storefront_sections
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [
+            {"slug": "ofertas-destacadas", "title": "Ofertas destacadas", "category_name": None, "category_names": [], "target_count": 100, "is_active": True, "sort_order": 100},
+            {"slug": "tecnologia", "title": "Tecnología", "category_name": "tecnologia", "category_names": ["tecnologia"], "target_count": 100, "is_active": True, "sort_order": 10},
+        ]
+        cursor.fetchone.return_value = {"total": 0}
+        with patch.object(storefront_sections, "get_connection", return_value=connection):
+            result = storefront_sections.get_storefront_sections()
+        queries = [call.args[0] for call in cursor.execute.call_args_list[1:]]
+        self.assertEqual(len(result), 2)
+        self.assertTrue(all("catalog_status" in query and "missing_fields" in query for query in queries))
+        self.assertFalse(any("profit_margin_pct" in query for query in queries))
+        connection.close.assert_called_once()
+
 
 
 if __name__ == "__main__":
