@@ -26,15 +26,26 @@ def expire_catalog():
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE products
-                SET is_active = FALSE, updated_at = NOW()
+                SET source_metadata = COALESCE(source_metadata, '{}'::jsonb) ||
+                    jsonb_build_object('catalog_status', 'stale', 'catalog_stale_at', NOW()::text)
                 WHERE is_active = TRUE
                   AND catalog_expires_at IS NOT NULL
                   AND catalog_expires_at <= NOW()
+                  AND source_metadata->>'catalog_status' IS DISTINCT FROM 'stale'
                 RETURNING id
             """)
             expired = cur.rowcount
+            cur.execute("""
+                UPDATE published_cards pc
+                SET subtitle = 'Precio pendiente de verificación',
+                    footer = 'Precio observado anteriormente · verifica el precio actual en la tienda',
+                    updated_at = NOW()
+                FROM products p
+                WHERE p.id = pc.product_id AND pc.is_published = TRUE
+                  AND p.is_active = TRUE AND p.catalog_expires_at <= NOW()
+            """)
         conn.commit()
-        print(f"== Productos vencidos retirados: {expired} ==")
+        print(f"== Productos marcados para revalidación (sin borrarlos ni desactivarlos): {expired} ==")
     finally:
         conn.close()
 
@@ -58,6 +69,7 @@ def run_pipeline():
                   AND p.image_url IS NOT NULL AND p.image_url <> ''
                   AND p.product_url IS NOT NULL AND p.product_url <> ''
                   AND p.title IS NOT NULL AND p.title NOT LIKE 'Producto %%'
+                  AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                   AND pl.name IN ('amazon', 'aliexpress')
                 ORDER BY p.updated_at DESC LIMIT 1000
             """)
