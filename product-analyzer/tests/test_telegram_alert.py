@@ -25,6 +25,7 @@ class TelegramCommandTests(unittest.TestCase):
 
         with (
             patch.object(telegram_alert, "get_connection", return_value=connection),
+            patch.object(telegram_alert, "enrich_pending_products", return_value=0),
             patch.object(telegram_alert, "score_product", return_value=72),
         ):
             result = telegram_alert._model_active_products()
