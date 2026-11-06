@@ -33,5 +33,19 @@ class URLFirstWorkerTests(unittest.TestCase):
         self.assertIn("URLs", result["reason"])
 
 
+    def test_expired_catalog_products_are_marked_stale_without_deactivation(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.rowcount = 12
+        with patch.object(main, "get_connection", return_value=connection):
+            main.expire_catalog()
+        statements = [call.args[0] for call in cursor.execute.call_args_list]
+        self.assertIn("catalog_status", statements[0])
+        self.assertNotIn("SET is_active = FALSE", statements[0])
+        self.assertIn("UPDATE published_cards", statements[1])
+        connection.commit.assert_called_once()
+        connection.close.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
