@@ -75,6 +75,37 @@ class CustomerOfferTests(unittest.TestCase):
         self.assertEqual(result["publication_type"], "catalog")
         connection.commit.assert_called_once()
 
+    def test_does_not_publish_url_only_product_with_unverified_required_fields(self):
+        connection = MagicMock()
+        result = publish_catalog_product(connection, 15, {
+            "title": "Auriculares inalámbricos",
+            "current_price": 24.99,
+            "currency": "USD",
+            "image_url": "https://images.example/headphones.jpg",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+            "platform": "amazon",
+            "source_metadata": {
+                "metadata_source": "url_only",
+                "missing_fields": ["title", "price", "category", "image_url"],
+            },
+        })
+        self.assertIsNone(result)
+        connection.commit.assert_not_called()
+
+    def test_does_not_publish_url_only_product_without_verified_field_sources(self):
+        connection = MagicMock()
+        result = publish_catalog_product(connection, 16, {
+            "title": "Auriculares inalámbricos",
+            "current_price": 24.99,
+            "currency": "USD",
+            "image_url": "https://images.example/headphones.jpg",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+            "platform": "amazon",
+            "source_metadata": {"metadata_source": "url_only", "missing_fields": []},
+        })
+        self.assertIsNone(result)
+        connection.commit.assert_not_called()
+
     def test_does_not_publish_catalog_product_without_real_image_or_price(self):
         connection = MagicMock()
         result = publish_catalog_product(connection, 12, {

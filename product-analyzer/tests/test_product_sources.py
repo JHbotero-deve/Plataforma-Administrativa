@@ -83,6 +83,10 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(result["product_url"], "https://www.amazon.com/dp/B012345678")
         self.assertEqual(result["source_metadata"]["original_url"], "https://amzn.to/example")
         self.assertEqual(result["source_metadata"]["enrichment_status"], "complete")
+        self.assertEqual(result["source_metadata"]["field_sources"]["title"], "user")
+        self.assertEqual(result["source_metadata"]["field_sources"]["price"], "user")
+        self.assertEqual(result["source_metadata"]["field_sources"]["image_url"], "user")
+        self.assertEqual(result["source_metadata"]["field_sources"]["currency"], "user")
         self.assertNotIn("network_enrichment_disabled", result["source_metadata"])
 
     def test_complete_user_supplied_product_does_not_refetch_page(self):
@@ -95,7 +99,7 @@ class ProductSourcesTests(unittest.TestCase):
             "image_url": "https://img.example/shoes.jpg",
             "category": "calzado",
             "currency": "USD",
-            "source_metadata": {"enrichment_version": product_sources.ENRICHMENT_VERSION},
+            "source_metadata": {"enrichment_version": product_sources.ENRICHMENT_VERSION, "manual_fields": ["title", "price", "currency", "image_url", "category"]},
         }
         with patch.object(product_sources, "_public_product_page") as fetch:
             result = product_sources.enrich_product(product)

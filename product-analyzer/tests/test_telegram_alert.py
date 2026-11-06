@@ -205,6 +205,19 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertIn("Productos inactivos: 498", message)
         self.assertIn("Productos con URL: 490", message)
 
+    def test_top_products_excludes_unverified_and_placeholder_catalog_rows(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = []
+        with patch.object(telegram_alert, "get_connection", return_value=connection):
+            self.assertEqual(telegram_alert._top_products(limit=8), [])
+        query, parameters = cursor.execute.call_args.args
+        self.assertIn("field_sources", query)
+        self.assertIn("missing_fields", query)
+        self.assertIn("%placeholder%", query)
+        self.assertEqual(parameters, (8,))
+        connection.close.assert_called_once()
+
     def test_unverified_legacy_metrics_are_not_displayed_as_real(self):
         message = telegram_alert._format_product({
             "title": "Auriculares",
