@@ -268,7 +268,7 @@ def enrich_product(product, force=False):
             product["category"] = inferred_category
             metadata["category_source"] = "title_inference"
     title = str(product.get("title") or "").strip()
-    complete = bool(title and not _is_placeholder_title(title) and product.get("price") and product.get("currency") and product.get("currency") != "UNK" and product.get("image_url") and product.get("category"))
+    complete = bool(title and not _is_placeholder_title(title) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and product.get("category"))
     if complete and not force:
         metadata.update({"enrichment_status": "complete", "enrichment_version": ENRICHMENT_VERSION, "missing_fields": []})
         product["source_metadata"] = metadata
@@ -276,21 +276,21 @@ def enrich_product(product, force=False):
     try:
         page = _public_product_page(url, platform)
         resolved_url = page.get("resolved_url") or url
-        page_fields = {"public_product_page", "public_product_page_empty"}
+        has_page_data = any(page.get(key) for key in ("title", "price", "image_url", "description"))
+        metadata["metadata_source"] = "public_product_page" if has_page_data else "public_product_page_empty"
         for field, key in (("title", "title"), ("price", "price"), ("previous_price", "previous_price"), ("currency", "currency"), ("image_url", "image_url"), ("description", "description"), ("rating", "rating"), ("reviews_count", "reviews_count"), ("category", "category")):
             current = product.get(field)
             missing_title = field == "title" and _is_placeholder_title(current)
             missing_currency = field == "currency" and str(current or "").upper() in {"", "UNK", "N/D"}
             replace_legacy = metadata.get("metadata_source") == "url_only" and field in {"price", "currency"}
-            replace_page_value = force and metadata.get("metadata_source") in page_fields and field not in manual_fields
-            if (current is None or current == "" or missing_title or missing_currency or replace_legacy or replace_page_value) and field not in manual_fields and page.get(key) is not None:
+            should_update = force or current is None or current == "" or missing_title or missing_currency or replace_legacy
+            if should_update and field not in manual_fields and page.get(key) is not None:
                 product[field] = page[key]
         product["gallery_urls"] = list(dict.fromkeys((product.get("gallery_urls") or []) + (page.get("gallery_urls") or [])))[:10]
         if not product.get("image_url") and product["gallery_urls"] and "image_url" not in manual_fields:
             product["image_url"] = product["gallery_urls"][0]
         if not product.get("seller") and page.get("seller"):
             product["seller"] = page["seller"]
-        original_url = metadata.get("original_url") or url
         product["product_url"] = resolved_url
         page_price = page.get("price")
         page_currency = str(page.get("currency") or "").upper()
@@ -301,23 +301,26 @@ def enrich_product(product, force=False):
         currency_matches = bool(page_currency and page_currency == str(product.get("currency") or "").upper())
         refresh_verified = bool(page.get("title") and page_price is not None and page_currency and page.get("image_url") and price_matches and currency_matches)
         field_sources = dict(metadata.get("field_sources") or {})
+        for field in manual_fields:
+            if product.get(field) is not None:
+                field_sources[field] = "user"
         for field, key in (("title", "title"), ("price", "price"), ("previous_price", "previous_price"), ("currency", "currency"), ("image_url", "image_url"), ("description", "description"), ("rating", "rating"), ("reviews_count", "reviews_count"), ("category", "category"), ("seller", "seller")):
             if page.get(key) is not None and field not in manual_fields:
                 field_sources[field] = "public_product_page"
         metadata["field_sources"] = field_sources
+        has_complete_data = bool(product.get("title") and not _is_placeholder_title(product.get("title")) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url"))
         metadata.update({
             "catalog_status": "current" if refresh_verified else "stale",
-            "original_url": original_url,
-            "resolved_url": resolved_url,
-            "metadata_source": "public_product_page" if any(page.get(key) for key in ("title", "price", "image_url", "description")) else "public_product_page_empty",
             "catalog_refresh_verified": refresh_verified,
-            "enrichment_status": "complete" if product.get("title") and not _is_placeholder_title(product.get("title")) and product.get("price") and product.get("currency") and product.get("currency") != "UNK" and product.get("image_url") else "partial",
+            "original_url": metadata.get("original_url") or url,
+            "resolved_url": resolved_url,
+            "enrichment_status": "complete" if has_complete_data else "partial",
             "enrichment_version": ENRICHMENT_VERSION,
             "enriched_at": datetime.now(timezone.utc).isoformat(),
         })
         metadata.pop("network_enrichment_disabled", None)
         metadata.pop("enrichment_error", None)
-        if metadata["enrichment_status"] == "partial" or not refresh_verified:
+        if not has_complete_data or not refresh_verified:
             metadata["enrichment_retry_after"] = (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat()
         else:
             metadata.pop("enrichment_retry_after", None)
@@ -342,11 +345,11 @@ def enrich_product(product, force=False):
     if match and (not product.get("external_id") or str(product["external_id"]).startswith("URL-")):
         product["external_id"] = match.group(1).upper() if platform == "amazon" else match.group(1)
     missing = []
-    if not product.get("title") or _is_placeholder_title(product.get("title")):
+    if _is_placeholder_title(product.get("title")):
         missing.append("title")
     if not product.get("price"):
         missing.append("price")
-    if not product.get("currency") or product.get("currency") == "UNK":
+    if not product.get("currency") or product.get("currency") in {"UNK", "N/D"}:
         missing.append("currency")
     if not product.get("category"):
         missing.append("category")
