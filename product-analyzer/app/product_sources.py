@@ -91,7 +91,11 @@ def _number(value):
     if "," in raw and "." in raw:
         raw = raw.replace(".", "").replace(",", ".") if raw.rfind(",") > raw.rfind(".") else raw.replace(",", "")
     elif "," in raw:
-        raw = raw.replace(",", ".")
+        whole, separator, fraction = raw.partition(",")
+        raw = whole + fraction if len(fraction) == 3 else whole + "." + fraction
+    elif "." in raw:
+        whole, separator, fraction = raw.partition(".")
+        raw = whole + fraction if len(fraction) == 3 else raw
     try:
         result = float(raw)
         return result if result > 0 else None
