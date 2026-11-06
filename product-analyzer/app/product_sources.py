@@ -297,7 +297,13 @@ def enrich_product(product, force=False):
                 price_matches = False
         currency_matches = "currency" not in manual_fields or page_currency == str(product.get("currency") or "").upper()
         refresh_verified = bool(page.get("title") and page_price is not None and page_currency and page.get("image_url") and price_matches and currency_matches)
+        field_sources = dict(metadata.get("field_sources") or {})
+        for field, key in (("title", "title"), ("price", "price"), ("previous_price", "previous_price"), ("currency", "currency"), ("image_url", "image_url"), ("description", "description"), ("rating", "rating"), ("reviews_count", "reviews_count"), ("category", "category"), ("seller", "seller")):
+            if page.get(key) is not None and field not in manual_fields:
+                field_sources[field] = "public_product_page"
+        metadata["field_sources"] = field_sources
         metadata.update({
+            "catalog_status": "current" if refresh_verified else "stale",
             "original_url": original_url,
             "resolved_url": resolved_url,
             "metadata_source": "public_product_page" if any(page.get(key) for key in ("title", "price", "image_url", "description")) else "public_product_page_empty",
@@ -318,6 +324,7 @@ def enrich_product(product, force=False):
             "enrichment_status": "partial",
             "enrichment_version": ENRICHMENT_VERSION,
             "catalog_refresh_verified": False,
+            "catalog_status": "stale",
             "enrichment_error": f"{type(exc).__name__}: {str(exc)[:180]}",
             "enrichment_retry_after": (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat(),
         })
