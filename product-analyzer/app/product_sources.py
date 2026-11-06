@@ -254,8 +254,8 @@ def enrich_product(product):
             metadata["category_source"] = "title_inference"
     title = str(product.get("title") or "").strip()
     complete = bool(title and not title.casefold().startswith("producto ") and product.get("price") and product.get("image_url") and product.get("category"))
-    if complete and metadata.get("enrichment_version") == ENRICHMENT_VERSION:
-        metadata["enrichment_status"] = "complete"
+    if complete:
+        metadata.update({"enrichment_status": "complete", "enrichment_version": ENRICHMENT_VERSION, "missing_fields": []})
         product["source_metadata"] = metadata
         return product
     try:
@@ -283,7 +283,10 @@ def enrich_product(product):
         })
         metadata.pop("network_enrichment_disabled", None)
         metadata.pop("enrichment_error", None)
-        metadata.pop("enrichment_retry_after", None)
+        if metadata["enrichment_status"] == "partial":
+            metadata["enrichment_retry_after"] = (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat()
+        else:
+            metadata.pop("enrichment_retry_after", None)
     except Exception as exc:
         metadata.update({
             "original_url": metadata.get("original_url") or url,
@@ -316,6 +319,8 @@ def enrich_product(product):
     return product
 
 def _retry_due(metadata):
+    if (metadata or {}).get("enrichment_status") == "complete":
+        return False
     if (metadata or {}).get("enrichment_version") != ENRICHMENT_VERSION:
         return True
     retry_after = (metadata or {}).get("enrichment_retry_after")
