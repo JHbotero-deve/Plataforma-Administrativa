@@ -65,9 +65,7 @@ def _is_public_product_page(request):
     try:
         parsed = urlsplit(str(getattr(request, "url", "") or ""))
         host = (parsed.hostname or "").lower().rstrip(".")
-        if parsed.scheme != "https" or parsed.username or parsed.password:
-            return False
-        if parsed.port not in (None, 443):
+        if parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None, 443):
             return False
     except ValueError:
         return False
@@ -78,9 +76,8 @@ def _is_public_product_page(request):
     if root_host in AMAZON_PAGE_DOMAINS:
         return any(parsed.path.startswith(path) for path in PRODUCT_PATHS)
     if root_host in ALIEXPRESS_PAGE_DOMAINS:
-        return bool(__import__("re").match(r"^/item/\d+(?:\.html)?(?:/|$)", parsed.path, __import__("re").I))
+        return bool(re.match(r"^/item/\\d+(?:\\.html)?(?:/|$)", parsed.path, re.I))
     return False
-
 
 def install_marketplace_request_guard():
     original_send = requests.sessions.Session.send
