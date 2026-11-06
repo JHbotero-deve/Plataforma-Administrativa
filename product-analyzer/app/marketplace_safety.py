@@ -32,6 +32,9 @@ AMAZON_PAGE_DOMAINS = {
     "amazon.ae", "amazon.sg", "amazon.com.tr", "amazon.com.br",
 }
 ALIEXPRESS_PAGE_DOMAINS = {"aliexpress.com", "aliexpress.us", "aliexpress.ru"}
+AMAZON_IMAGE_DOMAINS = {"media-amazon.com", "ssl-images-amazon.com", "images-amazon.com"}
+ALIEXPRESS_IMAGE_DOMAINS = {"aliexpress-media.com", "alicdn.com"}
+IMAGE_PATH_RE = re.compile(r"\.(?:avif|gif|jpe?g|png|webp)(?:$|/)", re.I)
 PRODUCT_PATHS = (
     "/dp/", "/gp/product/", "/gp/aw/d/",
 )
@@ -71,6 +74,8 @@ def _is_public_product_page(request):
         return False
     if host in AMAZON_SHORTLINKS or host in ALIEXPRESS_SHORTLINKS:
         return True
+    if _host_matches(host, AMAZON_IMAGE_DOMAINS | ALIEXPRESS_IMAGE_DOMAINS):
+        return bool(IMAGE_PATH_RE.search(parsed.path))
     labels = host.split(".")
     root_host = ".".join(labels[1:]) if len(labels) > 2 and labels[0] in {"www", "m", "smile"} else host
     if root_host in AMAZON_PAGE_DOMAINS:
