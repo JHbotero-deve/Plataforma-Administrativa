@@ -47,7 +47,7 @@ def compute_opportunity_score(price_score, demand_score, trend_score, weights=(0
 def score_product(conn, product_id: int, category_avg_price: float):
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT current_price, previous_price, rating, reviews_count, sales_estimate "
+            "SELECT current_price, previous_price, rating, reviews_count, sales_estimate, source_metadata "
             "FROM products WHERE id = %s", (product_id,)
         )
         p = cur.fetchone()
@@ -58,8 +58,13 @@ def score_product(conn, product_id: int, category_avg_price: float):
         )
         history = [row["price"] for row in cur.fetchall()]
 
+    field_sources = (p.get("source_metadata") or {}).get("field_sources") or {}
+    verified_sources = {"public_product_page", "user"}
+    rating = p["rating"] if field_sources.get("rating") in verified_sources else None
+    reviews_count = p["reviews_count"] if field_sources.get("reviews_count") in verified_sources else None
+    sales_estimate = p["sales_estimate"] if field_sources.get("sales_estimate") in verified_sources else None
     price_score = compute_price_score(float(p["current_price"]), category_avg_price, p["previous_price"])
-    demand_score = compute_demand_score(p["rating"], p["reviews_count"], p["sales_estimate"])
+    demand_score = compute_demand_score(rating, reviews_count, sales_estimate)
     trend_score = compute_trend_score(history)
     opportunity_score = compute_opportunity_score(price_score, demand_score, trend_score)
 
