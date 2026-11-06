@@ -159,6 +159,69 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertNotIn(token, output.getvalue())
 
 
+    def test_search_without_term_returns_usage(self):
+        send = MagicMock(return_value=True)
+        with patch.object(telegram_alert, "_send", send):
+            self.assertTrue(telegram_alert._handle("token", "chat", "/buscar"))
+        self.assertIn("/buscar término", send.call_args.args[2])
+
+    def test_modeling_sends_progress_before_batch_result(self):
+        send = MagicMock(return_value=True)
+        with (
+            patch.object(telegram_alert, "_model_active_products", return_value=(3, 2, 0, 0, 4, 1, 0)),
+            patch.object(telegram_alert, "_send", send),
+        ):
+            self.assertTrue(telegram_alert._handle("token", "chat", "/modelar"))
+        self.assertEqual(send.call_count, 2)
+        self.assertIn("Iniciando modelado", send.call_args_list[0].args[2])
+        self.assertIn("Productos puntuados: 3", send.call_args_list[1].args[2])
+
+    def test_catalog_status_reports_total_active_inactive_and_url_counts(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchone.side_effect = [
+            {"total": 500, "active": 2, "inactive": 498, "stale": 498, "with_url": 490},
+            {"modeled": 0},
+        ]
+        send = MagicMock(return_value=True)
+        with (
+            patch.object(telegram_alert, "get_connection", return_value=connection),
+            patch.object(telegram_alert, "_send", send),
+        ):
+            self.assertTrue(telegram_alert._handle("token", "chat", "/estado"))
+        message = send.call_args.args[2]
+        self.assertIn("Productos registrados: 500", message)
+        self.assertIn("Productos activos: 2", message)
+        self.assertIn("Productos inactivos: 498", message)
+        self.assertIn("Productos con URL: 490", message)
+
+    def test_unverified_legacy_metrics_are_not_displayed_as_real(self):
+        message = telegram_alert._format_product({
+            "title": "Auriculares",
+            "current_price": 24.99,
+            "currency": "USD",
+            "rating": 4.8,
+            "reviews_count": 128,
+            "sales_estimate": 450,
+            "source_metadata": {"metadata_source": "legacy_marketplace_api"},
+        })
+        self.assertIn("Rating: N/D | Reseñas: N/D", message)
+        self.assertIn("Ventas estimadas: N/D", message)
+        self.assertNotIn("4.8", message)
+        self.assertNotIn("128", message)
+        self.assertNotIn("450", message)
+
+    def test_stale_product_is_marked_for_price_revalidation(self):
+        message = telegram_alert._format_product({
+            "title": "Auriculares",
+            "current_price": 24.99,
+            "currency": "USD",
+            "product_url": "https://www.amazon.com/dp/B000000001",
+            "source_metadata": {"catalog_status": "stale"},
+        })
+        self.assertIn("precio pendiente de verificación", message)
+
+
 class TelegramApiResponseTests(unittest.TestCase):
     def test_http_success_with_telegram_rejection_is_not_reported_as_sent(self):
         response = MagicMock(ok=True, status_code=200)
