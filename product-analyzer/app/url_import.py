@@ -28,19 +28,20 @@ ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 MAX_ZIP_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
+def _host_matches(host: str, domains) -> bool:
+    return any(host == domain or host.endswith("." + domain) for domain in domains)
+
+
 def detect_platform(url: str) -> str:
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().rstrip(".")
-    if AMAZON_HOST_RE.search(host) or "amazon" in host or "amzn" in host or "a.co" in host:
+    if parsed.username or parsed.password or parsed.port not in (None, 80, 443):
+        raise ValueError("La URL contiene credenciales o un puerto no permitido.")
+    if _host_matches(host, AMAZON_DOMAINS) or host in AMAZON_SHORTLINKS:
         return "amazon"
-    if ALIEXPRESS_HOST_RE.search(host) or "aliexpress" in host or "alii.pub" in host:
+    if _host_matches(host, ALIEXPRESS_DOMAINS) or host in ALIEXPRESS_SHORTLINKS:
         return "aliexpress"
-    if SHORTENER_HOST_RE.search(host):
-        if "amazon" in host or "amzn" in host or "a.co" in host:
-            return "amazon"
-        return "aliexpress"
-    raise ValueError("La URL debe pertenecer a Amazon o AliExpress.")
-
+    raise ValueError("La URL debe pertenecer a Amazon o AliExpress mediante un dominio oficial o enlace corto oficial.")
 
 def _external_id(url: str, platform: str) -> str:
     parsed = urlparse(url)
