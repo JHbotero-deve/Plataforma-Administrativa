@@ -160,6 +160,8 @@ class ProductSourcesTests(unittest.TestCase):
     def test_price_parser_handles_common_formats(self):
         self.assertEqual(product_sources._number("$1,299.00"), 1299.0)
         self.assertEqual(product_sources._number("1.299,00 €"), 1299.0)
+        self.assertEqual(product_sources._number("25,000"), 25000.0)
+        self.assertEqual(product_sources._number("25.000"), 25000.0)
         self.assertIsNone(product_sources._number("Consultar"))
 
     def test_redirect_cycle_fails_fast(self):
