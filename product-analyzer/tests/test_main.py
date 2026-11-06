@@ -14,6 +14,7 @@ class WorkerPipelineTests(unittest.TestCase):
         connection = MagicMock()
         cursor = connection.cursor.return_value.__enter__.return_value
         cursor.fetchall.side_effect = [
+            [],
             [{"category": "accesorios", "currency": "USD", "avg_price": 30}],
             [{"id": 7}],
         ]
@@ -30,6 +31,8 @@ class WorkerPipelineTests(unittest.TestCase):
         with (
             patch.object(main, "get_connection", return_value=connection),
             patch.object(main, "expire_catalog") as expire,
+            patch.object(main, "enrich_pending_products", return_value=0) as enrich,
+            patch.object(main, "publish_catalog_product", return_value=None) as publish,
             patch.object(main, "score_product", return_value=80) as score,
             patch.object(main, "send_telegram_alert", side_effect=RuntimeError("Telegram unavailable")) as alert,
             patch.object(main, "creator_configured", return_value=False) as creator,
@@ -38,6 +41,8 @@ class WorkerPipelineTests(unittest.TestCase):
             main.run_pipeline()
 
         expire.assert_called_once()
+        enrich.assert_called_once_with(connection, limit=80, max_workers=4)
+        publish.assert_not_called()
         score.assert_called_once_with(connection, 7, 30.0)
         alert.assert_called_once()
         creator.assert_called_once()
