@@ -117,6 +117,8 @@ def import_url(
         missing_fields.append("category")
     if not final_image:
         missing_fields.append("image_url")
+    if not final_currency:
+        missing_fields.append("currency")
 
     return {
         "platform": platform,
