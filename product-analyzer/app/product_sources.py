@@ -14,7 +14,7 @@ import requests
 from db import _affiliate_url
 from url_import import ASIN_RE
 
-ENRICHMENT_VERSION = 8
+ENRICHMENT_VERSION = 9
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 MAX_REDIRECTS = 12
@@ -65,7 +65,8 @@ def _allowed_host(host, platform):
 def _is_placeholder_title(value):
     title = re.sub(r"\s+", " ", str(value or "").strip().casefold())
     normalized = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
-    return not title or title.startswith("producto ") or any(
+    generic_id = re.match(r"^producto (?:amazon|aliexpress|url)[ -]?[a-z0-9_-]{6,}$", title)
+    return not title or title == "producto" or bool(generic_id) or any(
         phrase in normalized
         for phrase in ("oferta destacada global", "producto verificado con envio rapido", "producto verificado con envio", "titulo real del producto", "nombre real del producto")
     )
@@ -383,10 +384,10 @@ def enrich_product(product, force=False):
     return product
 
 def _retry_due(metadata):
-    if (metadata or {}).get("enrichment_status") == "complete":
-        return False
     if (metadata or {}).get("enrichment_version") != ENRICHMENT_VERSION:
         return True
+    if (metadata or {}).get("enrichment_status") == "complete":
+        return False
     retry_after = (metadata or {}).get("enrichment_retry_after")
     if not retry_after:
         return True
