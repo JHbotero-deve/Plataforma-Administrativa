@@ -28,7 +28,9 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(product["category"], "calzado")
         self.assertEqual(product["price"], 49.90)
         self.assertEqual(product["image_url"], "https://images.example/zapatillas.jpg")
-        self.assertEqual(product["source_metadata"]["missing_fields"], [])
+        self.assertEqual(product["source_metadata"]["missing_fields"], ["currency"])
+        self.assertIn("price", product["source_metadata"]["manual_fields"])
+        self.assertIn("title", product["source_metadata"]["manual_fields"])
 
     def test_public_jsonld_extracts_product_fields_without_marketplace_api(self):
         response = MagicMock()
@@ -54,7 +56,7 @@ class ProductSourcesTests(unittest.TestCase):
             "currency": "COP",
             "image_url": None,
             "category": None,
-            "source_metadata": {"original_url": "https://amzn.to/example"},
+            "source_metadata": {"original_url": "https://amzn.to/example", "manual_fields": ["price", "currency"]},
         }
         page = {
             "resolved_url": "https://www.amazon.com/dp/B012345678",
@@ -190,6 +192,62 @@ class ProductSourcesTests(unittest.TestCase):
         ):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 import_url(url)
+
+
+    def test_forced_refresh_updates_stale_page_price_currency_and_image(self):
+        product = {
+            "platform": "aliexpress",
+            "external_id": "1005001234567890",
+            "product_url": "https://www.aliexpress.com/item/1005001234567890.html",
+            "title": "Auriculares inalámbricos",
+            "price": 25000,
+            "currency": "USD",
+            "image_url": "https://images.example/old.jpg",
+            "category": "tecnologia",
+            "source_metadata": {"metadata_source": "public_product_page", "enrichment_status": "complete"},
+        }
+        page = {
+            "resolved_url": product["product_url"],
+            "title": "Auriculares inalámbricos",
+            "price": 25,
+            "currency": "CNY",
+            "image_url": "https://images.example/new.jpg",
+            "gallery_urls": ["https://images.example/new.jpg"],
+            "description": "Producto actualizado",
+        }
+        with patch.object(product_sources, "_public_product_page", return_value=page) as fetch:
+            result = product_sources.enrich_product(product, force=True)
+        fetch.assert_called_once()
+        self.assertEqual(result["price"], 25)
+        self.assertEqual(result["currency"], "CNY")
+        self.assertEqual(result["image_url"], "https://images.example/new.jpg")
+        self.assertTrue(result["source_metadata"]["catalog_refresh_verified"])
+
+    def test_forced_refresh_does_not_override_manual_price_and_marks_mismatch_unverified(self):
+        product = {
+            "platform": "amazon",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+            "title": "Producto manual",
+            "price": 60,
+            "currency": "USD",
+            "image_url": "https://images.example/manual.jpg",
+            "category": "tecnologia",
+            "source_metadata": {"metadata_source": "cli", "manual_fields": ["title", "price", "currency", "image_url"]},
+        }
+        page = {
+            "resolved_url": product["product_url"],
+            "title": "Producto real",
+            "price": 49.99,
+            "currency": "USD",
+            "image_url": "https://images.example/page.jpg",
+            "gallery_urls": ["https://images.example/page.jpg"],
+        }
+        with patch.object(product_sources, "_public_product_page", return_value=page):
+            result = product_sources.enrich_product(product, force=True)
+        self.assertEqual(result["price"], 60)
+        self.assertEqual(result["title"], "Producto manual")
+        self.assertFalse(result["source_metadata"]["catalog_refresh_verified"])
+
 
     def test_verified_public_price_replaces_legacy_url_only_placeholder(self):
         product = {
