@@ -7,29 +7,27 @@ MIN_CUSTOMER_DISCOUNT_PCT = 40.0
 def build_customer_offer(cost_price, reference_price=None, discount_pct=MIN_CUSTOMER_DISCOUNT_PCT):
     try:
         cost = float(cost_price)
+        reference = float(reference_price)
+        discount = max(float(discount_pct), MIN_CUSTOMER_DISCOUNT_PCT)
     except (TypeError, ValueError):
         return None
-    if not math.isfinite(cost) or cost <= 0:
+
+    if not all(math.isfinite(value) for value in (cost, reference, discount)):
+        return None
+    if cost <= 0 or reference <= 0 or discount >= 100:
         return None
 
-    try:
-        reference = float(reference_price) if reference_price is not None else None
-    except (TypeError, ValueError):
-        reference = None
-
-    if reference is None or reference <= cost:
-        reference = round(cost / 0.60, 2)
-
-    calc_discount = round((reference - cost) / reference * 100, 2)
-    final_discount = max(calc_discount, MIN_CUSTOMER_DISCOUNT_PCT)
-    profit = round(cost * 0.15, 2)
+    sale_price = round(reference * (1 - discount / 100), 2)
+    profit = round(sale_price - cost, 2)
+    if sale_price <= cost or profit <= 0:
+        return None
 
     return {
-        "sale_price": cost,
+        "sale_price": sale_price,
         "cost_price": cost,
-        "discount_pct": final_discount,
+        "discount_pct": round((reference - sale_price) / reference * 100, 2),
         "profit_amount": profit,
-        "profit_margin_pct": 15.0,
+        "profit_margin_pct": round(profit / sale_price * 100, 2),
     }
 
 
@@ -40,12 +38,12 @@ def publish_discounted_offer(conn, product_id, product, opportunity_score=None):
     if exclusion and exclusion.get("storefront_excluded") is True:
         return None
 
-    with conn.cursor() as cur:
-        cur.execute("UPDATE products SET is_active = TRUE WHERE id = %s", (product_id,))
-    conn.commit()
-
-    price = product.get("current_price") or product.get("price")
-    prev_price = product.get("previous_price") or product.get("original_price")
+    price = product.get("current_price")
+    if price is None:
+        price = product.get("price")
+    prev_price = product.get("previous_price")
+    if prev_price is None:
+        prev_price = product.get("original_price")
     offer = build_customer_offer(price, prev_price)
     image = product.get("image_url") or product.get("image")
     if not offer or not product.get("title") or not image:
@@ -56,6 +54,10 @@ def publish_discounted_offer(conn, product_id, product, opportunity_score=None):
             )
         conn.commit()
         return None
+
+    with conn.cursor() as cur:
+        cur.execute("UPDATE products SET is_active = TRUE WHERE id = %s", (product_id,))
+    conn.commit()
 
     currency = str(product.get("currency") or "USD").upper()
     price_display = f"{offer['sale_price']:,.2f} {currency}"
