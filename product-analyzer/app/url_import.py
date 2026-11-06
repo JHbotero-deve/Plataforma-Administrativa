@@ -15,13 +15,15 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-AMAZON_HOST_RE = re.compile(r"(^|\.)(amazon\.[a-z.]+|link\.amazon|amzn\.to|amzn\.com|a\.co)$", re.I)
-ALIEXPRESS_HOST_RE = re.compile(r"(^|\.)(aliexpress\.[a-z.]+|aliexpress\.ru|alii\.pub|s\.click\.aliexpress\.com|click\.aliexpress\.com)$", re.I)
-SHORTENER_HOST_RE = re.compile(
-    r"(^|\.)(s\.click\.aliexpress\.com|click\.aliexpress\.com"
-    r"|amzn\.to|a\.co|bit\.ly|tinyurl\.com|t\.co|goo\.gl"
-    r"|shorturl\.at|rb\.gy|is\.gd|cutt\.ly|link\.amazon)$", re.I,
+AMAZON_DOMAINS = (
+    "amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de",
+    "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amazon.com.au",
+    "amazon.in", "amazon.nl", "amazon.se", "amazon.pl", "amazon.ae",
+    "amazon.sg", "amazon.com.tr", "amazon.com.br",
 )
+AMAZON_SHORTLINKS = {"amzn.to", "amzn.eu", "amzn.asia", "amzn.com", "amzn.ca", "amzn.de", "amzn.co.uk", "a.co", "link.amazon"}
+ALIEXPRESS_DOMAINS = ("aliexpress.com", "aliexpress.us", "aliexpress.ru")
+ALIEXPRESS_SHORTLINKS = {"s.click.aliexpress.com", "click.aliexpress.com", "alii.pub"}
 ASIN_RE = re.compile(r"/(?:dp|gp/product|gp/aw/d)/([A-Z0-9]{10})(?:[/?]|$)", re.I)
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
