@@ -312,21 +312,12 @@ def proxy_media_image(url: str = Query(...)):
         raise HTTPException(status_code=502, detail=f"Error cargando imagen: {exc}")
 
 
-@core_router.post("/admin/inject")
-def admin_inject(_: str = Depends(require_admin)):
-    """Inyecta productos de inmediato ejecutando el ciclo de refill y pipeline de afiliados."""
-    try:
-        from promotion_bots import run_storefront_refill, run_promotion_cycle
-        refill_res = run_storefront_refill()
-        promo_res = run_promotion_cycle(max_alerts=3)
-        return {
-            "status": "success",
-            "refill": refill_res,
-            "promotions": promo_res,
-        }
-    except Exception as exc:
-        return {"status": "error", "detail": str(exc)}
-
+@core_router.post("/admin/inject", dependencies=[Depends(require_admin)])
+def admin_inject():
+    raise HTTPException(
+        status_code=410,
+        detail="La búsqueda por APIs de marketplaces fue retirada. Usa la importación y el enriquecimiento URL-first.",
+    )
 
 @core_router.get("/pipeline/metrics")
 def pipeline_metrics():
