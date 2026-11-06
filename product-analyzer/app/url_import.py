@@ -72,7 +72,7 @@ def import_url(
     category: Optional[str] = None,
     title: Optional[str] = None,
     price: Optional[float] = None,
-    currency: str = "USD",
+    currency: Optional[str] = None,
     image_url: Optional[str] = None,
     external_id: Optional[str] = None,
 ) -> dict:
@@ -90,7 +90,7 @@ def import_url(
     final_title = raw_title or f"Producto {platform.title()} {external_id}"
     final_image = (image_url or "").strip() or None
     final_price = price
-    final_currency = (currency or "USD").strip().upper()[:10] or "USD"
+    final_currency = (currency or "").strip().upper()[:10] or None
     category_value = str(category or "").strip().lower()
     allowed_categories = {
         "ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda",
@@ -133,7 +133,8 @@ def import_url(
         "sales_estimate": None,
         "source_metadata": {
             "import_method": "authorized_cli_url",
-            "metadata_source": "cli" if title or price is not None or image_url or final_category else "url_only",
+            "metadata_source": "cli" if title or price is not None or image_url or final_category or currency else "url_only",
+            "manual_fields": [field for field, supplied in (("title", title), ("price", price), ("image_url", image_url), ("currency", currency), ("category", final_category)) if supplied is not None and supplied != ""],
             "category_source": "user" if final_category else None,
             "original_url": url,
             "resolved_url": resolved_url or url,
