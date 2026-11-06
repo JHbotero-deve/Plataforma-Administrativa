@@ -160,11 +160,19 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertNotIn(token, output.getvalue())
 
 
-    def test_search_without_term_returns_usage(self):
+    def test_search_without_term_lists_imported_catalog(self):
+        products = [{"title": "Auriculares inalámbricos"}]
         send = MagicMock(return_value=True)
-        with patch.object(telegram_alert, "_send", send):
+        send_product = MagicMock(return_value=True)
+        with (
+            patch.object(telegram_alert, "_search_products", return_value=products) as search,
+            patch.object(telegram_alert, "_send", send),
+            patch.object(telegram_alert, "_send_product", send_product),
+        ):
             self.assertTrue(telegram_alert._handle("token", "chat", "/buscar"))
-        self.assertIn("/buscar término", send.call_args.args[2])
+        search.assert_called_once_with("", limit=8)
+        self.assertIn("Catálogo importado", send.call_args.args[2])
+        self.assertEqual(send_product.call_count, 1)
 
     def test_modeling_sends_progress_before_batch_result(self):
         send = MagicMock(return_value=True)
