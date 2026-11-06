@@ -471,6 +471,7 @@ def _model_active_products():
                           AND category_id IS NOT NULL
                           AND title IS NOT NULL
                           AND title NOT LIKE 'Producto %%'
+                          AND LOWER(title) NOT LIKE '%oferta destacada global%'
                           AND image_url IS NOT NULL
                           AND image_url <> ''
                     ) AS eligible,
