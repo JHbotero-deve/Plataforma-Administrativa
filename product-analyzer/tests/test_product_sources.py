@@ -280,5 +280,11 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(result["source_metadata"]["metadata_source"], "public_product_page")
 
 
+    def test_rejects_generic_global_offer_as_a_real_product_title(self):
+        self.assertTrue(product_sources._is_placeholder_title("Oferta Destacada Global · Producto Verificado con Envío Rápido"))
+        self.assertTrue(product_sources._is_placeholder_title("Producto Amazon B000000001"))
+        self.assertFalse(product_sources._is_placeholder_title("Auriculares inalámbricos Bluetooth"))
+
+
 if __name__ == "__main__":
     unittest.main()
