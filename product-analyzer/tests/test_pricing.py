@@ -70,8 +70,8 @@ class CustomerOfferTests(unittest.TestCase):
         self.assertEqual(insert.args[1][6], 49.99)
         self.assertIn("NULL,NULL,NULL", insert.args[0].replace(" ", ""))
         self.assertEqual(insert.args[1][7], 72)
-        self.assertIsNone(insert.args[1][8])
-        self.assertIsNone(insert.args[1][9])
+        self.assertEqual(insert.args[1][8], "Precio de referencia del comercio · compra externa")
+        self.assertEqual(insert.args[1][9], "#b6f23a")
         self.assertEqual(result["publication_type"], "catalog")
         connection.commit.assert_called_once()
 
