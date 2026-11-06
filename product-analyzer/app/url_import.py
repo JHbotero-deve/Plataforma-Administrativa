@@ -74,11 +74,6 @@ def import_url(
 
     platform = detect_platform(url)
     resolved_url = url
-    try:
-        from product_sources import _resolve_product_url
-        resolved_url = _resolve_product_url(url, platform)
-    except Exception:
-        pass
 
     supplied_id = str(external_id or "").strip()
     external_id = supplied_id[:150] if supplied_id else _external_id(resolved_url, platform)
