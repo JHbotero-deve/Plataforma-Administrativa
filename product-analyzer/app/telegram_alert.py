@@ -280,7 +280,7 @@ def _products_by_ids(product_ids, limit=8):
             cur.execute(
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url, p.image_gallery,
-                       p.description, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
+                       p.description, p.source_metadata, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -453,6 +453,7 @@ def _model_active_products():
                   AND p.category_id IS NOT NULL
                   AND p.title IS NOT NULL
                   AND p.title NOT LIKE 'Producto %%'
+                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
                   AND p.image_url IS NOT NULL
                   AND p.image_url <> ''
                 ORDER BY p.updated_at DESC
