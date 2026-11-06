@@ -363,7 +363,7 @@ def _retry_due(metadata):
         return True
 
 
-def _enrich_pending_row(row):
+def _enrich_pending_row(row, force=False):
     source_metadata = row["source_metadata"] or {}
     category = row["category"]
     if category == "accesorios" and source_metadata.get("metadata_source") == "url_only" and not source_metadata.get("category_source"):
@@ -383,7 +383,7 @@ def _enrich_pending_row(row):
         "seller": {"external_id": row.get("seller_external_id"), "name": row.get("seller_name")} if row.get("seller_external_id") and row.get("seller_name") else None,
         "source_metadata": source_metadata,
     }
-    return enrich_product(product)
+    return enrich_product(product, force=force)
 
 
 def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
@@ -401,7 +401,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
     if not rows:
         return 0
     with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(rows)))) as executor:
-        enriched_rows = list(executor.map(_enrich_pending_row, rows))
+        enriched_rows = list(executor.map(_enrich_pending_row, rows, [bool(row.get("catalog_expired")) for row in rows]))
     recovered = 0
     for row, enriched in zip(rows, enriched_rows):
         metadata = enriched.get("source_metadata") or {}
