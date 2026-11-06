@@ -220,7 +220,7 @@ def _top_products(limit=25):
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
                   AND COALESCE(s.opportunity_score, 0) >= 60
-                  AND p.current_price > 0 AND p.category_id IS NOT NULL
+                  AND p.current_price > 0 AND p.currency NOT IN ('UNK', 'N/D') AND p.category_id IS NOT NULL
                   AND p.title NOT LIKE 'Producto %%' AND p.image_url IS NOT NULL
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                   AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
@@ -449,6 +449,7 @@ def _model_active_products():
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                   AND p.current_price IS NOT NULL
                   AND p.current_price > 0
+                  AND p.currency NOT IN ('UNK', 'N/D')
                   AND p.category_id IS NOT NULL
                   AND p.title IS NOT NULL
                   AND p.title NOT LIKE 'Producto %%'
@@ -465,6 +466,7 @@ def _model_active_products():
                     COUNT(*) FILTER (
                         WHERE current_price IS NOT NULL
                           AND current_price > 0
+                          AND currency NOT IN ('UNK', 'N/D')
                           AND category_id IS NOT NULL
                           AND title IS NOT NULL
                           AND title NOT LIKE 'Producto %%'
@@ -654,7 +656,7 @@ def _handle(token, chat_id, text):
                     SELECT COUNT(DISTINCT p.id) AS modeled
                     FROM products p
                     JOIN product_scores s ON s.product_id = p.id
-                    WHERE p.is_active = TRUE AND p.current_price IS NOT NULL
+                    WHERE p.is_active = TRUE AND p.current_price IS NOT NULL AND p.currency NOT IN ('UNK', 'N/D')
                     """
                 )
                 modeled = cur.fetchone()["modeled"]
