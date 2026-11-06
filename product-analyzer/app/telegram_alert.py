@@ -236,6 +236,15 @@ def _top_products(limit=25):
                   AND LOWER(p.title) NOT LIKE '%producto verificado con%'
                   AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
                   AND LOWER(p.title) NOT LIKE '%nombre real del producto%' AND p.image_url IS NOT NULL
+                  AND p.product_url IS NOT NULL
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%enlace-de-la-imagen.jpg%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%placeholder%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%example.com%'
+                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                   AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND LOWER(p.title) NOT LIKE '%oferta destacada global%'

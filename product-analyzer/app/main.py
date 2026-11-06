@@ -124,6 +124,14 @@ def run_pipeline():
                   AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND p.image_url IS NOT NULL
                   AND p.image_url <> ''
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%enlace-de-la-imagen.jpg%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%placeholder%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%example.com%'
+                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
                 ORDER BY p.updated_at DESC
                 LIMIT 500
             """)

@@ -433,11 +433,22 @@ def list_products(
         with conn.cursor() as cur:
             query = """
                 SELECT p.id, p.title, pl.name AS platform, c.name AS category,
-                       p.current_price, p.currency, p.rating, p.reviews_count,
-                       p.sales_estimate, p.image_url, p.image_gallery, p.product_url, p.affiliate_url, p.updated_at, p.source_metadata, p.description, p.previous_price, p.stock, p.sku,
-                       p.catalog_expires_at, p.model_url, p.model_shape,
+                       CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user') THEN p.current_price ELSE NULL END AS current_price,
+                       CASE WHEN p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user') THEN p.currency ELSE NULL END AS currency,
+                       CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
+                       CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
+                       CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
+                       CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user') THEN p.image_url ELSE NULL END AS image_url,
+                       p.image_gallery, p.product_url, p.affiliate_url, p.updated_at, p.source_metadata, p.description,
+                       CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS previous_price,
+                       p.stock, p.sku, p.catalog_expires_at, p.model_url, p.model_shape,
                        seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
-                       s.opportunity_score
+                       CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
+                            THEN s.opportunity_score ELSE NULL END AS opportunity_score
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
@@ -475,7 +486,9 @@ def public_product(product_id: int):
                 COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) AS image_url,p.image_gallery,
                 COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) AS product_url,
                 p.affiliate_url,p.sku,p.external_id,p.stock,
-                pl.name AS platform,c.name AS category,p.rating,p.reviews_count,p.updated_at,
+                pl.name AS platform,c.name AS category,
+                CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
+                CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,p.updated_at,
                 seller.name AS seller_name,p.source_metadata->>'seller_url' AS seller_url
                 FROM published_cards pc JOIN products p ON p.id=pc.product_id JOIN platforms pl ON pl.id=p.platform_id
                 LEFT JOIN categories c ON c.id=p.category_id
@@ -915,17 +928,42 @@ def top_opportunities(limit: int = Query(20, ge=1, le=100)):
             cur.execute(
                 """
                 SELECT p.id, p.title, pl.name AS platform, c.name AS category,
-                       p.current_price, p.currency, p.rating, p.reviews_count,
-                       p.sales_estimate, s.price_score, s.demand_score,
-                       s.trend_score, s.opportunity_score, p.product_url,
-                       p.image_url, p.updated_at, p.catalog_expires_at,
+                       p.current_price, p.currency,
+                       CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
+                       CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
+                       CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
+                       s.price_score, s.demand_score, s.trend_score, s.opportunity_score,
+                       p.product_url, p.image_url, p.updated_at, p.catalog_expires_at,
                        p.model_url, p.model_shape, p.source_metadata
                 FROM product_scores s
                 JOIN products p ON p.id = s.product_id
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
                 WHERE p.is_active = TRUE
-                ORDER BY s.opportunity_score DESC
+                  AND COALESCE(s.opportunity_score, 0) >= 60
+                  AND p.current_price > 0
+                  AND p.currency NOT IN ('UNK', 'N/D')
+                  AND p.product_url IS NOT NULL AND p.product_url <> ''
+                  AND p.image_url IS NOT NULL AND p.image_url <> ''
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%enlace-de-la-imagen.jpg%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%placeholder%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%example.com%'
+                  AND LOWER(p.title) NOT LIKE 'producto amazon %%'
+                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
+                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
+                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
+                  AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
+                  AND LOWER(p.title) NOT LIKE '%nombre real del producto%'
+                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
+                  AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
+                ORDER BY s.opportunity_score DESC, p.updated_at DESC
                 LIMIT %s
                 """,
                 (limit,),

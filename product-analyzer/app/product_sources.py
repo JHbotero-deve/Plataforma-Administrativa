@@ -290,6 +290,10 @@ def enrich_product(product, force=False):
     title = str(product.get("title") or "").strip()
     complete = bool(title and not _is_placeholder_title(title) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and not _is_placeholder_image_url(product.get("image_url")) and product.get("category"))
     if complete and not force:
+        for field in manual_fields:
+            if product.get(field) is not None:
+                field_sources[field] = "user"
+        metadata["field_sources"] = field_sources
         metadata.update({"enrichment_status": "complete", "enrichment_version": ENRICHMENT_VERSION, "missing_fields": []})
         product["source_metadata"] = metadata
         return product

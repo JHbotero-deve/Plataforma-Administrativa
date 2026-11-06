@@ -101,6 +101,15 @@ def publish_catalog_product(conn, product_id, product, opportunity_score=None, c
     title = str(product.get("title") or "").strip()
     image = product.get("image_url") or product.get("image")
     product_url = product.get("product_url") or product.get("affiliate_url")
+    metadata = product.get("source_metadata") or {}
+    missing_fields = set(metadata.get("missing_fields") or [])
+    if missing_fields.intersection({"title", "price", "currency", "image_url"}):
+        return None
+    if metadata.get("metadata_source") in {"url_only", "public_product_page", "public_product_page_empty"}:
+        field_sources = metadata.get("field_sources") or {}
+        verified = {"public_product_page", "user"}
+        if any(field_sources.get(field) not in verified for field in ("title", "price", "currency", "image_url")):
+            return None
     try:
         price = float(product.get("current_price") if product.get("current_price") is not None else product.get("price"))
     except (TypeError, ValueError):
