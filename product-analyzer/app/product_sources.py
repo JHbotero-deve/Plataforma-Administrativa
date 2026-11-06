@@ -65,7 +65,7 @@ def _allowed_host(host, platform):
 def _is_placeholder_title(value):
     title = re.sub(r"\s+", " ", str(value or "").strip().casefold())
     normalized = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
-    generic_id = re.match(r"^producto (?:amazon|aliexpress|url)[ -]?[a-z0-9_-]{6,}$", title)
+    generic_id = re.match(r"^producto (?:amazon|aliexpress|url)(?:[ -]?[a-z0-9_-]{6,})?$", title)
     return not title or title == "producto" or bool(generic_id) or any(
         phrase in normalized
         for phrase in ("oferta destacada global", "producto verificado con envio rapido", "producto verificado con envio", "titulo real del producto", "nombre real del producto")
@@ -429,7 +429,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
             (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) AS catalog_expired
             FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN sellers s ON s.id=p.seller_id
             WHERE p.product_url IS NOT NULL AND (
-                (p.is_active=TRUE AND (p.current_price IS NULL OR p.currency IS NULL OR p.currency = 'UNK' OR p.image_url IS NULL OR LOWER(p.title) LIKE 'producto amazon %%' OR LOWER(p.title) LIKE 'producto aliexpress %%' OR LOWER(p.title) LIKE 'producto url-%%' OR LOWER(p.title) LIKE '%titulo real del producto%' OR LOWER(p.title) LIKE '%nombre real del producto%' OR LOWER(p.title) LIKE '%oferta destacada global%' OR LOWER(p.title) LIKE '%producto verificado con%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%enlace-de-la-imagen.jpg%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%placeholder%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%example.com%' OR p.category_id IS NULL))
+                (p.is_active=TRUE AND (p.current_price IS NULL OR p.currency IS NULL OR p.currency = 'UNK' OR p.image_url IS NULL OR LOWER(p.title) LIKE 'producto amazon %%' OR LOWER(p.title) LIKE 'producto aliexpress %%' OR LOWER(p.title) LIKE 'producto url-%%' OR LOWER(p.title) IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url') OR LOWER(p.title) LIKE '%titulo real del producto%' OR LOWER(p.title) LIKE '%nombre real del producto%' OR LOWER(p.title) LIKE '%oferta destacada global%' OR LOWER(p.title) LIKE '%producto verificado con%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%enlace-de-la-imagen.jpg%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%placeholder%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%example.com%' OR p.category_id IS NULL))
                 OR (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW())
                 OR (p.is_active=TRUE AND (LOWER(p.title) LIKE '%oferta destacada global%' OR LOWER(p.title) LIKE '%producto verificado con%'))
             )
