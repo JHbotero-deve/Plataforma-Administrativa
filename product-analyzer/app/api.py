@@ -28,7 +28,7 @@ from db import get_connection, upsert_product
 from notifications import send_telegram_alert
 from monetization import router as monetization_router
 from publications import ensure_draft_storage, router as publication_router
-from storefront_sections import ensure_storefront_section_storage, router as storefront_sections_router
+from storefront_sections import PUBLIC_CARD_QUALITY_FILTER, ensure_storefront_section_storage, router as storefront_sections_router
 from store_orders import ensure_commerce_storage, router as store_orders_router
 from store_notifications import process_pending_notifications
 from tiktok_api import router as tiktok_creator_router
@@ -439,7 +439,7 @@ def list_products(
                        CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
                        CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
                        CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user') THEN p.image_url ELSE NULL END AS image_url,
-                       p.image_gallery, p.product_url, p.affiliate_url, p.updated_at, p.source_metadata, p.description,
+                       CASE WHEN p.source_metadata IS NULL OR COALESCE(p.source_metadata->>'metadata_source', '') NOT IN ('url_only', 'public_product_page', 'public_product_page_empty', 'legacy_marketplace_api') OR p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user') THEN p.image_gallery ELSE '[]'::jsonb END AS image_gallery, p.product_url, p.affiliate_url, p.updated_at, p.source_metadata, p.description,
                        CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS previous_price,
                        p.stock, p.sku, p.catalog_expires_at, p.model_url, p.model_shape,
                        seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
@@ -481,9 +481,13 @@ def public_product(product_id: int):
     conn=get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("""SELECT pc.id AS publication_id,pc.product_id,pc.title,pc.subtitle,pc.price_display,
-                pc.sale_price,pc.opportunity_score,pc.footer,p.description,pc.sale_price AS current_price,p.previous_price,p.previous_price AS original_price,CASE WHEN p.previous_price>0 AND pc.sale_price>0 THEN ROUND((p.previous_price-pc.sale_price)/p.previous_price*100,2) ELSE NULL END AS discount_pct,p.currency,
-                COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) AS image_url,p.image_gallery,
+            cur.execute(f"""SELECT pc.id AS publication_id,pc.product_id,pc.title,pc.subtitle,pc.price_display,
+                pc.sale_price,pc.opportunity_score,pc.footer,p.description,pc.sale_price AS current_price,
+                CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS previous_price,
+                CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS original_price,
+                CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') AND p.previous_price>0 AND pc.sale_price>0 THEN ROUND((p.previous_price-pc.sale_price)/p.previous_price*100,2) ELSE NULL END AS discount_pct,p.currency,
+                COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) AS image_url,
+                CASE WHEN p.source_metadata IS NULL OR COALESCE(p.source_metadata->>'metadata_source', '') NOT IN ('url_only', 'public_product_page', 'public_product_page_empty', 'legacy_marketplace_api') OR p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user') THEN p.image_gallery ELSE '[]'::jsonb END AS image_gallery,
                 COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) AS product_url,
                 p.affiliate_url,p.sku,p.external_id,p.stock,
                 pl.name AS platform,c.name AS category,
@@ -493,7 +497,8 @@ def public_product(product_id: int):
                 FROM published_cards pc JOIN products p ON p.id=pc.product_id JOIN platforms pl ON pl.id=p.platform_id
                 LEFT JOIN categories c ON c.id=p.category_id
                 LEFT JOIN sellers seller ON seller.id=p.seller_id
-                WHERE pc.product_id=%s AND pc.is_published=TRUE AND p.is_active=TRUE""",(product_id,))
+                WHERE pc.product_id=%s AND pc.is_published=TRUE AND p.is_active=TRUE
+                {PUBLIC_CARD_QUALITY_FILTER}""",(product_id,))
             row=cur.fetchone()
     finally: conn.close()
     if not row: raise HTTPException(404,"Producto publicado no encontrado")
@@ -511,11 +516,12 @@ def affiliate_click(payload: dict):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("""SELECT p.product_url,p.affiliate_url,pl.name AS platform
+            cur.execute(f"""SELECT p.product_url,p.affiliate_url,pl.name AS platform
                 FROM products p
                 JOIN platforms pl ON pl.id=p.platform_id
                 JOIN published_cards pc ON pc.product_id=p.id AND pc.is_published=TRUE
-                WHERE p.id=%s AND p.is_active=TRUE""", (product_id,))
+                WHERE p.id=%s AND p.is_active=TRUE
+                {PUBLIC_CARD_QUALITY_FILTER}""", (product_id,))
             row = cur.fetchone()
             if not row:
                 raise HTTPException(404, "Producto no encontrado")
@@ -558,7 +564,7 @@ def public_sitemap():
     conn=get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT pc.product_id,pc.title FROM published_cards pc JOIN products p ON p.id=pc.product_id WHERE pc.is_published=TRUE AND p.is_active=TRUE")
+            cur.execute(f"SELECT pc.product_id,pc.title FROM published_cards pc JOIN products p ON p.id=pc.product_id WHERE pc.is_published=TRUE AND p.is_active=TRUE {PUBLIC_CARD_QUALITY_FILTER}")
             rows=cur.fetchall()
     finally: conn.close()
     urls=[base+"/",base+"/tienda"]+[base+"/producto/"+_seo_slug(r["title"])+f"-{r['product_id']}" for r in rows]

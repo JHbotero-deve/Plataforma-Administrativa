@@ -40,5 +40,47 @@ class ApiCatalogQualityTests(unittest.TestCase):
         connection.close.assert_called_once()
 
 
+    def test_products_endpoint_hides_unverified_image_gallery(self):
+        connection, cursor = self._connection()
+        with patch.object(api, "get_connection", return_value=connection):
+            self.assertEqual(api.list_products(limit=50, offset=0), [])
+        query = cursor.execute.call_args.args[0]
+        self.assertIn("ELSE '[]'::jsonb END AS image_gallery", query)
+
+    def test_public_product_detail_rejects_stale_cards_and_hides_unverified_discounts(self):
+        connection, cursor = self._connection()
+        cursor.fetchone.return_value = None
+        with patch.object(api, "get_connection", return_value=connection):
+            with self.assertRaises(api.HTTPException):
+                api.public_product(123)
+        query = cursor.execute.call_args.args[0]
+        self.assertIn("catalog_status", query)
+        self.assertIn("missing_fields", query)
+        self.assertIn("field_sources", query)
+        self.assertIn("previous_price", query)
+        self.assertIn("ELSE '[]'::jsonb END AS image_gallery", query)
+        connection.close.assert_called_once()
+
+    def test_affiliate_click_and_sitemap_exclude_stale_cards(self):
+        connection, cursor = self._connection()
+        cursor.fetchone.return_value = None
+        with patch.object(api, "get_connection", return_value=connection):
+            with self.assertRaises(api.HTTPException):
+                api.affiliate_click({"product_id": 123})
+        click_query = cursor.execute.call_args.args[0]
+        self.assertIn("catalog_status", click_query)
+        self.assertIn("missing_fields", click_query)
+        connection.close.assert_called_once()
+
+        connection, cursor = self._connection()
+        with patch.object(api, "get_connection", return_value=connection):
+            api.public_sitemap()
+        sitemap_query = cursor.execute.call_args.args[0]
+        self.assertIn("catalog_status", sitemap_query)
+        self.assertIn("missing_fields", sitemap_query)
+        connection.close.assert_called_once()
+
+
+
 if __name__ == "__main__":
     unittest.main()
