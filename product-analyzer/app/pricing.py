@@ -106,7 +106,9 @@ def publish_catalog_product(conn, product_id, product, opportunity_score=None, c
         return None
     if not title or title.casefold().startswith("producto ") or not image or not product_url or not math.isfinite(price) or price <= 0:
         return None
-    currency = str(product.get("currency") or "USD").upper()
+    currency = str(product.get("currency") or "").upper()
+    if not currency or currency in {"UNK", "N/D"}:
+        return None
     platform = str(product.get("platform") or "marketplace").replace("_", " ").title()
     with conn.cursor() as cur:
         cur.execute("UPDATE products SET is_active = TRUE WHERE id = %s", (product_id,))
