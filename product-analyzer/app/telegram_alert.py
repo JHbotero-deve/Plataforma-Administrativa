@@ -322,7 +322,7 @@ def _add_url(argument, title=None):
             title=title or (details[1] if len(details) > 1 and details[1] else None),
             price=price,
             image_url=details[2] if len(details) > 2 and details[2] else None,
-            currency=details[3] if len(details) > 3 and details[3] else "USD",
+            currency=details[3] if len(details) > 3 and details[3] else None,
         )
         product = enrich_product(product)
         category = category or product.get("category")
