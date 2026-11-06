@@ -168,8 +168,6 @@ jobs:
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_product_sources.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_aliexpress_oauth.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_pricing.py'
-          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_amazon_creators.py'
-          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_promotion_bots.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_store_commerce.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_storefront_sections.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_telegram_alert.py'
@@ -178,6 +176,7 @@ jobs:
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_main_url_only.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_marketplace_safety.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_analysis.py'
+          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_api_media_proxy.py'
           python -m unittest discover -s product-analyzer/tests -p 'test_catalog_cli.py'
           python -m py_compile scripts/importar-lote-central.py scripts/importar-url-central.py
 

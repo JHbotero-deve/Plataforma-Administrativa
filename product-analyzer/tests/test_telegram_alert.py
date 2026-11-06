@@ -25,6 +25,7 @@ class TelegramCommandTests(unittest.TestCase):
 
         with (
             patch.object(telegram_alert, "get_connection", return_value=connection),
+            patch.object(telegram_alert, "enrich_pending_products", return_value=0),
             patch.object(telegram_alert, "score_product", return_value=72),
         ):
             result = telegram_alert._model_active_products()
@@ -60,12 +61,11 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertIn("/agregar URL", send.call_args.args[2])
 
-    def test_search_command_queues_external_search_and_shows_local_catalog(self):
+    def test_search_command_uses_only_local_catalog(self):
         send = MagicMock(return_value=True)
         products = [{"title": "Auriculares", "current_price": 25, "currency": "USD"}]
 
         with (
-            patch.object(telegram_alert, "_queue_marketplace_search", return_value=17) as queue,
             patch.object(telegram_alert, "_search_products", return_value=products) as search,
             patch.object(telegram_alert, "_send", send),
             patch.object(telegram_alert, "_send_product", return_value=True) as send_product,
@@ -73,26 +73,22 @@ class TelegramCommandTests(unittest.TestCase):
             result = telegram_alert._handle("token", "chat", "/buscar auriculares")
 
         self.assertTrue(result)
-        queue.assert_called_once_with("auriculares")
         search.assert_called_once_with("auriculares", limit=8)
         send_product.assert_called_once()
-        self.assertIn("Búsqueda registrada", send.call_args_list[0].args[2])
-        self.assertIn("Resultados del catálogo", send.call_args_list[1].args[2])
+        self.assertIn("Resultados del catálogo", send.call_args_list[0].args[2])
 
-    def test_search_command_queues_even_without_local_results(self):
+    def test_search_command_does_not_queue_external_search_when_no_local_results(self):
         send = MagicMock(return_value=True)
 
         with (
-            patch.object(telegram_alert, "_queue_marketplace_search", return_value=18) as queue,
             patch.object(telegram_alert, "_search_products", return_value=[]),
             patch.object(telegram_alert, "_send", send),
         ):
             result = telegram_alert._handle("token", "chat", "/buscar teclado")
 
         self.assertTrue(result)
-        queue.assert_called_once_with("teclado")
-        self.assertIn("Búsqueda registrada", send.call_args_list[0].args[2])
-        self.assertIn("quedó registrada", send.call_args_list[1].args[2])
+        self.assertIn("No hay coincidencias", send.call_args.args[2])
+        self.assertIn("/agregar URL", send.call_args.args[2])
 
     def test_search_matches_category_as_well_as_title(self):
         connection = MagicMock()
@@ -129,7 +125,7 @@ class TelegramCommandTests(unittest.TestCase):
         conn = MagicMock()
 
         with (
-            patch.object(telegram_alert, "import_url", return_value=product),
+            patch.object(telegram_alert, "import_url", return_value=product) as import_mock,
             patch.object(telegram_alert, "enrich_product", return_value=product),
             patch.object(telegram_alert, "get_connection", return_value=conn),
             patch.object(telegram_alert, "upsert_product", return_value=7) as upsert,
@@ -142,6 +138,7 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertIs(saved_product, product)
         self.assertIsNone(score)
         self.assertEqual(upsert.call_args.args[1:3], ("amazon", None))
+        self.assertIsNone(import_mock.call_args.kwargs["currency"])
         conn.close.assert_called_once()
 
     def test_send_error_does_not_log_the_bot_token(self):
@@ -162,6 +159,90 @@ class TelegramCommandTests(unittest.TestCase):
 
         self.assertFalse(result)
         self.assertNotIn(token, output.getvalue())
+
+
+    def test_search_without_term_lists_imported_catalog(self):
+        products = [{"title": "Auriculares inalámbricos"}]
+        send = MagicMock(return_value=True)
+        send_product = MagicMock(return_value=True)
+        with (
+            patch.object(telegram_alert, "_search_products", return_value=products) as search,
+            patch.object(telegram_alert, "_send", send),
+            patch.object(telegram_alert, "_send_product", send_product),
+        ):
+            self.assertTrue(telegram_alert._handle("token", "chat", "/buscar"))
+        search.assert_called_once_with("", limit=8)
+        self.assertIn("Catálogo importado", send.call_args.args[2])
+        self.assertEqual(send_product.call_count, 1)
+
+    def test_modeling_sends_progress_before_batch_result(self):
+        send = MagicMock(return_value=True)
+        with (
+            patch.object(telegram_alert, "_model_active_products", return_value=(3, 2, 0, 0, 4, 1, 0)),
+            patch.object(telegram_alert, "_send", send),
+        ):
+            self.assertTrue(telegram_alert._handle("token", "chat", "/modelar"))
+        self.assertEqual(send.call_count, 2)
+        self.assertIn("Iniciando modelado", send.call_args_list[0].args[2])
+        self.assertIn("Productos puntuados: 3", send.call_args_list[1].args[2])
+
+    def test_catalog_status_reports_total_active_inactive_and_url_counts(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchone.side_effect = [
+            {"total": 500, "active": 2, "inactive": 498, "stale": 498, "with_url": 490},
+            {"modeled": 0},
+        ]
+        send = MagicMock(return_value=True)
+        with (
+            patch.object(telegram_alert, "get_connection", return_value=connection),
+            patch.object(telegram_alert, "_send", send),
+        ):
+            self.assertTrue(telegram_alert._handle("token", "chat", "/estado"))
+        message = send.call_args.args[2]
+        self.assertIn("Productos registrados: 500", message)
+        self.assertIn("Productos activos: 2", message)
+        self.assertIn("Productos inactivos: 498", message)
+        self.assertIn("Productos con URL: 490", message)
+
+    def test_top_products_excludes_unverified_and_placeholder_catalog_rows(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = []
+        with patch.object(telegram_alert, "get_connection", return_value=connection):
+            self.assertEqual(telegram_alert._top_products(limit=8), [])
+        query, parameters = cursor.execute.call_args.args
+        self.assertIn("field_sources", query)
+        self.assertIn("missing_fields", query)
+        self.assertIn("%placeholder%", query)
+        self.assertEqual(parameters, (8,))
+        connection.close.assert_called_once()
+
+    def test_unverified_legacy_metrics_are_not_displayed_as_real(self):
+        message = telegram_alert._format_product({
+            "title": "Auriculares",
+            "current_price": 24.99,
+            "currency": "USD",
+            "rating": 4.8,
+            "reviews_count": 128,
+            "sales_estimate": 450,
+            "source_metadata": {"metadata_source": "legacy_marketplace_api"},
+        })
+        self.assertIn("Rating: N/D | Reseñas: N/D", message)
+        self.assertIn("Ventas estimadas: N/D", message)
+        self.assertNotIn("4.8", message)
+        self.assertNotIn("128", message)
+        self.assertNotIn("450", message)
+
+    def test_stale_product_is_marked_for_price_revalidation(self):
+        message = telegram_alert._format_product({
+            "title": "Auriculares",
+            "current_price": 24.99,
+            "currency": "USD",
+            "product_url": "https://www.amazon.com/dp/B000000001",
+            "source_metadata": {"catalog_status": "stale"},
+        })
+        self.assertIn("precio pendiente de verificación", message)
 
 
 class TelegramApiResponseTests(unittest.TestCase):

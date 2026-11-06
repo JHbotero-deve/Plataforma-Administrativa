@@ -10,7 +10,7 @@ import requests
 from analysis import score_product
 from db import get_connection, upsert_product
 from url_import import detect_platform, import_url
-from product_sources import ALLOWED_CATEGORIES, enrich_product
+from product_sources import ALLOWED_CATEGORIES, enrich_product, enrich_pending_products, _is_placeholder_title, _is_placeholder_image_url
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
@@ -92,7 +92,8 @@ def _has_product_image(product):
     gallery = product.get("image_gallery")
     if not isinstance(gallery, (list, tuple)):
         gallery = []
-    return bool(_product_link(product.get("image_url")) or any(_product_link(value) for value in gallery))
+    usable = lambda value: bool(_product_link(value) and not _is_placeholder_image_url(value))
+    return bool(usable(product.get("image_url")) or any(usable(value) for value in gallery))
 
 
 def _store_link():
@@ -103,12 +104,19 @@ def _store_link():
 def _format_product(p):
     title = html.escape(str(p.get("title") or "Sin título")[:90])
     price = p.get("current_price")
-    currency = html.escape(str(p.get("currency") or "")[:10])
+    currency_value = str(p.get("currency") or "").upper()
+    currency = html.escape(currency_value if currency_value not in {"", "UNK", "N/D"} else "N/D")
     platform = html.escape(str(p.get("platform") or "N/D")[:40])
     category = html.escape(str(p.get("category") or "N/D")[:40])
-    rating = html.escape(str(p.get("rating") if p.get("rating") is not None else "N/D")[:20])
-    reviews = html.escape(str(p.get("reviews_count") if p.get("reviews_count") is not None else "N/D")[:20])
-    sales = html.escape(str(p.get("sales_estimate") if p.get("sales_estimate") is not None else "N/D")[:20])
+    metadata = p.get("source_metadata") or {}
+    field_sources = metadata.get("field_sources") or {}
+    verified_sources = {"public_product_page", "user"}
+    rating_value = p.get("rating") if field_sources.get("rating") in verified_sources else None
+    reviews_value = p.get("reviews_count") if field_sources.get("reviews_count") in verified_sources else None
+    sales_value = p.get("sales_estimate") if field_sources.get("sales_estimate") in verified_sources else None
+    rating = html.escape(str(rating_value if rating_value is not None else "N/D")[:20])
+    reviews = html.escape(str(reviews_value if reviews_value is not None else "N/D")[:20])
+    sales = html.escape(str(sales_value if sales_value is not None else "N/D")[:20])
     opportunity = p.get("opportunity_score")
     price_score = p.get("price_score")
     demand_score = p.get("demand_score")
@@ -120,7 +128,7 @@ def _format_product(p):
 
     # Datos que todavía no se pudieron obtener del producto
     missing = []
-    if re.match(r"^(\d+\.\s*)?Producto ", str(p.get("title") or "")):
+    if _is_placeholder_title(p.get("title")):
         missing.append("título real")
     if price is None:
         missing.append("precio")
@@ -151,6 +159,8 @@ def _format_product(p):
         lines.append(f"Vendedor: {seller_text}")
     if description:
         lines.append(html.escape(description[:300]))
+    if metadata.get("catalog_status") == "stale":
+        lines.append("<b>Estado:</b> precio pendiente de verificación en la tienda")
     if missing:
         lines.append("<b>Datos faltantes:</b> " + html.escape(", ".join(missing)))
     if url:
@@ -202,7 +212,7 @@ def _top_products(limit=25):
             cur.execute(
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url, p.image_gallery,
-                       p.description, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
+                       p.description, p.source_metadata, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -216,8 +226,28 @@ def _top_products(limit=25):
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
                   AND COALESCE(s.opportunity_score, 0) >= 60
-                  AND p.current_price > 0 AND p.category_id IS NOT NULL
-                  AND p.title NOT LIKE 'Producto %%' AND p.image_url IS NOT NULL
+                  AND p.current_price > 0 AND p.currency NOT IN ('UNK', 'N/D') AND p.category_id IS NOT NULL
+                  AND LOWER(p.title) NOT LIKE 'producto amazon %%'
+                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
+                  AND LOWER(p.title) <> 'producto'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%' AND p.image_url IS NOT NULL
+                  AND p.product_url IS NOT NULL
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
+                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
+                  AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
                 """,
@@ -238,7 +268,7 @@ def _search_products(term, limit=8):
             cur.execute(
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url, p.image_gallery,
-                       p.description, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
+                       p.description, p.source_metadata, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -251,8 +281,18 @@ def _search_products(term, limit=8):
                 LEFT JOIN sellers seller ON seller.id = p.seller_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
+                  AND LOWER(p.title) NOT LIKE 'producto amazon %%'
+                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) <> 'producto'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
                   AND (p.title ILIKE %s OR COALESCE(c.name, '') ILIKE %s)
-                ORDER BY COALESCE(s.opportunity_score, 0) DESC
+                ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
                 """,
                 (f"%{term}%", f"%{term}%", limit),
@@ -274,7 +314,7 @@ def _products_by_ids(product_ids, limit=8):
             cur.execute(
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url, p.image_gallery,
-                       p.description, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
+                       p.description, p.source_metadata, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -327,7 +367,7 @@ def _add_url(argument, title=None):
             title=title or (details[1] if len(details) > 1 and details[1] else None),
             price=price,
             image_url=details[2] if len(details) > 2 and details[2] else None,
-            currency=details[3] if len(details) > 3 and details[3] else "USD",
+            currency=details[3] if len(details) > 3 and details[3] else None,
         )
         product = enrich_product(product)
         category = category or product.get("category")
@@ -338,7 +378,7 @@ def _add_url(argument, title=None):
         try:
             product_id = upsert_product(conn, product["platform"], category, product)
             score = None
-            if product.get("price") is not None and category and product.get("image_url") and product.get("title") and not product["title"].startswith("Producto "):
+            if product.get("price") is not None and product.get("currency") not in (None, "", "UNK") and category and product.get("image_url") and product.get("title") and not _is_placeholder_title(product["title"]):
                 with conn.cursor() as cur:
                     cur.execute(
                         """
@@ -384,6 +424,18 @@ def _model_product(argument):
             "reviews_count": int(parts[7] or 0),
             "sales_estimate": int(parts[8] or 0),
             "image_url": parts[9] or None,
+            "source_metadata": {
+                "metadata_source": "telegram_manual",
+                "field_sources": {
+                    "title": "user",
+                    "price": "user",
+                    "currency": "user",
+                    "rating": "user" if parts[6] else None,
+                    "reviews_count": "user" if parts[7] else None,
+                    "sales_estimate": "user" if parts[8] else None,
+                    "image_url": "user",
+                },
+            },
         }
         conn = get_connection()
         try:
@@ -413,7 +465,7 @@ def _model_active_products():
     """Puntúa el catálogo local sin consultar Amazon ni AliExpress."""
     conn = get_connection()
     try:
-        enriched = 0
+        enriched = enrich_pending_products(conn, limit=20, max_workers=4, force=True)
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -428,11 +480,22 @@ def _model_active_products():
                        ), p.current_price) AS category_avg
                 FROM products p
                 WHERE p.is_active = TRUE
+                  AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND p.current_price IS NOT NULL
                   AND p.current_price > 0
+                  AND p.currency NOT IN ('UNK', 'N/D')
                   AND p.category_id IS NOT NULL
                   AND p.title IS NOT NULL
-                  AND p.title NOT LIKE 'Producto %%'
+                  AND LOWER(p.title) NOT LIKE 'producto amazon %%'
+                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) <> 'producto'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
                   AND p.image_url IS NOT NULL
                   AND p.image_url <> ''
                 ORDER BY p.updated_at DESC
@@ -446,9 +509,19 @@ def _model_active_products():
                     COUNT(*) FILTER (
                         WHERE current_price IS NOT NULL
                           AND current_price > 0
+                          AND currency NOT IN ('UNK', 'N/D')
                           AND category_id IS NOT NULL
                           AND title IS NOT NULL
-                          AND title NOT LIKE 'Producto %%'
+                          AND LOWER(title) NOT LIKE 'producto amazon %%'
+                          AND LOWER(title) NOT LIKE 'producto aliexpress %%'
+                          AND LOWER(title) NOT LIKE 'producto url-%%'
+                          AND LOWER(title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
+                          AND LOWER(title) <> 'producto'
+                          AND LOWER(title) NOT LIKE '%%oferta destacada global%%'
+                          AND LOWER(title) NOT LIKE '%%producto verificado con%%'
+                          AND LOWER(title) NOT LIKE '%%titulo real del producto%%'
+                          AND LOWER(title) NOT LIKE '%%nombre real del producto%%'
+                          AND LOWER(title) NOT LIKE '%%oferta destacada global%%'
                           AND image_url IS NOT NULL
                           AND image_url <> ''
                     ) AS eligible,
@@ -466,7 +539,7 @@ def _model_active_products():
                     COUNT(*) FILTER (WHERE source_metadata->>'enrichment_status' IN ('retry','partial','blocked')) AS retry
                 FROM products
                 WHERE is_active = TRUE AND product_url IS NOT NULL
-                  AND (current_price IS NULL OR image_url IS NULL OR title LIKE 'Producto %%' OR category_id IS NULL)
+                  AND (current_price IS NULL OR image_url IS NULL OR LOWER(title) LIKE 'producto amazon %%' OR LOWER(title) LIKE 'producto aliexpress %%' OR LOWER(title) LIKE 'producto url-%%' OR LOWER(title) IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url') OR LOWER(title) LIKE '%%oferta destacada global%%' OR LOWER(title) LIKE '%%producto verificado con%%' OR LOWER(title) LIKE '%%titulo real del producto%%' OR LOWER(title) LIKE '%%nombre real del producto%%' OR LOWER(COALESCE(image_url, '')) LIKE '%%enlace-de-la-imagen.jpg%%' OR LOWER(COALESCE(image_url, '')) LIKE '%%placeholder%%' OR LOWER(COALESCE(image_url, '')) LIKE '%%example.com%%' OR category_id IS NULL)
             """)
             enrichment_counts = cur.fetchone() or {}
             recovery = int(enrichment_counts.get("recovery") or 0)
@@ -485,29 +558,6 @@ def _model_active_products():
         return scored, missing_data, errors, remaining, enriched, recovery, retry
     finally:
         conn.close()
-
-
-def _queue_marketplace_search(query):
-    normalized = " ".join(str(query or "").split())[:100]
-    if not normalized:
-        raise ValueError("La búsqueda está vacía")
-    connection = get_connection()
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "INSERT INTO marketplace_search_requests (query) VALUES (%s) RETURNING id",
-                (normalized,),
-            )
-            row = cursor.fetchone()
-        connection.commit()
-        if row is None:
-            raise RuntimeError("La base de datos no devolvió el ID de la búsqueda")
-        return row["id"] if isinstance(row, dict) else row[0]
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
 
 
 def _handle(token, chat_id, text):
@@ -546,7 +596,7 @@ def _handle(token, chat_id, text):
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
             "/buscar término — buscar en el catálogo ya importado\n"
-            "/modelar — puntuar productos del catálogo local sin consultar tiendas\n"
+            "/modelar — revalidar URLs públicas y puntuar el catálogo local\n"
             "/agregar URL — importar Amazon o AliExpress; admite datos manuales\n"
             "Publicación — selecciona productos en Studio y usa «Publicar en Central»\n"
             "/estado — estado del catálogo\n"
@@ -571,34 +621,24 @@ def _handle(token, chat_id, text):
     if command == "/buscar":
         term = argument.strip()
         if not term:
-            return _send(token, chat_id, "Uso: /buscar término para consultar el catálogo importado, o envía una URL de Amazon/AliExpress para agregar un producto.")
+            products = _search_products("", limit=8)
+            if not products:
+                return _send(token, chat_id, "No hay productos con título comercial en el catálogo activo. Envía una URL de Amazon/AliExpress para agregar uno.")
+            if not _send(token, chat_id, f"<b>Catálogo importado ({len(products)} productos)</b>"):
+                return False
+            for index, product in enumerate(products, 1):
+                product["title"] = f"{index}. {product['title']}"
+                if not _send_product(token, chat_id, product):
+                    return False
+            return True
         if _is_http_url(term):
             result, payload, score = _add_url(term)
             if result is None:
                 return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
             return _send_imported(token, chat_id, result, payload, score, "<b>Producto importado desde URL</b>")
-        try:
-            request_id = _queue_marketplace_search(term)
-        except Exception as exc:
-            print(f"[telegram-bot] No se pudo registrar la búsqueda: {type(exc).__name__}: {str(exc)[:200]}")
-            return _send(token, chat_id, "No fue posible registrar la búsqueda. Int?ntalo nuevamente.")
-
-        if not _send(
-            token,
-            chat_id,
-            f"<b>Búsqueda registrada</b> (solicitud #{request_id}). "
-            "El worker consultará Amazon y AliExpress.",
-        ):
-            return False
-
         products = _search_products(term[:100], limit=8)
         if not products:
-            return _send(
-                token,
-                chat_id,
-                "No hay coincidencias en el catálogo local. "
-                "La b?squeda externa quedó registrada y será procesada por el worker.",
-            )
+            return _send(token, chat_id, "No hay coincidencias en el catálogo importado. Envía la URL del producto o usa /agregar URL para incorporarlo.")
         if not _send(token, chat_id, f"<b>Resultados del catálogo ({len(products)})</b>"):
             return False
         for index, product in enumerate(products, 1):
@@ -631,6 +671,8 @@ def _handle(token, chat_id, text):
     if command == "/modelar":
         if not argument.strip():
             try:
+                if not _send(token, chat_id, "Iniciando modelado del catálogo local..."):
+                    return False
                 scored, missing_price, errors, remaining, enriched, recovery, retry = _model_active_products()
                 return _send(
                     token, chat_id,
@@ -642,7 +684,7 @@ def _handle(token, chat_id, text):
                     f"Pendientes por límite de lote: {remaining}\n"
                     f"Datos recuperados desde URLs: {enriched}\n"
                     f"Errores al puntuar: {errors}\n"
-                    "El sistema consulta las APIs oficiales de las tiendas cuando están configuradas y usa metadatos públicos como respaldo."
+                    "El sistema recupera metadatos de páginas públicas por URL; no consulta APIs externas de búsqueda o detalle de marketplaces."
                 )
             except Exception as exc:
                 print(f"[telegram-bot] batch modeling error: {type(exc).__name__}: {exc}")
@@ -656,19 +698,35 @@ def _handle(token, chat_id, text):
         conn = get_connection()
         try:
             with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) AS total FROM products WHERE is_active = TRUE")
-                total = cur.fetchone()["total"]
+                cur.execute("""
+                    SELECT COUNT(*) AS total,
+                           COUNT(*) FILTER (WHERE is_active = TRUE) AS active,
+                           COUNT(*) FILTER (WHERE is_active = FALSE) AS inactive,
+                           COUNT(*) FILTER (WHERE source_metadata->>'catalog_status' = 'stale' OR (catalog_expires_at IS NOT NULL AND catalog_expires_at <= NOW())) AS stale,
+                           COUNT(*) FILTER (WHERE product_url IS NOT NULL AND product_url <> '') AS with_url
+                    FROM products
+                """)
+                counts = cur.fetchone()
+                total = int(counts["total"] or 0)
+                active = int(counts["active"] or 0)
+                inactive = int(counts["inactive"] or 0)
+                stale = int(counts["stale"] or 0)
+                with_url = int(counts["with_url"] or 0)
                 cur.execute(
                     """
                     SELECT COUNT(DISTINCT p.id) AS modeled
                     FROM products p
                     JOIN product_scores s ON s.product_id = p.id
-                    WHERE p.is_active = TRUE AND p.current_price IS NOT NULL
+                    WHERE p.is_active = TRUE AND p.current_price IS NOT NULL AND p.currency NOT IN ('UNK', 'N/D')
+                      AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
+                      AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                     """
                 )
                 modeled = cur.fetchone()["modeled"]
             message = (
-                f"<b>Estado del catálogo</b>\nProductos activos: {total}\n"
+                f"<b>Estado del catálogo</b>\nProductos registrados: {total}\n"
+                f"Productos activos: {active}\nProductos inactivos: {inactive}\n"
+                f"Productos por revalidar: {stale}\nProductos con URL: {with_url}\n"
                 f"Productos modelados: {modeled}"
             )
             if not total:

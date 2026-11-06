@@ -1,5 +1,6 @@
 """Customer offer rules; internal costs and margins never belong in public responses."""
 import math
+from product_sources import _is_placeholder_image_url, _is_placeholder_title
 
 MIN_CUSTOMER_DISCOUNT_PCT = 40.0
 
@@ -88,3 +89,57 @@ def publish_discounted_offer(conn, product_id, product, opportunity_score=None):
         )
     conn.commit()
     return offer
+
+
+def publish_catalog_product(conn, product_id, product, opportunity_score=None, commit=True):
+    """Publica productos externos a su precio real, sin inventar descuentos ni costes."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT storefront_excluded FROM products WHERE id = %s", (product_id,))
+        exclusion = cur.fetchone()
+    if exclusion and exclusion.get("storefront_excluded") is True:
+        return None
+    title = str(product.get("title") or "").strip()
+    image = product.get("image_url") or product.get("image")
+    product_url = product.get("product_url") or product.get("affiliate_url")
+    metadata = product.get("source_metadata") or {}
+    missing_fields = set(metadata.get("missing_fields") or [])
+    if missing_fields.intersection({"title", "price", "currency", "image_url"}):
+        return None
+    if metadata.get("metadata_source") in {"url_only", "public_product_page", "public_product_page_empty"}:
+        field_sources = metadata.get("field_sources") or {}
+        verified = {"public_product_page", "user"}
+        if any(field_sources.get(field) not in verified for field in ("title", "price", "currency", "image_url")):
+            return None
+    try:
+        price = float(product.get("current_price") if product.get("current_price") is not None else product.get("price"))
+    except (TypeError, ValueError):
+        return None
+    if _is_placeholder_title(title) or _is_placeholder_image_url(image) or not product_url or not math.isfinite(price) or price <= 0:
+        return None
+    currency = str(product.get("currency") or "").upper()
+    if not currency or currency in {"UNK", "N/D"}:
+        return None
+    platform = str(product.get("platform") or "marketplace").replace("_", " ").title()
+    with conn.cursor() as cur:
+        cur.execute("UPDATE products SET is_active = TRUE WHERE id = %s", (product_id,))
+        cur.execute("""
+            INSERT INTO published_cards (
+                product_id, title, subtitle, price_display, image_url, product_url,
+                sale_price, cost_price, profit_amount, profit_margin_pct,
+                opportunity_score, footer, accent, is_published, published_at, updated_at
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,NULL,NULL,NULL,%s,%s,%s,TRUE,NOW(),NOW())
+            ON CONFLICT (product_id) DO UPDATE SET
+                title=EXCLUDED.title, subtitle=EXCLUDED.subtitle,
+                price_display=EXCLUDED.price_display, image_url=EXCLUDED.image_url,
+                product_url=EXCLUDED.product_url, sale_price=EXCLUDED.sale_price,
+                cost_price=NULL, profit_amount=NULL, profit_margin_pct=NULL,
+                opportunity_score=EXCLUDED.opportunity_score,
+                footer=EXCLUDED.footer, is_published=TRUE, updated_at=NOW()
+        """, (
+            product_id, title, f"Producto de {platform}",
+            f"{price:,.2f} {currency}", image, product_url, price,
+            opportunity_score or 0, "Precio de referencia del comercio · compra externa", "#b6f23a",
+        ))
+    if commit:
+        conn.commit()
+    return {"sale_price": price, "discount_pct": None, "publication_type": "catalog"}

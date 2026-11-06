@@ -1,5 +1,6 @@
 """Enriquecimiento de productos desde metadatos públicos y exportaciones autorizadas."""
 import json
+import math
 import os
 import re
 import unicodedata
@@ -13,13 +14,13 @@ import requests
 from db import _affiliate_url
 from url_import import ASIN_RE
 
-ENRICHMENT_VERSION = 6
+ENRICHMENT_VERSION = 9
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 MAX_REDIRECTS = 12
 ALLOWED_HOSTS = {
-    "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amazon.com.au", "amazon.in", "amazon.nl", "amazon.se", "amazon.pl", "amazon.ae", "amazon.sg", "amazon.com.tr", "amazon.com.br", "link.amazon", "amzn.to", "amzn.com", "a.co"),
-    "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub", "s.click.aliexpress.com"),
+    "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amazon.com.au", "amazon.in", "amazon.nl", "amazon.se", "amazon.pl", "amazon.ae", "amazon.sg", "amazon.com.tr", "amazon.com.br", "link.amazon", "amzn.to", "amzn.eu", "amzn.asia", "amzn.com", "amzn.ca", "amzn.de", "amzn.co.uk", "a.co"),
+    "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub", "s.click.aliexpress.com", "click.aliexpress.com"),
 }
 ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"}
 BROWSER_HEADERS = {
@@ -61,6 +62,25 @@ def _allowed_host(host, platform):
     return any(host == domain or host.endswith("." + domain) for domain in ALLOWED_HOSTS[platform])
 
 
+def _is_placeholder_title(value):
+    title = re.sub(r"\s+", " ", str(value or "").strip().casefold())
+    normalized = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
+    generic_id = re.match(r"^producto (?:amazon|aliexpress|url)(?:[ -]?[a-z0-9_-]{6,})?$", title)
+    return not title or title == "producto" or bool(generic_id) or any(
+        phrase in normalized
+        for phrase in ("oferta destacada global", "producto verificado con envio rapido", "producto verificado con envio", "titulo real del producto", "nombre real del producto")
+    )
+
+
+def _is_placeholder_image_url(value):
+    try:
+        parsed = urlsplit(str(value or "").strip())
+        host = (parsed.hostname or "").lower().rstrip(".")
+        return host in {"enlace-de-la-imagen.jpg", "example.com", "www.example.com", "placeholder.com"} or "placeholder" in parsed.path.casefold()
+    except ValueError:
+        return True
+
+
 def _walk_products(value):
     if isinstance(value, dict):
         kind = value.get("@type")
@@ -82,7 +102,11 @@ def _number(value):
     if "," in raw and "." in raw:
         raw = raw.replace(".", "").replace(",", ".") if raw.rfind(",") > raw.rfind(".") else raw.replace(",", "")
     elif "," in raw:
-        raw = raw.replace(",", ".")
+        whole, separator, fraction = raw.partition(",")
+        raw = whole + fraction if len(fraction) == 3 else whole + "." + fraction
+    elif "." in raw:
+        whole, separator, fraction = raw.partition(".")
+        raw = whole + fraction if len(fraction) == 3 else raw
     try:
         result = float(raw)
         return result if result > 0 else None
@@ -127,8 +151,8 @@ def _public_product_page(url, platform):
     for hop in range(MAX_REDIRECTS + 1):
         parsed = urlsplit(current)
         host = (parsed.hostname or "").lower().rstrip(".")
-        if platform not in ALLOWED_HOSTS or parsed.scheme not in ("http", "https") or not _allowed_host(host, platform):
-            raise ValueError("La URL redirigió fuera de los dominios permitidos de la tienda.")
+        if platform not in ALLOWED_HOSTS or parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None, 443) or not _allowed_host(host, platform):
+            raise ValueError("La URL redirigió fuera de los dominios HTTPS permitidos de la tienda.")
         normalized = _normalized_url(current)
         if normalized in seen_urls:
             raise RuntimeError("La tienda devolvió un ciclo de redirección, normalmente causado por un inicio de sesión obligatorio.")
@@ -231,7 +255,7 @@ def _public_product_page(url, platform):
         "description": str(description).strip()[:5000] or None,
         "currency": str(currency).upper()[:10] if currency else None,
         "rating": _number(rating),
-        "reviews_count": int(_number(reviews_count) or 0),
+        "reviews_count": int(_number(reviews_count)) if _number(reviews_count) is not None else None,
         "category": _category(category, title),
         "seller": seller,
         "seller_url": urljoin(current, seller_url) if seller_url else None,
@@ -240,256 +264,134 @@ def _public_product_page(url, platform):
 
 
 
-def _resolve_product_url(url, platform):
-    """Resuelve enlaces cortos de afiliado (s.click.aliexpress.com, amzn.to) siguiendo HTTP y redirecciones HTML/JS."""
-    current = url
-    seen = set()
-    for _ in range(MAX_REDIRECTS + 1):
-        parsed = urlsplit(current)
-        host = (parsed.hostname or "").lower().rstrip(".")
-        if platform not in ALLOWED_HOSTS or parsed.scheme not in ("http", "https") or not _allowed_host(host, platform):
-            raise ValueError("La URL redirigió fuera de los dominios permitidos de la tienda.")
-        normalized = _normalized_url(current)
-        if normalized in seen:
-            raise RuntimeError("La tienda devolvió un ciclo de redirección.")
-        seen.add(normalized)
-        try:
-            response = requests.get(
-                current,
-                headers=BROWSER_HEADERS,
-                timeout=15,
-                allow_redirects=True,
-            )
-            final_url = response.url
-            html_text = response.text[:200_000]
-            response.close()
-        except Exception:
-            return current
-
-        if ALIEXPRESS_ITEM_RE.search(urlsplit(final_url).path) or ASIN_RE.search(urlsplit(final_url).path):
-            return final_url
-
-        match_meta = re.search(r'content=["\'][^"\']*url=([^"\']+)["\']', html_text, re.I)
-        if match_meta:
-            target = match_meta.group(1)
-            current = urljoin(final_url, target)
-            continue
-
-        match_js = re.search(r'(?:window\.)?location\.href\s*=\s*["\']([^"\']+)["\']', html_text, re.I)
-        if match_js:
-            target = match_js.group(1)
-            current = urljoin(final_url, target)
-            continue
-
-        match_item = re.search(r'aliexpress\.com/item/(\d+)', html_text, re.I)
-        if match_item:
-            return f"https://www.aliexpress.com/item/{match_item.group(1)}.html"
-
-        return final_url
-    return current
-
-
-def _aliexpress_product_data(product_id, category=None):
-    from affiliate_links import aliexpress_api_request
-    from promotion_bots import PRODUCT_FIELDS, _official_url
-
-    tracking_id = os.getenv("ALIEXPRESS_TRACKING_ID", "").strip() or os.getenv("ALIEXPRESS_AFFILIATE_TRACKING_ID", "").strip()
-    payload = aliexpress_api_request(
-        "aliexpress.affiliate.productdetail.get",
-        {
-            "product_ids": str(product_id),
-            "fields": PRODUCT_FIELDS,
-            "target_currency": "USD",
-            "target_language": "ES",
-            "tracking_id": tracking_id,
-            "country": "CO",
-        },
-    )
-    root = payload.get("aliexpress_affiliate_productdetail_get_response", payload)
-    response = root.get("resp_result", root) if isinstance(root, dict) else {}
-    if not isinstance(response, dict):
-        raise RuntimeError("AliExpress devolvió una respuesta de detalle inválida.")
-    code = response.get("resp_code")
-    if code not in (None, "", 0, "0", 200, "200"):
-        raise RuntimeError(f"AliExpress rechazó el detalle del producto ({code}).")
-    result = response.get("result") or {}
-    products = result.get("products") or []
-    if isinstance(products, dict):
-        products = products.get("product") or products.get("products") or products.get("product_detail") or []
-    if isinstance(products, dict):
-        products = [products]
-    for raw in products if isinstance(products, list) else []:
-        if not isinstance(raw, dict) or str(raw.get("product_id") or "") != str(product_id):
-            continue
-        title = str(raw.get("product_title") or "").strip()[:500] or None
-        product_url = _official_url(raw.get("product_detail_url")) or f"https://www.aliexpress.com/item/{product_id}.html"
-        image = _official_url(raw.get("product_main_image_url"), image=True)
-        gallery = raw.get("product_small_image_urls") or []
-        if isinstance(gallery, dict):
-            gallery = gallery.get("string") or gallery.get("url") or []
-        if isinstance(gallery, str):
-            gallery = [gallery]
-        if not isinstance(gallery, list):
-            gallery = []
-        gallery = list(dict.fromkeys(
-            value for item in gallery
-            if (value := _official_url(item, image=True))
-        ))
-        if image and image not in gallery:
-            gallery.insert(0, image)
-        sale_price = _number(raw.get("target_sale_price") or raw.get("sale_price"))
-        original_price = _number(raw.get("target_original_price") or raw.get("original_price"))
-        inferred = category or _category(
-            raw.get("first_level_category_name") or raw.get("second_level_category_name"),
-            title,
-        )
-        shop_id = str(raw.get("shop_id") or "").strip()
-        shop_url = _official_url(raw.get("shop_url"))
-        seller_name = str(raw.get("shop_name") or raw.get("seller_name") or "").strip()
-        if not seller_name and shop_id:
-            seller_name = f"Tienda AliExpress #{shop_id}"
-        seller = {"external_id": shop_id or seller_name, "name": seller_name} if seller_name else None
-        promotion_link = _official_url(raw.get("promotion_link"))
-        if not title and sale_price is None and not image:
-            continue
-        return {
-            "external_id": str(product_id),
-            "title": title,
-            "product_url": product_url,
-            "resolved_url": product_url,
-            "affiliate_url": promotion_link,
-            "price": sale_price,
-            "previous_price": original_price,
-            "currency": str(raw.get("target_sale_price_currency") or raw.get("sale_price_currency") or "USD").upper()[:10],
-            "image_url": image or (gallery[0] if gallery else None),
-            "gallery_urls": gallery[:10],
-            "description": str(raw.get("product_description") or "").strip()[:5000] or None,
-            "rating": None,
-            "reviews_count": 0,
-            "sales_estimate": int(_number(raw.get("lastest_volume")) or 0),
-            "category": inferred,
-            "seller": seller,
-            "seller_url": shop_url,
-            "source_metadata": {
-                "metadata_source": "aliexpress_affiliate_api",
-                "import_method": "official_aliexpress_affiliate_productdetail_api",
-                "seller_name": seller_name or None,
-                "seller_id": shop_id or None,
-                "seller_url": shop_url,
-                "lastest_volume": int(_number(raw.get("lastest_volume")) or 0),
-            },
-        }
-    errors = payload.get("error_response") if isinstance(payload, dict) else None
-    code = errors.get("code") if isinstance(errors, dict) else "ProductNotAccessible"
-    raise RuntimeError(f"AliExpress no devolvió datos utilizables para el producto ({code}).")
-
-def _aliexpress_product_by_title(title, category=None):
-    """Busca un enlace corto por su título en la API oficial de afiliados, sin abrir la página."""
-    title = " ".join(str(title or "").split())[:180]
-    if not title or title.casefold().startswith("producto "):
-        return None
-    tracking_id = os.getenv("ALIEXPRESS_TRACKING_ID", "").strip() or os.getenv("ALIEXPRESS_AFFILIATE_TRACKING_ID", "").strip()
-    if not (os.getenv("ALIEXPRESS_APP_KEY", "").strip() and os.getenv("ALIEXPRESS_APP_SECRET", "").strip() and tracking_id):
-        return None
-
-    normalized_title = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode().lower()
-    stopwords = {"para", "con", "por", "una", "uno", "the", "for", "with", "and", "men", "women", "man", "woman", "hombre", "mujer", "talla", "nivel"}
-    source_tokens = [token for token in re.findall(r"[a-z0-9]{3,}", normalized_title) if token not in stopwords]
-    source_set = set(source_tokens)
-    if len(source_set) < 2:
-        return None
-
-    from affiliate_links import aliexpress_api_request
-    from promotion_bots import PRODUCT_FIELDS, _normalize_product, _product_results
-
-    payload = aliexpress_api_request(
-        "aliexpress.affiliate.product.query",
-        {
-            "keywords": title,
-            "page_no": "1",
-            "page_size": "20",
-            "sort": "LAST_VOLUME_DESC",
-            "target_currency": "USD",
-            "target_language": "ES",
-            "ship_to_country": "CO",
-            "tracking_id": tracking_id,
-            "fields": PRODUCT_FIELDS,
-        },
-    )
-    matches = []
-    for raw in _product_results(payload):
-        candidate_title = str(raw.get("product_title") or "")
-        normalized_candidate = unicodedata.normalize("NFKD", candidate_title).encode("ascii", "ignore").decode().lower()
-        candidate_tokens = set(re.findall(r"[a-z0-9]{3,}", normalized_candidate)) - stopwords
-        overlap = source_set & candidate_tokens
-        if len(overlap) < 2:
-            continue
-        similarity = len(overlap) / max(1, min(len(source_set), len(candidate_tokens)))
-        brand_match = bool(source_tokens and source_tokens[0] in candidate_tokens)
-        if similarity < 0.4 and not brand_match:
-            continue
-        inferred = category or _category(
-            raw.get("first_level_category_name") or raw.get("second_level_category_name"),
-            candidate_title,
-        )
-        product = _normalize_product(raw, inferred)
-        if product:
-            product["source_metadata"]["metadata_source"] = "aliexpress_affiliate_api_search"
-            product["resolved_url"] = product.get("product_url")
-            matches.append((similarity + (0.25 if brand_match else 0), product))
-    return max(matches, key=lambda item: item[0])[1] if matches else None
-
-
-def _official_product_data(url, platform, category=None):
-    if platform == "amazon":
-        match = ASIN_RE.search(urlsplit(url).path)
-        if match:
-            from amazon_creators import get_item_by_asin
-            marketplace = urlsplit(url).hostname or "www.amazon.com"
-            product = get_item_by_asin(match.group(1), category, marketplace)
-            if product:
-                product["resolved_url"] = product.get("product_url") or url
-                return product
-    if platform == "aliexpress":
-        match = ALIEXPRESS_ITEM_RE.search(urlsplit(url).path)
-        if match:
-            return _aliexpress_product_data(match.group(1), category)
-    return None
-
-
-def enrich_product(product):
-    """Conserva los datos aportados y no consulta redes ni APIs de marketplaces."""
-    url = str(product.get("product_url") or "")
+def enrich_product(product, force=False):
+    """Enriquece y revalida productos con la página pública de su URL."""
+    url = str(product.get("product_url") or "").strip()
     platform = product.get("platform")
     if platform not in ALLOWED_HOSTS or not url:
         return product
     metadata = dict(product.get("source_metadata") or {})
+    manual_fields = set(metadata.get("manual_fields") or [])
+    field_sources = dict(metadata.get("field_sources") or {})
+    if _is_placeholder_title(product.get("title")):
+        manual_fields.discard("title")
+        field_sources.pop("title", None)
+    if _is_placeholder_image_url(product.get("image_url")):
+        product["image_url"] = None
+        manual_fields.discard("image_url")
+        field_sources.pop("image_url", None)
+    metadata["manual_fields"] = sorted(manual_fields)
+    metadata["field_sources"] = field_sources
     if not product.get("category"):
         inferred_category = _category(None, product.get("title"))
         if inferred_category:
             product["category"] = inferred_category
             metadata["category_source"] = "title_inference"
-    path = urlsplit(url).path
+    title = str(product.get("title") or "").strip()
+    complete = bool(title and not _is_placeholder_title(title) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and not _is_placeholder_image_url(product.get("image_url")) and product.get("category"))
+    if complete and not force:
+        for field in manual_fields:
+            if product.get(field) is not None:
+                field_sources[field] = "user"
+        metadata["field_sources"] = field_sources
+        metadata.update({"enrichment_status": "complete", "enrichment_version": ENRICHMENT_VERSION, "missing_fields": []})
+        product["source_metadata"] = metadata
+        return product
+    try:
+        legacy_url_only = metadata.get("metadata_source") == "url_only"
+        page = _public_product_page(url, platform)
+        resolved_url = page.get("resolved_url") or url
+        has_page_data = any(page.get(key) for key in ("title", "price", "image_url", "description"))
+        metadata["metadata_source"] = "public_product_page" if has_page_data else "public_product_page_empty"
+        for field, key in (("title", "title"), ("price", "price"), ("previous_price", "previous_price"), ("currency", "currency"), ("image_url", "image_url"), ("description", "description"), ("rating", "rating"), ("reviews_count", "reviews_count"), ("category", "category")):
+            current = product.get(field)
+            missing_title = field == "title" and _is_placeholder_title(current)
+            missing_currency = field == "currency" and str(current or "").upper() in {"", "UNK", "N/D"}
+            replace_legacy = legacy_url_only and field in {"price", "currency"}
+            should_update = force or current is None or current == "" or missing_title or missing_currency or replace_legacy
+            if should_update and field not in manual_fields and page.get(key) is not None:
+                product[field] = page[key]
+        product["gallery_urls"] = list(dict.fromkeys((product.get("gallery_urls") or []) + (page.get("gallery_urls") or [])))[:10]
+        if (not product.get("image_url") or _is_placeholder_image_url(product.get("image_url"))) and product["gallery_urls"] and "image_url" not in manual_fields:
+            product["image_url"] = product["gallery_urls"][0]
+        if not product.get("seller") and page.get("seller"):
+            product["seller"] = page["seller"]
+        product["product_url"] = resolved_url
+        page_price = page.get("price")
+        page_currency = str(page.get("currency") or "").upper()
+        try:
+            price_matches = page_price is not None and math.isclose(float(product.get("price")), float(page_price), rel_tol=0.01, abs_tol=0.01)
+        except (TypeError, ValueError):
+            price_matches = False
+        currency_matches = bool(page_currency and page_currency == str(product.get("currency") or "").upper())
+        refresh_verified = bool(page.get("title") and page_price is not None and page_currency and page.get("image_url") and price_matches and currency_matches)
+        field_sources = dict(metadata.get("field_sources") or {})
+        for field in ("title", "price", "previous_price", "currency", "image_url", "description", "rating", "reviews_count", "category", "seller"):
+            if field not in manual_fields:
+                field_sources.pop(field, None)
+        for field in manual_fields:
+            if product.get(field) is not None:
+                field_sources[field] = "user"
+        for field, key in (("title", "title"), ("price", "price"), ("previous_price", "previous_price"), ("currency", "currency"), ("image_url", "image_url"), ("description", "description"), ("rating", "rating"), ("reviews_count", "reviews_count"), ("category", "category"), ("seller", "seller")):
+            if page.get(key) is not None and field not in manual_fields:
+                field_sources[field] = "public_product_page"
+        metadata["field_sources"] = field_sources
+        has_complete_data = bool(product.get("title") and not _is_placeholder_title(product.get("title")) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and not _is_placeholder_image_url(product.get("image_url")))
+        metadata.update({
+            "catalog_status": "current" if refresh_verified else "stale",
+            "catalog_refresh_verified": refresh_verified,
+            "original_url": metadata.get("original_url") or url,
+            "resolved_url": resolved_url,
+            "enrichment_status": "complete" if has_complete_data else "partial",
+            "enrichment_version": ENRICHMENT_VERSION,
+            "enriched_at": datetime.now(timezone.utc).isoformat(),
+        })
+        metadata.pop("network_enrichment_disabled", None)
+        metadata.pop("enrichment_error", None)
+        if not has_complete_data or not refresh_verified:
+            metadata["enrichment_retry_after"] = (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat()
+        else:
+            metadata.pop("enrichment_retry_after", None)
+    except Exception as exc:
+        metadata.update({
+            "original_url": metadata.get("original_url") or url,
+            "enrichment_status": "partial",
+            "enrichment_version": ENRICHMENT_VERSION,
+            "catalog_refresh_verified": False,
+            "catalog_status": "stale",
+            "enrichment_error": f"{type(exc).__name__}: {str(exc)[:180]}",
+            "enrichment_retry_after": (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat(),
+        })
+        metadata.pop("network_enrichment_disabled", None)
+    if not product.get("category"):
+        inferred_category = _category(None, product.get("title"))
+        if inferred_category:
+            product["category"] = inferred_category
+            metadata["category_source"] = "title_inference"
+    path = urlsplit(str(product.get("product_url") or url)).path
     match = ASIN_RE.search(path) if platform == "amazon" else ALIEXPRESS_ITEM_RE.search(path)
     if match and (not product.get("external_id") or str(product["external_id"]).startswith("URL-")):
         product["external_id"] = match.group(1).upper() if platform == "amazon" else match.group(1)
-    metadata.update({
-        "metadata_source": metadata.get("metadata_source") or "url_only",
-        "resolved_url": metadata.get("resolved_url") or url,
-        "enrichment_status": "paused",
-        "enrichment_version": ENRICHMENT_VERSION,
-        "network_enrichment_disabled": True,
-    })
-    metadata.pop("marketplace_api_error", None)
-    metadata.pop("enrichment_error", None)
+    missing = []
+    if _is_placeholder_title(product.get("title")):
+        missing.append("title")
+    if not product.get("price"):
+        missing.append("price")
+    if not product.get("currency") or product.get("currency") in {"UNK", "N/D"}:
+        missing.append("currency")
+    if not product.get("category"):
+        missing.append("category")
+    if not product.get("image_url") or _is_placeholder_image_url(product.get("image_url")):
+        missing.append("image_url")
+    metadata["missing_fields"] = missing
     product["source_metadata"] = metadata
     return product
 
 def _retry_due(metadata):
-    if (metadata or {}).get("network_enrichment_disabled"):
-        return False
     if (metadata or {}).get("enrichment_version") != ENRICHMENT_VERSION:
         return True
+    if (metadata or {}).get("enrichment_status") == "complete":
+        return False
     retry_after = (metadata or {}).get("enrichment_retry_after")
     if not retry_after:
         return True
@@ -502,7 +404,7 @@ def _retry_due(metadata):
         return True
 
 
-def _enrich_pending_row(row):
+def _enrich_pending_row(row, force=False):
     source_metadata = row["source_metadata"] or {}
     category = row["category"]
     if category == "accesorios" and source_metadata.get("metadata_source") == "url_only" and not source_metadata.get("category_source"):
@@ -522,21 +424,28 @@ def _enrich_pending_row(row):
         "seller": {"external_id": row.get("seller_external_id"), "name": row.get("seller_name")} if row.get("seller_external_id") and row.get("seller_name") else None,
         "source_metadata": source_metadata,
     }
-    return enrich_product(product)
+    return enrich_product(product, force=force)
 
 
 def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
     with conn.cursor() as cur:
-        cur.execute("""SELECT p.id,p.external_id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,p.affiliate_url,pl.name AS platform,c.name AS category,p.source_metadata,s.external_id AS seller_external_id,s.name AS seller_name
+        cur.execute("""SELECT p.id,p.external_id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,p.affiliate_url,pl.name AS platform,c.name AS category,p.source_metadata,s.external_id AS seller_external_id,s.name AS seller_name,p.is_active,
+            (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) AS catalog_expired
             FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN sellers s ON s.id=p.seller_id
-            WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL OR p.seller_id IS NULL)
-            ORDER BY p.updated_at ASC LIMIT %s""", (max(limit, limit * 5),))
+            WHERE p.product_url IS NOT NULL AND (
+                (p.is_active=TRUE AND (p.current_price IS NULL OR p.currency IS NULL OR p.currency = 'UNK' OR p.image_url IS NULL OR LOWER(p.title) LIKE 'producto amazon %%' OR LOWER(p.title) LIKE 'producto aliexpress %%' OR LOWER(p.title) LIKE 'producto url-%%' OR LOWER(p.title) IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url') OR LOWER(p.title) LIKE '%%titulo real del producto%%' OR LOWER(p.title) LIKE '%%nombre real del producto%%' OR LOWER(p.title) LIKE '%%oferta destacada global%%' OR LOWER(p.title) LIKE '%%producto verificado con%%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%%enlace-de-la-imagen.jpg%%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%%placeholder%%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%%example.com%%' OR p.category_id IS NULL))
+                OR (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW())
+                OR (p.is_active=TRUE AND (LOWER(p.title) LIKE '%%oferta destacada global%%' OR LOWER(p.title) LIKE '%%producto verificado con%%'))
+                OR (p.is_active=TRUE AND COALESCE(p.source_metadata->>'enrichment_version', '') <> %s)
+                OR (COALESCE(p.source_metadata->>'catalog_status', '') = 'stale')
+            )
+            ORDER BY (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) DESC,p.catalog_expires_at ASC NULLS LAST,p.updated_at ASC LIMIT %s""", (str(ENRICHMENT_VERSION), max(limit, limit * 5)))
         candidates = cur.fetchall()
-    rows = [row for row in candidates if force or _retry_due(row.get("source_metadata") or {})][:limit]
+    rows = [row for row in candidates if force or row.get("catalog_expired") or _retry_due(row.get("source_metadata") or {})][:limit]
     if not rows:
         return 0
     with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(rows)))) as executor:
-        enriched_rows = list(executor.map(_enrich_pending_row, rows))
+        enriched_rows = list(executor.map(_enrich_pending_row, rows, [bool(force or row.get("catalog_expired") or str((row.get("source_metadata") or {}).get("enrichment_version") or "") != str(ENRICHMENT_VERSION)) for row in rows]))
     recovered = 0
     for row, enriched in zip(rows, enriched_rows):
         metadata = enriched.get("source_metadata") or {}
@@ -570,6 +479,8 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 rating=COALESCE(%s,rating),
                 reviews_count=COALESCE(%s,reviews_count),
                 source_metadata=%s::jsonb,
+                is_active=CASE WHEN %s THEN TRUE ELSE is_active END,
+                catalog_expires_at=CASE WHEN %s THEN NOW()+INTERVAL '48 hours' WHEN %s THEN NOW()+INTERVAL '12 hours' ELSE catalog_expires_at END,
                 updated_at=NOW()
                 WHERE id=%s""", (
                 candidate_external_id, candidate_external_id, candidate_external_id,
@@ -583,9 +494,13 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 enriched.get("price"), enriched.get("currency"), enriched.get("image_url"),
                 json.dumps(gallery), json.dumps(gallery),
                 enriched.get("rating"), enriched.get("reviews_count"),
-                json.dumps(metadata), row["id"],
+                json.dumps(metadata),
+                bool(metadata.get("catalog_refresh_verified")),
+                bool(metadata.get("catalog_refresh_verified")),
+                bool(row.get("catalog_expired")),
+                row["id"],
             ))
-        if metadata.get("metadata_source") in {"public_product_page", "amazon_creators_api", "aliexpress_affiliate_api"} and any(enriched.get(key) for key in ("price", "image_url")):
+        if metadata.get("metadata_source") == "public_product_page" and any(enriched.get(key) for key in ("price", "image_url")):
             recovered += 1
     conn.commit()
     return recovered

@@ -4,6 +4,33 @@ from pydantic import BaseModel, Field, StrictInt
 from admin_auth import require_admin
 from db import get_connection
 
+PUBLIC_CARD_QUALITY_FILTER = """
+AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
+AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
+AND p.current_price > 0
+AND p.currency NOT IN ('UNK', 'N/D')
+AND pc.sale_price > 0
+AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+AND COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) IS NOT NULL
+AND COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) IS NOT NULL
+AND LOWER(COALESCE(pc.title, p.title, '')) NOT LIKE 'producto amazon %%'
+AND LOWER(COALESCE(pc.title, p.title, '')) NOT LIKE 'producto aliexpress %%'
+AND LOWER(COALESCE(pc.title, p.title, '')) NOT LIKE 'producto url-%%'
+AND LOWER(COALESCE(pc.image_url, p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+AND LOWER(COALESCE(pc.image_url, p.image_url, '')) NOT LIKE '%%placeholder%%'
+AND LOWER(COALESCE(pc.image_url, p.image_url, '')) NOT LIKE '%%example.com%%'
+AND (
+    p.source_metadata IS NULL
+    OR COALESCE(p.source_metadata->>'metadata_source', '') NOT IN ('url_only', 'public_product_page', 'public_product_page_empty', 'legacy_marketplace_api')
+    OR (
+        p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+        AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+        AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+        AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+    )
+)
+"""
+
 router = APIRouter(tags=["storefront-sections"])
 DEFAULT_SECTIONS = (
     ("tecnologia", "Tecnología", "tecnologia", ["tecnologia"], "celular laptop tablet tecnologia", 100, 10),
@@ -71,12 +98,13 @@ def get_refill_sections():
 
 def count_published_for_category(conn, category_names):
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(f"""
             SELECT COUNT(*) AS total
             FROM published_cards pc
             JOIN products p ON p.id = pc.product_id
             JOIN categories c ON c.id = p.category_id
             WHERE pc.is_published = TRUE AND p.is_active = TRUE
+              {PUBLIC_CARD_QUALITY_FILTER}
               AND c.name = ANY(%s)
         """, (category_names,))
         row = cur.fetchone()
@@ -94,23 +122,24 @@ def get_storefront_sections():
             result = []
             for section in sections:
                 if section["category_name"] is None:
-                    cur.execute("""
+                    cur.execute(f"""
                         SELECT COUNT(*) AS total FROM (
                             SELECT pc.id FROM published_cards pc
                             JOIN products p ON p.id = pc.product_id
                             WHERE pc.is_published = TRUE AND p.is_active = TRUE
-                              AND COALESCE(pc.profit_margin_pct, 0) > 0
-                            ORDER BY pc.profit_margin_pct DESC, pc.opportunity_score DESC, pc.published_at DESC
+                              {PUBLIC_CARD_QUALITY_FILTER}
+                            ORDER BY COALESCE(pc.opportunity_score, 0) DESC, pc.published_at DESC
                             LIMIT %s
                         ) featured
                     """, (section["target_count"],))
                 else:
-                    cur.execute("""
+                    cur.execute(f"""
                         SELECT COUNT(*) AS total
                         FROM published_cards pc
                         JOIN products p ON p.id = pc.product_id
                         JOIN categories c ON c.id = p.category_id
                         WHERE pc.is_published = TRUE AND p.is_active = TRUE
+                          {PUBLIC_CARD_QUALITY_FILTER}
                           AND c.name = ANY(%s)
                     """, (section["category_names"],))
                 count = int((cur.fetchone() or {}).get("total") or 0)

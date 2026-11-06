@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
 
-from pricing import build_customer_offer, publish_discounted_offer
+from pricing import build_customer_offer, publish_catalog_product, publish_discounted_offer
 
 
 class CustomerOfferTests(unittest.TestCase):
@@ -52,6 +52,107 @@ class CustomerOfferTests(unittest.TestCase):
         query = connection.cursor.return_value.__enter__.return_value.execute.call_args
         self.assertIn("is_published = FALSE", query.args[0])
         connection.commit.assert_called_once()
+
+
+    def test_publishes_complete_catalog_product_at_source_price_without_fake_margin(self):
+        connection = MagicMock()
+        product = {
+            "title": "Tenis deportivos",
+            "current_price": 49.99,
+            "currency": "USD",
+            "image_url": "https://images.example/tenis.jpg",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+            "platform": "amazon",
+        }
+        result = publish_catalog_product(connection, 11, product, 72)
+        calls = connection.cursor.return_value.__enter__.return_value.execute.call_args_list
+        insert = next(call for call in calls if "INSERT INTO published_cards" in call.args[0])
+        self.assertEqual(insert.args[1][6], 49.99)
+        self.assertIn("NULL,NULL,NULL", insert.args[0].replace(" ", ""))
+        self.assertEqual(insert.args[1][7], 72)
+        self.assertEqual(insert.args[1][8], "Precio de referencia del comercio · compra externa")
+        self.assertEqual(insert.args[1][9], "#b6f23a")
+        self.assertEqual(result["publication_type"], "catalog")
+        connection.commit.assert_called_once()
+
+    def test_does_not_publish_url_only_product_with_unverified_required_fields(self):
+        connection = MagicMock()
+        result = publish_catalog_product(connection, 15, {
+            "title": "Auriculares inalámbricos",
+            "current_price": 24.99,
+            "currency": "USD",
+            "image_url": "https://images.example/headphones.jpg",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+            "platform": "amazon",
+            "source_metadata": {
+                "metadata_source": "url_only",
+                "missing_fields": ["title", "price", "category", "image_url"],
+            },
+        })
+        self.assertIsNone(result)
+        connection.commit.assert_not_called()
+
+    def test_does_not_publish_url_only_product_without_verified_field_sources(self):
+        connection = MagicMock()
+        result = publish_catalog_product(connection, 16, {
+            "title": "Auriculares inalámbricos",
+            "current_price": 24.99,
+            "currency": "USD",
+            "image_url": "https://images.example/headphones.jpg",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+            "platform": "amazon",
+            "source_metadata": {"metadata_source": "url_only", "missing_fields": []},
+        })
+        self.assertIsNone(result)
+        connection.commit.assert_not_called()
+
+    def test_does_not_publish_catalog_product_without_real_image_or_price(self):
+        connection = MagicMock()
+        result = publish_catalog_product(connection, 12, {
+            "title": "Producto Amazon B012345678",
+            "current_price": None,
+            "image_url": None,
+            "product_url": "https://www.amazon.com/dp/B012345678",
+        })
+        self.assertIsNone(result)
+        connection.commit.assert_not_called()
+
+
+    def test_does_not_publish_example_image_urls(self):
+        connection = MagicMock()
+        result = publish_catalog_product(connection, 13, {
+            "title": "Auriculares inalámbricos",
+            "current_price": 24.99,
+            "currency": "USD",
+            "image_url": "https://enlace-de-la-imagen.jpg",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+        })
+        self.assertIsNone(result)
+        connection.commit.assert_not_called()
+
+
+    def test_rejects_placeholder_title_and_image_without_blocking_manual_product_title(self):
+        connection = MagicMock()
+        result = publish_catalog_product(connection, 13, {
+            "title": "Título real del producto",
+            "current_price": 49.99,
+            "currency": "USD",
+            "image_url": "https://enlace-de-la-imagen.jpg",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+        })
+        self.assertIsNone(result)
+        execute = connection.cursor.return_value.__enter__.return_value.execute
+        self.assertEqual(execute.call_count, 1)
+
+        connection = MagicMock()
+        result = publish_catalog_product(connection, 14, {
+            "title": "Producto manual",
+            "current_price": 49.99,
+            "currency": "USD",
+            "image_url": "https://images.example/manual.jpg",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+        })
+        self.assertEqual(result["publication_type"], "catalog")
 
 
 if __name__ == "__main__":

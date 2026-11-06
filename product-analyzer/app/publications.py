@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from admin_auth import require_admin
 from db import get_connection
+from storefront_sections import PUBLIC_CARD_QUALITY_FILTER
 from notifications import send_telegram_publication
 
 router = APIRouter(tags=["publications"])
@@ -80,7 +81,7 @@ def list_publications(
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            where = "" if include_unpublished else "AND pc.is_published = TRUE"
+            where = "" if include_unpublished else "AND pc.is_published = TRUE " + PUBLIC_CARD_QUALITY_FILTER
             private_fields = (
                 "pc.cost_price, pc.profit_amount, pc.profit_margin_pct"
                 if include_unpublished else
@@ -101,8 +102,9 @@ def list_publications(
                        pc.sale_price, {private_fields},
                        pc.opportunity_score, pc.footer,
                        pc.accent, pc.is_published, pc.sort_order, pc.published_at,
-                       {customer_price} AS current_price, p.previous_price AS original_price,
-                       CASE WHEN p.previous_price > 0 AND pc.sale_price > 0 THEN ROUND((p.previous_price - pc.sale_price) / p.previous_price * 100, 2) ELSE NULL END AS discount_pct,
+                       {customer_price} AS current_price,
+                       CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS original_price,
+                       CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') AND p.previous_price > 0 AND pc.sale_price > 0 THEN ROUND((p.previous_price - pc.sale_price) / p.previous_price * 100, 2) ELSE NULL END AS discount_pct,
                        p.currency, p.image_gallery, p.affiliate_url, p.external_id, p.sku,
                        p.description, p.stock, pl.name AS platform, c.name AS category,
                        seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url

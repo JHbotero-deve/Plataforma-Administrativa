@@ -11,8 +11,6 @@ from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
-from affiliate_links import generate_aliexpress_affiliate_url
-
 def _database_url() -> str:
     db_url = (os.getenv("DATABASE_URL") or "").strip()
     if not db_url:
@@ -140,11 +138,11 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
                 product_url = COALESCE(EXCLUDED.product_url, products.product_url),
                 affiliate_url = COALESCE(EXCLUDED.affiliate_url, products.affiliate_url),
                 current_price = COALESCE(EXCLUDED.current_price, products.current_price),
-                previous_price = COALESCE(EXCLUDED.previous_price, products.previous_price),
+                previous_price = CASE WHEN EXCLUDED.source_metadata->>'import_method' = 'authorized_cli_url' THEN EXCLUDED.previous_price ELSE COALESCE(EXCLUDED.previous_price, products.previous_price) END,
                 currency = COALESCE(EXCLUDED.currency, products.currency),
-                rating = COALESCE(EXCLUDED.rating, products.rating),
-                reviews_count = COALESCE(EXCLUDED.reviews_count, products.reviews_count),
-                sales_estimate = COALESCE(EXCLUDED.sales_estimate, products.sales_estimate),
+                rating = CASE WHEN EXCLUDED.source_metadata->>'import_method' = 'authorized_cli_url' THEN EXCLUDED.rating ELSE COALESCE(EXCLUDED.rating, products.rating) END,
+                reviews_count = CASE WHEN EXCLUDED.source_metadata->>'import_method' = 'authorized_cli_url' THEN EXCLUDED.reviews_count ELSE COALESCE(EXCLUDED.reviews_count, products.reviews_count) END,
+                sales_estimate = CASE WHEN EXCLUDED.source_metadata->>'import_method' = 'authorized_cli_url' THEN EXCLUDED.sales_estimate ELSE COALESCE(EXCLUDED.sales_estimate, products.sales_estimate) END,
                 source_metadata = EXCLUDED.source_metadata,
                 catalog_batch_id = NOW(),
                 catalog_expires_at = NOW() + INTERVAL '48 hours',
@@ -165,7 +163,7 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
                 affiliate_url,
                 product.get("price"),
                 product.get("previous_price"),
-                product.get("currency") or "COP",
+                product.get("currency") or "UNK",
                 product.get("rating"),
                 product.get("reviews_count", 0),
                 product.get("sales_estimate"),

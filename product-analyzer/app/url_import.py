@@ -15,32 +15,41 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-AMAZON_HOST_RE = re.compile(r"(^|\.)(amazon\.[a-z.]+|link\.amazon|amzn\.to|amzn\.com|a\.co)$", re.I)
-ALIEXPRESS_HOST_RE = re.compile(r"(^|\.)(aliexpress\.[a-z.]+|aliexpress\.ru|alii\.pub|s\.click\.aliexpress\.com|click\.aliexpress\.com)$", re.I)
-SHORTENER_HOST_RE = re.compile(
-    r"(^|\.)(s\.click\.aliexpress\.com|click\.aliexpress\.com"
-    r"|amzn\.to|a\.co|bit\.ly|tinyurl\.com|t\.co|goo\.gl"
-    r"|shorturl\.at|rb\.gy|is\.gd|cutt\.ly|link\.amazon)$", re.I,
+AMAZON_DOMAINS = (
+    "amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de",
+    "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amazon.com.au",
+    "amazon.in", "amazon.nl", "amazon.se", "amazon.pl", "amazon.ae",
+    "amazon.sg", "amazon.com.tr", "amazon.com.br",
 )
+AMAZON_SHORTLINKS = {"amzn.to", "amzn.eu", "amzn.asia", "amzn.com", "amzn.ca", "amzn.de", "amzn.co.uk", "a.co", "link.amazon"}
+ALIEXPRESS_DOMAINS = ("aliexpress.com", "aliexpress.us", "aliexpress.ru")
+ALIEXPRESS_SHORTLINKS = {"s.click.aliexpress.com", "click.aliexpress.com", "alii.pub"}
 ASIN_RE = re.compile(r"/(?:dp|gp/product|gp/aw/d)/([A-Z0-9]{10})(?:[/?]|$)", re.I)
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 MAX_ZIP_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
+def _host_matches(host: str, domains) -> bool:
+    return any(host in {domain, "www." + domain, "m." + domain, "smile." + domain} for domain in domains)
+
+
 def detect_platform(url: str) -> str:
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().rstrip(".")
-    if AMAZON_HOST_RE.search(host) or "amazon" in host or "amzn" in host or "a.co" in host:
+    if parsed.scheme != "https":
+        raise ValueError("La URL del producto debe usar HTTPS.")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("La URL contiene un puerto no válido.") from exc
+    if parsed.username or parsed.password or port not in (None, 80, 443):
+        raise ValueError("La URL contiene credenciales o un puerto no permitido.")
+    if _host_matches(host, AMAZON_DOMAINS) or host in AMAZON_SHORTLINKS:
         return "amazon"
-    if ALIEXPRESS_HOST_RE.search(host) or "aliexpress" in host or "alii.pub" in host:
+    if _host_matches(host, ALIEXPRESS_DOMAINS) or host in ALIEXPRESS_SHORTLINKS:
         return "aliexpress"
-    if SHORTENER_HOST_RE.search(host):
-        if "amazon" in host or "amzn" in host or "a.co" in host:
-            return "amazon"
-        return "aliexpress"
-    raise ValueError("La URL debe pertenecer a Amazon o AliExpress.")
-
+    raise ValueError("La URL debe pertenecer a Amazon o AliExpress mediante un dominio oficial o enlace corto oficial.")
 
 def _external_id(url: str, platform: str) -> str:
     parsed = urlparse(url)
@@ -63,22 +72,17 @@ def import_url(
     category: Optional[str] = None,
     title: Optional[str] = None,
     price: Optional[float] = None,
-    currency: str = "USD",
+    currency: Optional[str] = None,
     image_url: Optional[str] = None,
     external_id: Optional[str] = None,
 ) -> dict:
     url = url.strip()
     parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        raise ValueError("La URL debe comenzar con http:// o https://.")
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("La URL debe comenzar con https://.")
 
     platform = detect_platform(url)
     resolved_url = url
-    try:
-        from product_sources import _resolve_product_url
-        resolved_url = _resolve_product_url(url, platform)
-    except Exception:
-        pass
 
     supplied_id = str(external_id or "").strip()
     external_id = supplied_id[:150] if supplied_id else _external_id(resolved_url, platform)
@@ -86,7 +90,7 @@ def import_url(
     final_title = raw_title or f"Producto {platform.title()} {external_id}"
     final_image = (image_url or "").strip() or None
     final_price = price
-    final_currency = (currency or "USD").strip().upper()[:10] or "USD"
+    final_currency = (currency or "").strip().upper()[:10] or None
     category_value = str(category or "").strip().lower()
     allowed_categories = {
         "ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda",
@@ -101,8 +105,11 @@ def import_url(
 
     if final_image:
         image = urlparse(final_image)
+        image_host = (image.hostname or "").lower().rstrip(".")
         if image.scheme not in ("http", "https") or not image.hostname:
             raise ValueError("La imagen debe ser una URL HTTP o HTTPS válida.")
+        if image_host in {"enlace-de-la-imagen.jpg", "example.com", "www.example.com", "placeholder.com"} or "placeholder" in image.path.casefold():
+            final_image = None
 
     missing_fields = []
     if not raw_title:
@@ -113,6 +120,8 @@ def import_url(
         missing_fields.append("category")
     if not final_image:
         missing_fields.append("image_url")
+    if not final_currency:
+        missing_fields.append("currency")
 
     return {
         "platform": platform,
@@ -124,16 +133,26 @@ def import_url(
         "price": final_price,
         "currency": final_currency,
         "rating": None,
-        "reviews_count": 0,
+        "reviews_count": None,
         "gallery_urls": [final_image] if final_image else [],
         "sales_estimate": None,
         "source_metadata": {
             "import_method": "authorized_cli_url",
-            "metadata_source": "cli" if title or price is not None or image_url or final_category else "url_only",
+            "metadata_source": "cli" if title or price is not None or image_url or final_category or currency else "url_only",
+            "manual_fields": [field for field, supplied in (("title", title), ("price", price), ("image_url", final_image), ("currency", currency), ("category", final_category)) if supplied is not None and supplied != ""],
             "category_source": "user" if final_category else None,
             "original_url": url,
             "resolved_url": resolved_url or url,
             "gallery_urls": [final_image] if final_image else [],
             "missing_fields": missing_fields,
+            "field_sources": {
+                key: "user" for key, supplied in (
+                    ("title", bool(raw_title)),
+                    ("price", final_price is not None),
+                    ("currency", bool(currency)),
+                    ("image_url", bool(final_image)),
+                    ("category", bool(final_category)),
+                ) if supplied
+            },
         },
     }

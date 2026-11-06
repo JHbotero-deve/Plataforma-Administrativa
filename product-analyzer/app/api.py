@@ -9,7 +9,7 @@ import secrets
 import time
 import requests
 from typing import Optional
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import Response
@@ -24,10 +24,6 @@ from admin_auth import (
     set_admin_cookie,
 )
 from analysis import score_product
-from aliexpress_oauth import (
-    ensure_aliexpress_oauth_storage,
-    router as aliexpress_oauth_router,
-)
 from db import get_connection, upsert_product
 from notifications import send_telegram_alert
 from monetization import router as monetization_router
@@ -38,7 +34,7 @@ from store_notifications import process_pending_notifications
 from tiktok_api import router as tiktok_creator_router
 from url_import import import_url
 from product_sources import enrich_product
-from pricing import publish_discounted_offer
+from pricing import publish_catalog_product
 from wompi import router as wompi_router
 from notifications import _config as _config_telegram
 from telegram_alert import run_bot
@@ -65,7 +61,6 @@ async def ensure_admin_draft_storage():
     ensure_draft_storage()
     ensure_storefront_section_storage()
     ensure_commerce_storage()
-    ensure_aliexpress_oauth_storage()
     notification_worker_task = asyncio.create_task(notification_delivery_loop())
 
     token, _ = _config_telegram()
@@ -122,7 +117,6 @@ app.include_router(tiktok_creator_router, prefix="/api/v1")
 app.include_router(publication_router, prefix="/api/v1")
 app.include_router(storefront_sections_router, prefix="/api/v1")
 app.include_router(store_orders_router, prefix="/api/v1")
-app.include_router(aliexpress_oauth_router, prefix="/api/v1")
 
 
 @app.middleware("http")
@@ -290,43 +284,12 @@ def telegram_status():
         }
 
 
-@core_router.get("/media/image")
-def proxy_media_image(url: str = Query(...)):
-    if not url.startswith("http://") and not url.startswith("https://"):
-        raise HTTPException(status_code=400, detail="URL inválida")
-    try:
-        resp = requests.get(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
-                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-                "Referer": "https://www.amazon.com/",
-            },
-            timeout=15,
-        )
-        if not resp.ok:
-            raise HTTPException(status_code=resp.status_code, detail="No se pudo cargar la imagen externa")
-        content_type = resp.headers.get("content-type", "image/jpeg")
-        return Response(content=resp.content, media_type=content_type)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Error cargando imagen: {exc}")
-
-
-@core_router.post("/admin/inject")
-def admin_inject(_: str = Depends(require_admin)):
-    """Inyecta productos de inmediato ejecutando el ciclo de refill y pipeline de afiliados."""
-    try:
-        from promotion_bots import run_storefront_refill, run_promotion_cycle
-        refill_res = run_storefront_refill()
-        promo_res = run_promotion_cycle(max_alerts=3)
-        return {
-            "status": "success",
-            "refill": refill_res,
-            "promotions": promo_res,
-        }
-    except Exception as exc:
-        return {"status": "error", "detail": str(exc)}
-
+@core_router.post("/admin/inject", dependencies=[Depends(require_admin)])
+def admin_inject():
+    raise HTTPException(
+        status_code=410,
+        detail="La búsqueda por APIs de marketplaces fue retirada. Usa la importación y el enriquecimiento URL-first.",
+    )
 
 @core_router.get("/pipeline/metrics")
 def pipeline_metrics():
@@ -463,17 +426,29 @@ def list_products(
     category: Optional[str] = Query(None),
     platform: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             query = """
                 SELECT p.id, p.title, pl.name AS platform, c.name AS category,
-                       p.current_price, p.currency, p.rating, p.reviews_count,
-                       p.sales_estimate, p.image_url, p.image_gallery, p.product_url, p.affiliate_url, p.updated_at, p.source_metadata, p.description, p.previous_price, p.stock, p.sku,
-                       p.catalog_expires_at, p.model_url, p.model_shape,
+                       CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user') THEN p.current_price ELSE NULL END AS current_price,
+                       CASE WHEN p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user') THEN p.currency ELSE NULL END AS currency,
+                       CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
+                       CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
+                       CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
+                       CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user') THEN p.image_url ELSE NULL END AS image_url,
+                       p.image_gallery, p.product_url, p.affiliate_url, p.updated_at, p.source_metadata, p.description,
+                       CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS previous_price,
+                       p.stock, p.sku, p.catalog_expires_at, p.model_url, p.model_shape,
                        seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
-                       s.opportunity_score
+                       CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
+                            THEN s.opportunity_score ELSE NULL END AS opportunity_score
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
@@ -488,8 +463,8 @@ def list_products(
             if platform:
                 query += " AND pl.name = %s"
                 params.append(platform)
-            query += " ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC LIMIT %s"
-            params.append(limit)
+            query += " ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC LIMIT %s OFFSET %s"
+            params.extend((limit, offset))
             cur.execute(query, params)
             return cur.fetchall()
     finally:
@@ -511,7 +486,9 @@ def public_product(product_id: int):
                 COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) AS image_url,p.image_gallery,
                 COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) AS product_url,
                 p.affiliate_url,p.sku,p.external_id,p.stock,
-                pl.name AS platform,c.name AS category,p.rating,p.reviews_count,p.updated_at,
+                pl.name AS platform,c.name AS category,
+                CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
+                CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,p.updated_at,
                 seller.name AS seller_name,p.source_metadata->>'seller_url' AS seller_url
                 FROM published_cards pc JOIN products p ON p.id=pc.product_id JOIN platforms pl ON pl.id=p.platform_id
                 LEFT JOIN categories c ON c.id=p.category_id
@@ -681,7 +658,7 @@ def import_product_from_url(payload: ProductImport):
                 (product_id,),
             )
             saved = cur.fetchone()
-        customer_offer = publish_discounted_offer(conn, product_id, dict(saved), score)
+        customer_offer = publish_catalog_product(conn, product_id, dict(saved), score)
         return {"product": saved, "opportunity_score": score, "customer_offer": customer_offer}
     finally:
         conn.close()
@@ -951,17 +928,42 @@ def top_opportunities(limit: int = Query(20, ge=1, le=100)):
             cur.execute(
                 """
                 SELECT p.id, p.title, pl.name AS platform, c.name AS category,
-                       p.current_price, p.currency, p.rating, p.reviews_count,
-                       p.sales_estimate, s.price_score, s.demand_score,
-                       s.trend_score, s.opportunity_score, p.product_url,
-                       p.image_url, p.updated_at, p.catalog_expires_at,
+                       p.current_price, p.currency,
+                       CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
+                       CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
+                       CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
+                       s.price_score, s.demand_score, s.trend_score, s.opportunity_score,
+                       p.product_url, p.image_url, p.updated_at, p.catalog_expires_at,
                        p.model_url, p.model_shape, p.source_metadata
                 FROM product_scores s
                 JOIN products p ON p.id = s.product_id
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN categories c ON c.id = p.category_id
                 WHERE p.is_active = TRUE
-                ORDER BY s.opportunity_score DESC
+                  AND COALESCE(s.opportunity_score, 0) >= 60
+                  AND p.current_price > 0
+                  AND p.currency NOT IN ('UNK', 'N/D')
+                  AND p.product_url IS NOT NULL AND p.product_url <> ''
+                  AND p.image_url IS NOT NULL AND p.image_url <> ''
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
+                  AND LOWER(p.title) NOT LIKE 'producto amazon %%'
+                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%'
+                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
+                  AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
+                ORDER BY s.opportunity_score DESC, p.updated_at DESC
                 LIMIT %s
                 """,
                 (limit,),

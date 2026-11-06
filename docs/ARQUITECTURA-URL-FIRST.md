@@ -82,22 +82,26 @@ Las referencias visuales aprobadas son la dirección de diseño. No deben presen
 
 ## Estado detectado en el repositorio
 
-En la revisión de la rama principal se encontraron estos elementos:
+Estado de la rama de recuperación URL-first:
 
-- `product-analyzer/app/url_import.py`: recibe una URL, detecta la plataforma y construye el registro inicial. Ya existe una base para el flujo URL-first.
-- `product-analyzer/app/product_sources.py`: procesa metadatos de páginas públicas, pero también contiene rutas de enriquecimiento ligadas a fuentes API de marketplaces.
-- `product-analyzer/app/marketplace_ingestion.py`: todavía ejecuta búsqueda de productos usando `amazon_creators.search_products` y `promotion_bots._search_bucket`.
+- `product-analyzer/app/url_import.py` valida el enlace y conserva la URL original; no realiza búsquedas ni llamadas a APIs de marketplaces.
+- `product-analyzer/app/product_sources.py` sigue redirecciones con validación de cada host y extrae metadatos públicos HTML, Open Graph y JSON-LD. Los campos manuales tienen prioridad.
+- `product-analyzer/app/marketplace_ingestion.py` y `marketplace_search.py` se conservaron como stubs de compatibilidad, sin llamadas externas.
+- Se retiraron los módulos de búsqueda/enriquecimiento por API `amazon_creators.py`, `promotion_bots.py` y `affiliate_links.py`.
+- Telegram `/buscar` consulta únicamente el catálogo local; para incorporar un artículo se envía su URL o se usa `/agregar`.
+- El endpoint administrativo heredado `/admin/inject` devuelve HTTP 410 y no ejecuta búsquedas externas.
+- El worker procesa URLs parciales, puntúa fichas utilizables y publica productos completos al precio real de la fuente, sin fabricar descuentos ni costes.
 
-Por tanto, el comportamiento actual no es todavía URL-first de extremo a extremo. La documentación establece el requisito objetivo y deja constancia de la deuda técnica; no afirma que la migración ya esté hecha.
+La lectura de páginas públicas puede fallar por login, CAPTCHA, límites o falta de metadatos. En esos casos el producto conserva estado parcial y el error queda registrado; no se intenta eludir el bloqueo.
 
 ## Criterios para dar la migración por terminada
 
-- [ ] El worker no ejecuta búsquedas de catálogo mediante APIs de marketplaces.
-- [ ] La importación por URL es el único flujo de adquisición de productos.
-- [ ] El enriquecimiento se basa en la página pública enlazada y en datos suministrados explícitamente por el usuario.
-- [ ] No se requieren claves de API de Amazon o AliExpress para importar, analizar o mostrar productos.
-- [ ] Los errores de acceso, CAPTCHA, login y falta de metadatos se registran como estados parciales o fallidos con causa.
-- [ ] Se conservan URL original, URL resuelta y procedencia de datos.
+- [x] El worker no ejecuta búsquedas de catálogo mediante APIs de marketplaces.
+- [x] La importación por URL es el único flujo de adquisición de productos.
+- [x] El enriquecimiento se basa en la página pública enlazada y en datos suministrados explícitamente por el usuario.
+- [x] No se requieren claves de API de Amazon o AliExpress para importar, analizar o mostrar productos.
+- [x] Los errores de acceso, CAPTCHA, login y falta de metadatos se registran como estados parciales o fallidos con causa.
+- [x] Se conservan URL original, URL resuelta y procedencia de datos.
 - [ ] Las pruebas cubren URL válida, enlaces cortos, redirecciones, dominios prohibidos, SSRF, metadatos ausentes y respuestas bloqueadas.
 - [ ] La tienda pública y el administrador existen como experiencias separadas; el administrador tiene menú lateral y la tienda implementa el diseño visual aprobado.
 - [ ] Los despliegues se validan en preview antes de publicar en producción.

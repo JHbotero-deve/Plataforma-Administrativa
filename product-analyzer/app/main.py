@@ -7,6 +7,8 @@ from analysis import score_product
 from db import get_connection
 from init_db import init_database
 from notifications import send_telegram_alert
+from pricing import publish_catalog_product
+from product_sources import enrich_pending_products
 from seed_catalog import seed_catalog
 from tiktok_creator import creator_configured, sync_showcase
 
@@ -24,25 +26,73 @@ def expire_catalog():
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE products
-                SET is_active = FALSE, updated_at = NOW()
+                SET source_metadata = COALESCE(source_metadata, '{}'::jsonb) ||
+                    jsonb_build_object('catalog_status', 'stale', 'catalog_stale_at', NOW()::text)
                 WHERE is_active = TRUE
                   AND catalog_expires_at IS NOT NULL
                   AND catalog_expires_at <= NOW()
+                  AND source_metadata->>'catalog_status' IS DISTINCT FROM 'stale'
                 RETURNING id
             """)
             expired = cur.rowcount
+            cur.execute("""
+                UPDATE published_cards pc
+                SET subtitle = 'Precio pendiente de verificación',
+                    price_display = 'Precio pendiente de verificación',
+                    sale_price = NULL, cost_price = NULL, profit_amount = NULL,
+                    profit_margin_pct = NULL, opportunity_score = 0,
+                    footer = 'Precio observado anteriormente · verifica el precio actual en la tienda',
+                    updated_at = NOW()
+                FROM products p
+                WHERE p.id = pc.product_id AND pc.is_published = TRUE
+                  AND p.is_active = TRUE AND p.catalog_expires_at <= NOW()
+            """)
         conn.commit()
-        print(f"== Productos vencidos retirados: {expired} ==")
+        print(f"== Productos marcados para revalidación (sin borrarlos ni desactivarlos): {expired} ==")
     finally:
         conn.close()
 
 
 def run_pipeline():
-    print("== Iniciando análisis del catálogo local; tráfico a marketplaces bloqueado ==")
-    expire_catalog()
+    print("== Iniciando catálogo URL-first: solo páginas públicas de producto ==")
     conn = get_connection()
     try:
-        print("[marketplaces] búsquedas y enriquecimiento automáticos desactivados.")
+        recovered = enrich_pending_products(conn, limit=80, max_workers=4)
+        print(f"[url-enrichment] productos enriquecidos/revalidados desde sus URLs públicas: {recovered}")
+        expire_catalog()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT p.id, p.title, p.current_price, p.currency, p.image_url, p.source_metadata,
+                       p.product_url, p.affiliate_url, pl.name AS platform,
+                       COALESCE(s.opportunity_score, 0) AS opportunity_score
+                FROM products p
+                JOIN platforms pl ON pl.id = p.platform_id
+                LEFT JOIN product_scores s ON s.product_id = p.id
+                WHERE p.is_active = TRUE AND p.current_price > 0 AND p.currency NOT IN ('UNK', 'N/D')
+                  AND p.image_url IS NOT NULL AND p.image_url <> ''
+                  AND p.product_url IS NOT NULL AND p.product_url <> ''
+                  AND p.title IS NOT NULL AND LOWER(p.title) NOT LIKE 'producto amazon %%'
+                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
+                  AND LOWER(p.title) <> 'producto'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%'
+                  AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
+                  AND pl.name IN ('amazon', 'aliexpress')
+                ORDER BY p.updated_at DESC LIMIT 1000
+            """)
+            catalog_rows = cur.fetchall()
+        published = 0
+        for row in catalog_rows:
+            if publish_catalog_product(conn, row["id"], row, row["opportunity_score"], commit=False):
+                published += 1
+        if published:
+            conn.commit()
+        print(f"[storefront] productos reales elegibles publicados/actualizados: {published}")
 
         averages = {}
         with conn.cursor() as cur:
@@ -50,7 +100,7 @@ def run_pipeline():
                 SELECT c.name AS category, p.currency, AVG(p.current_price) AS avg_price
                 FROM products p
                 JOIN categories c ON c.id = p.category_id
-                WHERE p.is_active = TRUE AND p.current_price IS NOT NULL
+                WHERE p.is_active = TRUE AND p.current_price IS NOT NULL AND p.currency NOT IN ('UNK', 'N/D')
                 GROUP BY c.name, p.currency
             """)
             for row in cur.fetchall():
@@ -63,9 +113,25 @@ def run_pipeline():
                   AND p.current_price > 0
                   AND p.category_id IS NOT NULL
                   AND p.title IS NOT NULL
-                  AND p.title NOT LIKE 'Producto %%'
+                  AND LOWER(p.title) NOT LIKE 'producto amazon %%'
+                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) <> 'producto'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%'
+                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND p.image_url IS NOT NULL
                   AND p.image_url <> ''
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
+                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
                 ORDER BY p.updated_at DESC
                 LIMIT 500
             """)

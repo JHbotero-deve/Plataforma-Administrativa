@@ -1857,7 +1857,7 @@
       const money = (v, c) => { if (v == null || Number.isNaN(Number(v))) return "—"; const n = Number(v); const cur = String(c || "COP").toUpperCase(); if (cur === "USD" || cur === "US$" || cur === "$") { const cop = n * 3329.61; return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(cop) + " COP"; } try { return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n) + " COP" } catch { return n.toLocaleString("es-CO") + " COP" } };
       const date = v => v ? new Date(v).toLocaleString("es-CO") : "—";
       const isMarketplaceImage = value => { try { const host = new URL(String(value || "")).hostname.toLowerCase(); return /(^|\.)amazon\./i.test(host) || /(^|\.)amazon$/i.test(host) || /(^|\.)media-amazon\.com$/i.test(host) || /(^|\.)ssl-images-amazon\.com$/i.test(host) || /(^|\.)images-amazon\.com$/i.test(host) || /(^|\.)amzn\.(?:to|eu|asia|com|ca|de|co\.uk)$/i.test(host) || host === "a.co" || /(^|\.)aliexpress\./i.test(host) || /(^|\.)alii\.pub$/i.test(host) || /(^|\.)taobao\.com$/i.test(host) || /(^|\.)aliexpress-media\.com$/i.test(host) || /(^|\.)alicdn\.com$/i.test(host); } catch { return false; } };
-      const productImage = p => { const mongo = p?.source_metadata?.mongo_image_id; if (mongo) return "mongo://" + mongo; return [p?.image_url, ...(Array.isArray(p?.image_gallery) ? p.image_gallery : [])].find(url => url && !isMarketplaceImage(url)) || ""; };
+      const productImage = p => { const mongo = p?.source_metadata?.mongo_image_id; if (mongo) return "mongo://" + mongo; return [p?.image_url, ...(Array.isArray(p?.image_gallery) ? p.image_gallery : [])].find(Boolean) || ""; };
       async function get(path) { const protectedRead = /^\/(mongo\/health|pipeline\/(summary|metrics)|intelligence\/overview|opportunities\/top|catalog\/active|products\/compare)(\/|\?|$)/.test(path); const headers = protectedRead ? adminHeaders({ Accept: "application/json" }) : authHeaders({ Accept: "application/json" }); const r = await fetch(API + path, requestOptions({ headers })); if (!r.ok) { const data = await r.json().catch(() => ({})); throw Object.assign(new Error(data.detail || "HTTP " + r.status), { status: r.status }) } return r.json() }
       function status(kind, label) { $("status").innerHTML = '<span class="dot ' + (kind === "ok" ? "ok" : kind === "warn" ? "warn" : "") + '"></span>' + esc(label) }
       updateOfflineStatus();
@@ -1875,11 +1875,11 @@
       function card(p) {
         const id = p.id;
         const score = p.opportunity_score == null ? "—" : Math.round(Number(p.opportunity_score));
-        const gallery = Array.isArray(p.image_gallery) ? p.image_gallery.filter(url => url && !isMarketplaceImage(url)) : [];
+        const gallery = Array.isArray(p.image_gallery) ? p.image_gallery.filter(Boolean) : [];
         const primary = productImage(p);
         const images = [primary, ...gallery].filter((url, i, a) => url && a.indexOf(url) === i);
         const image = images.length
-          ? '<img src="/api/v1/media/image?url=' + encodeURIComponent(images[0]) + '" alt="' + esc(p.title) + '" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="noimg" style="display:none">Sin imagen</span>'
+          ? '<img src="' + esc(images[0]) + '" alt="' + esc(p.title) + '" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="noimg" style="display:none">Sin imagen</span>'
           : '<span class="noimg">Sin imagen</span>';
         const platform = String(p.platform || "Origen").toLowerCase();
         const label = platform === "amazon" ? "Amazon" : platform === "aliexpress" ? "AliExpress" : platform === "tiktok" ? "TikTok" : "Central";

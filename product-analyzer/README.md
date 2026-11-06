@@ -8,6 +8,7 @@ Esta carpeta contiene la API, el worker y la aplicación frontend de Central.
 - `frontend/`: panel administrativo, tienda, fichas, estilos, service worker y showcase de audífonos.
 - `headphones/`: aplicación fuente del showcase 3D en React/Vite. Su salida compilada se publica en `frontend/headphones/`.
 - `tests/`: pruebas unitarias y de regresión.
+- `../docs/OPERACION-CENTRAL.md`: URLs de producción, endpoints, diagnóstico y recuperación.
 
 ## Experiencia de producto
 
@@ -30,7 +31,7 @@ Este README conserva las decisiones de diseño como especificación persistente.
 
 Los campos que no se recibieron se mantienen vacíos. Un registro URL-only puede tener un identificador técnico y un título interno de referencia, pero no se presenta como nombre comercial ni se publica. No se permiten valores de respaldo para precio, imagen, reseñas, calificación o ventas.
 
-Las solicitudes automáticas a APIs, páginas, short links y CDN de Amazon/AliExpress están bloqueadas por el guard de red. No se evaden CAPTCHA ni login. Por tanto, una URL sin título, precio o imagen aportados no se convierte automáticamente en una ficha completa. Usa datos verificables suministrados mediante el panel o CLI autorizado.
+Las APIs externas de búsqueda/detalle de Amazon y AliExpress no se usan para adquirir productos. El enriquecedor procesa URLs públicas y extrae metadatos HTML/Open Graph/JSON-LD cuando la página los permite; los enlaces cortos se resuelven con validación de cada redirección. Si hay login, CAPTCHA, bloqueo o faltan metadatos, el producto permanece parcial. No se evaden controles de acceso.
 
 ## Despliegue frontend — Vercel
 
