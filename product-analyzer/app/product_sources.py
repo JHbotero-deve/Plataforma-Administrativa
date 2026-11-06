@@ -439,7 +439,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 OR (p.is_active=TRUE AND COALESCE(p.source_metadata->>'enrichment_version', '') <> %s)
                 OR (COALESCE(p.source_metadata->>'catalog_status', '') = 'stale')
             )
-            ORDER BY (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) DESC,p.catalog_expires_at ASC NULLS LAST,p.updated_at ASC LIMIT %s""", (str(ENRICHMENT_VERSION), max(limit, limit * 5)))
+            ORDER BY p.is_active DESC,(p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) DESC,p.catalog_expires_at ASC NULLS LAST,p.updated_at ASC LIMIT %s""", (str(ENRICHMENT_VERSION), max(limit, limit * 5)))
         candidates = cur.fetchall()
     rows = [row for row in candidates if force or row.get("catalog_expired") or _retry_due(row.get("source_metadata") or {})][:limit]
     if not rows:

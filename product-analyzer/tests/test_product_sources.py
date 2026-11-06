@@ -114,6 +114,7 @@ class ProductSourcesTests(unittest.TestCase):
         query, parameters = cursor.execute.call_args.args
         self.assertIn("enrichment_version", query)
         self.assertIn("catalog_status", query)
+        self.assertIn("ORDER BY p.is_active DESC", query)
         self.assertEqual(parameters, (str(product_sources.ENRICHMENT_VERSION), 15))
 
     def test_failed_public_page_keeps_product_partial_and_retryable(self):
