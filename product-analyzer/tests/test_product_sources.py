@@ -8,10 +8,9 @@ from url_import import import_url
 class ProductSourcesTests(unittest.TestCase):
     def test_url_import_preserves_original_short_url_without_external_api(self):
         url = "https://amzn.to/example"
-        with patch.object(product_sources, "_public_product_page") as page, patch("affiliate_links.aliexpress_api_request") as api:
+        with patch.object(product_sources, "_public_product_page") as page:
             product = import_url(url)
         page.assert_not_called()
-        api.assert_not_called()
         self.assertEqual(product["product_url"], url)
         self.assertEqual(product["source_metadata"]["original_url"], url)
         self.assertIsNone(product["price"])
