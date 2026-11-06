@@ -2,6 +2,8 @@
 import math
 from urllib.parse import urlsplit
 
+from product_sources import _is_placeholder_image_url, _is_placeholder_title
+
 MIN_CUSTOMER_DISCOUNT_PCT = 40.0
 
 
@@ -105,10 +107,7 @@ def publish_catalog_product(conn, product_id, product, opportunity_score=None, c
         price = float(product.get("current_price") if product.get("current_price") is not None else product.get("price"))
     except (TypeError, ValueError):
         return None
-    normalized_title = title.casefold()
-    image_host = (urlsplit(str(image)).hostname or "").lower().rstrip(".") if image else ""
-    image_path = urlsplit(str(image)).path.casefold() if image else ""
-    if not title or title.casefold().startswith("producto ") or "oferta destacada global" in normalized_title or "producto verificado con envio rapido" in normalized_title or not image or image_host in {"enlace-de-la-imagen.jpg", "example.com", "www.example.com", "placeholder.com"} or "placeholder" in image_path or not product_url or not math.isfinite(price) or price <= 0:
+    if _is_placeholder_title(title) or _is_placeholder_image_url(image) or not product_url or not math.isfinite(price) or price <= 0:
         return None
     currency = str(product.get("currency") or "").upper()
     if not currency or currency in {"UNK", "N/D"}:
