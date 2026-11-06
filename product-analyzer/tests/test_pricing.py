@@ -100,5 +100,29 @@ class CustomerOfferTests(unittest.TestCase):
         connection.commit.assert_not_called()
 
 
+    def test_rejects_placeholder_title_and_image_without_blocking_manual_product_title(self):
+        connection = MagicMock()
+        result = publish_catalog_product(connection, 13, {
+            "title": "Título real del producto",
+            "current_price": 49.99,
+            "currency": "USD",
+            "image_url": "https://enlace-de-la-imagen.jpg",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+        })
+        self.assertIsNone(result)
+        execute = connection.cursor.return_value.__enter__.return_value.execute
+        self.assertEqual(execute.call_count, 1)
+
+        connection = MagicMock()
+        result = publish_catalog_product(connection, 14, {
+            "title": "Producto manual",
+            "current_price": 49.99,
+            "currency": "USD",
+            "image_url": "https://images.example/manual.jpg",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+        })
+        self.assertEqual(result["publication_type"], "catalog")
+
+
 if __name__ == "__main__":
     unittest.main()
