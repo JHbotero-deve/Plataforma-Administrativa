@@ -24,7 +24,7 @@ class OpportunityScoreTests(unittest.TestCase):
         cursor = connection.cursor.return_value.__enter__.return_value
         cursor.fetchone.return_value = {
             "current_price": 20,
-            "previous_price": None,
+            "previous_price": 40,
             "rating": 4.8,
             "reviews_count": 128,
             "sales_estimate": 450,
@@ -33,6 +33,7 @@ class OpportunityScoreTests(unittest.TestCase):
         cursor.fetchall.return_value = []
         score_product(connection, 7, 20)
         params = cursor.execute.call_args.args[1]
+        self.assertEqual(params[1], 50.0)
         self.assertEqual(params[2], 50.0)
 
     def test_score_uses_rating_reviews_and_sales_only_when_marked_as_verified(self):
