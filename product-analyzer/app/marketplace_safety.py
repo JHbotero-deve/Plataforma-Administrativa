@@ -1,5 +1,6 @@
 """Restricts marketplace traffic to public product-page GET requests only."""
 from functools import wraps
+import re
 from urllib.parse import urlsplit
 
 import requests
