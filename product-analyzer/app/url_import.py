@@ -31,12 +31,14 @@ MAX_ZIP_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
 def _host_matches(host: str, domains) -> bool:
-    return any(host == domain or host.endswith("." + domain) for domain in domains)
+    return any(host in {domain, "www." + domain, "m." + domain, "smile." + domain} for domain in domains)
 
 
 def detect_platform(url: str) -> str:
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().rstrip(".")
+    if parsed.scheme != "https":
+        raise ValueError("La URL del producto debe usar HTTPS.")
     try:
         port = parsed.port
     except ValueError as exc:
@@ -76,8 +78,8 @@ def import_url(
 ) -> dict:
     url = url.strip()
     parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        raise ValueError("La URL debe comenzar con http:// o https://.")
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("La URL debe comenzar con https://.")
 
     platform = detect_platform(url)
     resolved_url = url
