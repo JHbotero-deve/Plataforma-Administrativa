@@ -68,7 +68,8 @@ class CustomerOfferTests(unittest.TestCase):
         calls = connection.cursor.return_value.__enter__.return_value.execute.call_args_list
         insert = next(call for call in calls if "INSERT INTO published_cards" in call.args[0])
         self.assertEqual(insert.args[1][6], 49.99)
-        self.assertIsNone(insert.args[1][7])
+        self.assertIn("NULL,NULL,NULL", insert.args[0].replace(" ", ""))
+        self.assertEqual(insert.args[1][7], 72)
         self.assertIsNone(insert.args[1][8])
         self.assertIsNone(insert.args[1][9])
         self.assertEqual(result["publication_type"], "catalog")
