@@ -257,8 +257,11 @@ def _search_products(term, limit=8):
                 LEFT JOIN sellers seller ON seller.id = p.seller_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
                 WHERE p.is_active = TRUE
+                  AND p.title NOT LIKE 'Producto %%'
+                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
+                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
                   AND (p.title ILIKE %s OR COALESCE(c.name, '') ILIKE %s)
-                ORDER BY COALESCE(s.opportunity_score, 0) DESC
+                ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
                 """,
                 (f"%{term}%", f"%{term}%", limit),
@@ -431,7 +434,7 @@ def _model_active_products():
     """Puntúa el catálogo local sin consultar Amazon ni AliExpress."""
     conn = get_connection()
     try:
-        enriched = enrich_pending_products(conn, limit=20, max_workers=4)
+        enriched = enrich_pending_products(conn, limit=20, max_workers=4, force=True)
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -489,7 +492,7 @@ def _model_active_products():
                     COUNT(*) FILTER (WHERE source_metadata->>'enrichment_status' IN ('retry','partial','blocked')) AS retry
                 FROM products
                 WHERE is_active = TRUE AND product_url IS NOT NULL
-                  AND (current_price IS NULL OR image_url IS NULL OR title LIKE 'Producto %%' OR category_id IS NULL)
+                  AND (current_price IS NULL OR image_url IS NULL OR title LIKE 'Producto %%' OR LOWER(title) LIKE '%oferta destacada global%' OR LOWER(title) LIKE '%producto verificado con%' OR category_id IS NULL)
             """)
             enrichment_counts = cur.fetchone() or {}
             recovery = int(enrichment_counts.get("recovery") or 0)
@@ -571,7 +574,16 @@ def _handle(token, chat_id, text):
     if command == "/buscar":
         term = argument.strip()
         if not term:
-            return _send(token, chat_id, "Uso: /buscar término para consultar el catálogo importado, o envía una URL de Amazon/AliExpress para agregar un producto.")
+            products = _search_products("", limit=8)
+            if not products:
+                return _send(token, chat_id, "No hay productos con título comercial en el catálogo activo. Envía una URL de Amazon/AliExpress para agregar uno.")
+            if not _send(token, chat_id, f"<b>Catálogo importado ({len(products)} productos)</b>"):
+                return False
+            for index, product in enumerate(products, 1):
+                product["title"] = f"{index}. {product['title']}"
+                if not _send_product(token, chat_id, product):
+                    return False
+            return True
         if _is_http_url(term):
             result, payload, score = _add_url(term)
             if result is None:
