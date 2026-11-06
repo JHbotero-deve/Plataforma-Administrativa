@@ -55,15 +55,17 @@ class MarketplaceSafetyTests(unittest.TestCase):
                 response = session.get(url, timeout=1)
                 self.assertEqual(response.status_code, 200)
 
-    def test_blocks_marketplace_apis_search_and_image_cdn_requests(self):
+    def test_blocks_marketplace_apis_search_and_non_image_cdn_requests(self):
         cases = (
             ("GET", "https://creatorsapi.amazon/catalog/v1/searchItems"),
             ("GET", "https://api.amazon.com/auth/o2/token"),
             ("GET", "https://api-sg.aliexpress.com/sync"),
             ("GET", "https://eco.taobao.com/router/rest"),
-            ("GET", "https://m.media-amazon.com/images/I/photo.jpg"),
-            ("GET", "https://ae-pic-a1.aliexpress-media.com/image.jpg"),
-            ("GET", "https://ae01.alicdn.com/image.jpg"),
+            ("GET", "https://m.media-amazon.com/api/photo"),
+            ("GET", "https://ae-pic-a1.aliexpress-media.com/api/image"),
+            ("GET", "https://ae01.alicdn.com/api/image"),
+            ("POST", "https://m.media-amazon.com/images/I/photo.jpg"),
+            ("POST", "https://ae01.alicdn.com/kf/photo.jpg"),
             ("GET", "https://www.amazon.com/s?k=headphones"),
             ("POST", "https://www.amazon.com/dp/B000000001"),
             ("POST", "https://www.aliexpress.com/item/123456789.html"),
@@ -73,6 +75,20 @@ class MarketplaceSafetyTests(unittest.TestCase):
                 request = requests.Request(method, url).prepare()
                 with self.assertRaises(MarketplaceAccessBlocked):
                     requests.Session().send(request)
+
+    def test_allows_only_get_requests_for_marketplace_image_cdn_paths(self):
+        cases = (
+            "https://m.media-amazon.com/images/I/photo.jpg",
+            "https://images-na.ssl-images-amazon.com/images/I/photo.webp",
+            "https://ae-pic-a1.aliexpress-media.com/kf/photo.jpg",
+            "https://ae01.alicdn.com/kf/photo.png",
+        )
+        for url in cases:
+            with self.subTest(url=url):
+                session = requests.Session()
+                session.mount("https://", StaticAdapter())
+                response = session.get(url, timeout=1)
+                self.assertEqual(response.status_code, 200)
 
     def test_blocks_redirects_to_marketplace_api_before_request(self):
         session = requests.Session()
