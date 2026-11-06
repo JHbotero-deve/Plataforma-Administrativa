@@ -525,7 +525,7 @@ def _model_active_products():
                     COUNT(*) FILTER (WHERE source_metadata->>'enrichment_status' IN ('retry','partial','blocked')) AS retry
                 FROM products
                 WHERE is_active = TRUE AND product_url IS NOT NULL
-                  AND (current_price IS NULL OR image_url IS NULL OR title LIKE 'Producto %%' OR LOWER(title) LIKE '%oferta destacada global%' OR LOWER(title) LIKE '%producto verificado con%' OR category_id IS NULL)
+                  AND (current_price IS NULL OR image_url IS NULL OR LOWER(title) LIKE 'producto amazon %%' OR LOWER(title) LIKE 'producto aliexpress %%' OR LOWER(title) LIKE 'producto url-%%' OR LOWER(title) IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url') OR LOWER(title) LIKE '%oferta destacada global%' OR LOWER(title) LIKE '%producto verificado con%' OR LOWER(title) LIKE '%titulo real del producto%' OR LOWER(title) LIKE '%nombre real del producto%' OR LOWER(COALESCE(image_url, '')) LIKE '%enlace-de-la-imagen.jpg%' OR LOWER(COALESCE(image_url, '')) LIKE '%placeholder%' OR LOWER(COALESCE(image_url, '')) LIKE '%example.com%' OR category_id IS NULL)
             """)
             enrichment_counts = cur.fetchone() or {}
             recovery = int(enrichment_counts.get("recovery") or 0)
