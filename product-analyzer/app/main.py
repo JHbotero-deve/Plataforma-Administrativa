@@ -65,7 +65,7 @@ def run_pipeline():
                 FROM products p
                 JOIN platforms pl ON pl.id = p.platform_id
                 LEFT JOIN product_scores s ON s.product_id = p.id
-                WHERE p.is_active = TRUE AND p.current_price > 0
+                WHERE p.is_active = TRUE AND p.current_price > 0 AND p.currency NOT IN ('UNK', 'N/D')
                   AND p.image_url IS NOT NULL AND p.image_url <> ''
                   AND p.product_url IS NOT NULL AND p.product_url <> ''
                   AND p.title IS NOT NULL AND p.title NOT LIKE 'Producto %%'
@@ -88,7 +88,7 @@ def run_pipeline():
                 SELECT c.name AS category, p.currency, AVG(p.current_price) AS avg_price
                 FROM products p
                 JOIN categories c ON c.id = p.category_id
-                WHERE p.is_active = TRUE AND p.current_price IS NOT NULL
+                WHERE p.is_active = TRUE AND p.current_price IS NOT NULL AND p.currency NOT IN ('UNK', 'N/D')
                 GROUP BY c.name, p.currency
             """)
             for row in cur.fetchall():
