@@ -87,5 +87,18 @@ class CustomerOfferTests(unittest.TestCase):
         connection.commit.assert_not_called()
 
 
+    def test_does_not_publish_example_image_urls(self):
+        connection = MagicMock()
+        result = publish_catalog_product(connection, 13, {
+            "title": "Auriculares inalámbricos",
+            "current_price": 24.99,
+            "currency": "USD",
+            "image_url": "https://enlace-de-la-imagen.jpg",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+        })
+        self.assertIsNone(result)
+        connection.commit.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
