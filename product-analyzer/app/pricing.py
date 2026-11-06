@@ -104,7 +104,8 @@ def publish_catalog_product(conn, product_id, product, opportunity_score=None, c
         price = float(product.get("current_price") if product.get("current_price") is not None else product.get("price"))
     except (TypeError, ValueError):
         return None
-    if not title or title.casefold().startswith("producto ") or not image or not product_url or not math.isfinite(price) or price <= 0:
+    normalized_title = title.casefold()
+    if not title or title.casefold().startswith("producto ") or "oferta destacada global" in normalized_title or "producto verificado con envio rapido" in normalized_title or not image or not product_url or not math.isfinite(price) or price <= 0:
         return None
     currency = str(product.get("currency") or "").upper()
     if not currency or currency in {"UNK", "N/D"}:
