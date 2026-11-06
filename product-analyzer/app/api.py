@@ -38,7 +38,7 @@ from store_notifications import process_pending_notifications
 from tiktok_api import router as tiktok_creator_router
 from url_import import import_url
 from product_sources import enrich_product
-from pricing import publish_catalog_product, publish_discounted_offer
+from pricing import publish_catalog_product
 from wompi import router as wompi_router
 from notifications import _config as _config_telegram
 from telegram_alert import run_bot
