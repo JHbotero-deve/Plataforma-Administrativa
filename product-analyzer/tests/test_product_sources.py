@@ -182,8 +182,14 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(import_url("https://s.click.aliexpress.com/e/example")["platform"], "aliexpress")
         with self.assertRaises(ValueError):
             import_url("https://bit.ly/example")
-        with self.assertRaises(ValueError):
-            import_url("https://amazon.com.evil.example/dp/B012345678")
+        for url in (
+            "https://amazon.com.evil.example/dp/B012345678",
+            "https://api.amazon.com/catalog/search",
+            "https://api-sg.aliexpress.com/sync",
+            "http://www.amazon.com/dp/B012345678",
+        ):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                import_url(url)
 
     def test_verified_public_price_replaces_legacy_url_only_placeholder(self):
         product = {
