@@ -10,7 +10,7 @@ import requests
 from analysis import score_product
 from db import get_connection, upsert_product
 from url_import import detect_platform, import_url
-from product_sources import ALLOWED_CATEGORIES, enrich_product, _is_placeholder_title
+from product_sources import ALLOWED_CATEGORIES, enrich_product, enrich_pending_products, _is_placeholder_title
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
@@ -121,7 +121,7 @@ def _format_product(p):
 
     # Datos que todavía no se pudieron obtener del producto
     missing = []
-    if re.match(r"^(\d+\.\s*)?Producto ", str(p.get("title") or "")):
+    if _is_placeholder_title(p.get("title")):
         missing.append("título real")
     if price is None:
         missing.append("precio")
@@ -430,7 +430,7 @@ def _model_active_products():
     """Puntúa el catálogo local sin consultar Amazon ni AliExpress."""
     conn = get_connection()
     try:
-        enriched = 0
+        enriched = enrich_pending_products(conn, limit=20, max_workers=4)
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -541,7 +541,7 @@ def _handle(token, chat_id, text):
             "<b>Radar de Producto</b>\n\n"
             "/top — oportunidades con mayor score\n"
             "/buscar término — buscar en el catálogo ya importado\n"
-            "/modelar — puntuar productos del catálogo local sin consultar tiendas\n"
+            "/modelar — revalidar URLs públicas y puntuar el catálogo local\n"
             "/agregar URL — importar Amazon o AliExpress; admite datos manuales\n"
             "Publicación — selecciona productos en Studio y usa «Publicar en Central»\n"
             "/estado — estado del catálogo\n"
