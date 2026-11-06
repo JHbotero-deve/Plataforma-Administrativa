@@ -76,7 +76,7 @@ def _is_public_product_page(request):
     if root_host in AMAZON_PAGE_DOMAINS:
         return any(parsed.path.startswith(path) for path in PRODUCT_PATHS)
     if root_host in ALIEXPRESS_PAGE_DOMAINS:
-        return bool(re.match(r"^/item/\\d+(?:\\.html)?(?:/|$)", parsed.path, re.I))
+        return bool(re.match(r"^/item/\d+(?:\.html)?(?:/|$)", parsed.path, re.I))
     return False
 
 def install_marketplace_request_guard():
