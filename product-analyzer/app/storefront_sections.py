@@ -10,14 +10,15 @@ AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['ti
 AND p.current_price > 0
 AND p.currency NOT IN ('UNK', 'N/D')
 AND pc.sale_price > 0
+AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
 AND COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) IS NOT NULL
 AND COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) IS NOT NULL
 AND LOWER(COALESCE(pc.title, p.title, '')) NOT LIKE 'producto amazon %%'
 AND LOWER(COALESCE(pc.title, p.title, '')) NOT LIKE 'producto aliexpress %%'
 AND LOWER(COALESCE(pc.title, p.title, '')) NOT LIKE 'producto url-%%'
-AND LOWER(COALESCE(pc.image_url, p.image_url, '')) NOT LIKE '%enlace-de-la-imagen.jpg%'
-AND LOWER(COALESCE(pc.image_url, p.image_url, '')) NOT LIKE '%placeholder%'
-AND LOWER(COALESCE(pc.image_url, p.image_url, '')) NOT LIKE '%example.com%'
+AND LOWER(COALESCE(pc.image_url, p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+AND LOWER(COALESCE(pc.image_url, p.image_url, '')) NOT LIKE '%%placeholder%%'
+AND LOWER(COALESCE(pc.image_url, p.image_url, '')) NOT LIKE '%%example.com%%'
 AND (
     p.source_metadata IS NULL
     OR COALESCE(p.source_metadata->>'metadata_source', '') NOT IN ('url_only', 'public_product_page', 'public_product_page_empty', 'legacy_marketplace_api')
@@ -97,13 +98,13 @@ def get_refill_sections():
 
 def count_published_for_category(conn, category_names):
     with conn.cursor() as cur:
-        cur.execute("""
+        cur.execute(f"""
             SELECT COUNT(*) AS total
             FROM published_cards pc
             JOIN products p ON p.id = pc.product_id
             JOIN categories c ON c.id = p.category_id
             WHERE pc.is_published = TRUE AND p.is_active = TRUE
-              ${PUBLIC_CARD_QUALITY_FILTER}
+              {PUBLIC_CARD_QUALITY_FILTER}
               AND c.name = ANY(%s)
         """, (category_names,))
         row = cur.fetchone()
@@ -132,12 +133,13 @@ def get_storefront_sections():
                         ) featured
                     """, (section["target_count"],))
                 else:
-                    cur.execute("""
+                    cur.execute(f"""
                         SELECT COUNT(*) AS total
                         FROM published_cards pc
                         JOIN products p ON p.id = pc.product_id
                         JOIN categories c ON c.id = p.category_id
                         WHERE pc.is_published = TRUE AND p.is_active = TRUE
+                          {PUBLIC_CARD_QUALITY_FILTER}
                           AND c.name = ANY(%s)
                     """, (section["category_names"],))
                 count = int((cur.fetchone() or {}).get("total") or 0)

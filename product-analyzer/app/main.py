@@ -76,10 +76,10 @@ def run_pipeline():
                   AND LOWER(p.title) NOT LIKE 'producto url-%%'
                   AND LOWER(p.title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
                   AND LOWER(p.title) <> 'producto'
-                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
-                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
-                  AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
-                  AND LOWER(p.title) NOT LIKE '%nombre real del producto%'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%'
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                   AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND pl.name IN ('amazon', 'aliexpress')
@@ -117,16 +117,16 @@ def run_pipeline():
                   AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
                   AND LOWER(p.title) NOT LIKE 'producto url-%%'
                   AND LOWER(p.title) <> 'producto'
-                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
-                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
-                  AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
-                  AND LOWER(p.title) NOT LIKE '%nombre real del producto%'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%'
                   AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND p.image_url IS NOT NULL
                   AND p.image_url <> ''
-                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%enlace-de-la-imagen.jpg%'
-                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%placeholder%'
-                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%example.com%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
                   AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')

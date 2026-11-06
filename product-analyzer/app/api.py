@@ -945,17 +945,17 @@ def top_opportunities(limit: int = Query(20, ge=1, le=100)):
                   AND p.currency NOT IN ('UNK', 'N/D')
                   AND p.product_url IS NOT NULL AND p.product_url <> ''
                   AND p.image_url IS NOT NULL AND p.image_url <> ''
-                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%enlace-de-la-imagen.jpg%'
-                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%placeholder%'
-                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%example.com%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
                   AND LOWER(p.title) NOT LIKE 'producto amazon %%'
                   AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
                   AND LOWER(p.title) NOT LIKE 'producto url-%%'
                   AND LOWER(p.title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
-                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
-                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
-                  AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
-                  AND LOWER(p.title) NOT LIKE '%nombre real del producto%'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%'
                   AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')

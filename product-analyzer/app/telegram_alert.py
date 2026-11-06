@@ -232,14 +232,14 @@ def _top_products(limit=25):
                   AND LOWER(p.title) NOT LIKE 'producto url-%%'
                   AND LOWER(p.title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
                   AND LOWER(p.title) <> 'producto'
-                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
-                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
-                  AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
-                  AND LOWER(p.title) NOT LIKE '%nombre real del producto%' AND p.image_url IS NOT NULL
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%' AND p.image_url IS NOT NULL
                   AND p.product_url IS NOT NULL
-                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%enlace-de-la-imagen.jpg%'
-                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%placeholder%'
-                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%example.com%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
                   AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
@@ -247,7 +247,7 @@ def _top_products(limit=25):
                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                   AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
-                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
                 """,
@@ -285,12 +285,12 @@ def _search_products(term, limit=8):
                   AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
                   AND LOWER(p.title) NOT LIKE 'producto url-%%'
                   AND LOWER(p.title) <> 'producto'
-                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
-                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
-                  AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
-                  AND LOWER(p.title) NOT LIKE '%nombre real del producto%'
-                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
-                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
                   AND (p.title ILIKE %s OR COALESCE(c.name, '') ILIKE %s)
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
@@ -491,11 +491,11 @@ def _model_active_products():
                   AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
                   AND LOWER(p.title) NOT LIKE 'producto url-%%'
                   AND LOWER(p.title) <> 'producto'
-                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
-                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
-                  AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
-                  AND LOWER(p.title) NOT LIKE '%nombre real del producto%'
-                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%'
+                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
                   AND p.image_url IS NOT NULL
                   AND p.image_url <> ''
                 ORDER BY p.updated_at DESC
@@ -517,11 +517,11 @@ def _model_active_products():
                           AND LOWER(title) NOT LIKE 'producto url-%%'
                           AND LOWER(title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
                           AND LOWER(title) <> 'producto'
-                          AND LOWER(title) NOT LIKE '%oferta destacada global%'
-                          AND LOWER(title) NOT LIKE '%producto verificado con%'
-                          AND LOWER(title) NOT LIKE '%titulo real del producto%'
-                          AND LOWER(title) NOT LIKE '%nombre real del producto%'
-                          AND LOWER(title) NOT LIKE '%oferta destacada global%'
+                          AND LOWER(title) NOT LIKE '%%oferta destacada global%%'
+                          AND LOWER(title) NOT LIKE '%%producto verificado con%%'
+                          AND LOWER(title) NOT LIKE '%%titulo real del producto%%'
+                          AND LOWER(title) NOT LIKE '%%nombre real del producto%%'
+                          AND LOWER(title) NOT LIKE '%%oferta destacada global%%'
                           AND image_url IS NOT NULL
                           AND image_url <> ''
                     ) AS eligible,
@@ -539,7 +539,7 @@ def _model_active_products():
                     COUNT(*) FILTER (WHERE source_metadata->>'enrichment_status' IN ('retry','partial','blocked')) AS retry
                 FROM products
                 WHERE is_active = TRUE AND product_url IS NOT NULL
-                  AND (current_price IS NULL OR image_url IS NULL OR LOWER(title) LIKE 'producto amazon %%' OR LOWER(title) LIKE 'producto aliexpress %%' OR LOWER(title) LIKE 'producto url-%%' OR LOWER(title) IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url') OR LOWER(title) LIKE '%oferta destacada global%' OR LOWER(title) LIKE '%producto verificado con%' OR LOWER(title) LIKE '%titulo real del producto%' OR LOWER(title) LIKE '%nombre real del producto%' OR LOWER(COALESCE(image_url, '')) LIKE '%enlace-de-la-imagen.jpg%' OR LOWER(COALESCE(image_url, '')) LIKE '%placeholder%' OR LOWER(COALESCE(image_url, '')) LIKE '%example.com%' OR category_id IS NULL)
+                  AND (current_price IS NULL OR image_url IS NULL OR LOWER(title) LIKE 'producto amazon %%' OR LOWER(title) LIKE 'producto aliexpress %%' OR LOWER(title) LIKE 'producto url-%%' OR LOWER(title) IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url') OR LOWER(title) LIKE '%%oferta destacada global%%' OR LOWER(title) LIKE '%%producto verificado con%%' OR LOWER(title) LIKE '%%titulo real del producto%%' OR LOWER(title) LIKE '%%nombre real del producto%%' OR LOWER(COALESCE(image_url, '')) LIKE '%%enlace-de-la-imagen.jpg%%' OR LOWER(COALESCE(image_url, '')) LIKE '%%placeholder%%' OR LOWER(COALESCE(image_url, '')) LIKE '%%example.com%%' OR category_id IS NULL)
             """)
             enrichment_counts = cur.fetchone() or {}
             recovery = int(enrichment_counts.get("recovery") or 0)
