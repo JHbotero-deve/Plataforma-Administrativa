@@ -38,7 +38,7 @@ from store_notifications import process_pending_notifications
 from tiktok_api import router as tiktok_creator_router
 from url_import import import_url
 from product_sources import enrich_product
-from pricing import publish_discounted_offer
+from pricing import publish_catalog_product, publish_discounted_offer
 from wompi import router as wompi_router
 from notifications import _config as _config_telegram
 from telegram_alert import run_bot
@@ -463,6 +463,7 @@ def list_products(
     category: Optional[str] = Query(None),
     platform: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ):
     conn = get_connection()
     try:
@@ -488,8 +489,8 @@ def list_products(
             if platform:
                 query += " AND pl.name = %s"
                 params.append(platform)
-            query += " ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC LIMIT %s"
-            params.append(limit)
+            query += " ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC LIMIT %s OFFSET %s"
+            params.extend((limit, offset))
             cur.execute(query, params)
             return cur.fetchall()
     finally:
@@ -682,6 +683,8 @@ def import_product_from_url(payload: ProductImport):
             )
             saved = cur.fetchone()
         customer_offer = publish_discounted_offer(conn, product_id, dict(saved), score)
+        if not customer_offer and product.get("platform") in {"amazon", "aliexpress"}:
+            customer_offer = publish_catalog_product(conn, product_id, dict(saved), score)
         return {"product": saved, "opportunity_score": score, "customer_offer": customer_offer}
     finally:
         conn.close()
