@@ -91,6 +91,7 @@ class ProductSourcesTests(unittest.TestCase):
             "product_url": "https://www.aliexpress.com/item/123.html",
             "title": "Tenis deportivos",
             "price": 19.9,
+            "currency": "USD",
             "image_url": "https://img.example/shoes.jpg",
             "category": "calzado",
             "currency": "USD",
