@@ -96,6 +96,11 @@ def _has_product_image(product):
     return bool(usable(product.get("image_url")) or any(usable(value) for value in gallery))
 
 
+def _store_link():
+    base = os.getenv("PUBLIC_STORE_URL", "https://central-7ykr.vercel.app").rstrip("/")
+    return f"{base}/tienda"
+
+
 def _format_product(p):
     title = html.escape(str(p.get("title") or "Sin título")[:90])
     price = p.get("current_price")
@@ -116,7 +121,7 @@ def _format_product(p):
     price_score = p.get("price_score")
     demand_score = p.get("demand_score")
     trend_score = p.get("trend_score")
-    url = _product_link(p.get("affiliate_url") or p.get("product_url"))
+    url = _store_link()
     seller_name = str(p.get("seller_name") or "").strip()
     seller_url = _product_link(p.get("seller_url"))
     description = " ".join(str(p.get("description") or "").split())
@@ -164,7 +169,7 @@ def _format_product(p):
 
 
 def _send_product(token, chat_id, product):
-    url = _product_link(product.get("affiliate_url") or product.get("product_url"))
+    url = _store_link()
     reply_markup = None
     if url:
         reply_markup = {
