@@ -395,7 +395,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 (p.is_active=TRUE AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL))
                 OR (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW())
             )
-            ORDER BY p.catalog_expires_at ASC NULLS FIRST,p.updated_at ASC LIMIT %s""", (max(limit, limit * 5),))
+            ORDER BY (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) DESC,p.catalog_expires_at ASC NULLS LAST,p.updated_at ASC LIMIT %s""", (max(limit, limit * 5),))
         candidates = cur.fetchall()
     rows = [row for row in candidates if force or row.get("catalog_expired") or _retry_due(row.get("source_metadata") or {})][:limit]
     if not rows:
