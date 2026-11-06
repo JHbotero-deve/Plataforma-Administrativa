@@ -17,5 +17,46 @@ class OpportunityScoreTests(unittest.TestCase):
         self.assertEqual(compute_demand_score(5, 150, 300), 100.0)
 
 
+    def test_score_ignores_legacy_marketplace_metrics_without_provenance(self):
+        from unittest.mock import MagicMock
+        from analysis import score_product
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = {
+            "current_price": 20,
+            "previous_price": None,
+            "rating": 4.8,
+            "reviews_count": 128,
+            "sales_estimate": 450,
+            "source_metadata": {"metadata_source": "legacy_marketplace_api"},
+        }
+        cursor.fetchall.return_value = []
+        score_product(connection, 7, 20)
+        params = cursor.execute.call_args.args[1]
+        self.assertEqual(params[2], 50.0)
+
+    def test_score_uses_rating_reviews_and_sales_only_when_marked_as_verified(self):
+        from unittest.mock import MagicMock
+        from analysis import score_product
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = {
+            "current_price": 20,
+            "previous_price": None,
+            "rating": 5,
+            "reviews_count": 150,
+            "sales_estimate": 300,
+            "source_metadata": {"field_sources": {
+                "rating": "public_product_page",
+                "reviews_count": "public_product_page",
+                "sales_estimate": "user",
+            }},
+        }
+        cursor.fetchall.return_value = []
+        score_product(connection, 7, 20)
+        params = cursor.execute.call_args.args[1]
+        self.assertEqual(params[2], 100.0)
+
+
 if __name__ == "__main__":
     unittest.main()
