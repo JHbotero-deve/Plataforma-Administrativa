@@ -289,13 +289,11 @@ def enrich_product(product, force=False):
         product["product_url"] = resolved_url
         page_price = page.get("price")
         page_currency = str(page.get("currency") or "").upper()
-        price_matches = True
-        if "price" in manual_fields:
-            try:
-                price_matches = page_price is not None and math.isclose(float(product.get("price")), float(page_price), rel_tol=0.01, abs_tol=0.01)
-            except (TypeError, ValueError):
-                price_matches = False
-        currency_matches = "currency" not in manual_fields or page_currency == str(product.get("currency") or "").upper()
+        try:
+            price_matches = page_price is not None and math.isclose(float(product.get("price")), float(page_price), rel_tol=0.01, abs_tol=0.01)
+        except (TypeError, ValueError):
+            price_matches = False
+        currency_matches = bool(page_currency and page_currency == str(product.get("currency") or "").upper())
         refresh_verified = bool(page.get("title") and page_price is not None and page_currency and page.get("image_url") and price_matches and currency_matches)
         field_sources = dict(metadata.get("field_sources") or {})
         for field, key in (("title", "title"), ("price", "price"), ("previous_price", "previous_price"), ("currency", "currency"), ("image_url", "image_url"), ("description", "description"), ("rating", "rating"), ("reviews_count", "reviews_count"), ("category", "category"), ("seller", "seller")):
