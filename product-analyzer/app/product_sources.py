@@ -127,8 +127,8 @@ def _public_product_page(url, platform):
     for hop in range(MAX_REDIRECTS + 1):
         parsed = urlsplit(current)
         host = (parsed.hostname or "").lower().rstrip(".")
-        if platform not in ALLOWED_HOSTS or parsed.scheme not in ("http", "https") or not _allowed_host(host, platform):
-            raise ValueError("La URL redirigió fuera de los dominios permitidos de la tienda.")
+        if platform not in ALLOWED_HOSTS or parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None, 443) or not _allowed_host(host, platform):
+            raise ValueError("La URL redirigió fuera de los dominios HTTPS permitidos de la tienda.")
         normalized = _normalized_url(current)
         if normalized in seen_urls:
             raise RuntimeError("La tienda devolvió un ciclo de redirección, normalmente causado por un inicio de sesión obligatorio.")
