@@ -105,7 +105,9 @@ def publish_catalog_product(conn, product_id, product, opportunity_score=None, c
     except (TypeError, ValueError):
         return None
     normalized_title = title.casefold()
-    if not title or title.casefold().startswith("producto ") or "oferta destacada global" in normalized_title or "producto verificado con envio rapido" in normalized_title or not image or not product_url or not math.isfinite(price) or price <= 0:
+    image_host = (urlsplit(str(image)).hostname or "").lower().rstrip(".") if image else ""
+    image_path = urlsplit(str(image)).path.casefold() if image else ""
+    if not title or title.casefold().startswith("producto ") or "oferta destacada global" in normalized_title or "producto verificado con envio rapido" in normalized_title or not image or image_host in {"enlace-de-la-imagen.jpg", "example.com", "www.example.com", "placeholder.com"} or "placeholder" in image_path or not product_url or not math.isfinite(price) or price <= 0:
         return None
     currency = str(product.get("currency") or "").upper()
     if not currency or currency in {"UNK", "N/D"}:
