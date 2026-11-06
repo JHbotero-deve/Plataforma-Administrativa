@@ -442,7 +442,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 rating=COALESCE(%s,rating),
                 reviews_count=COALESCE(%s,reviews_count),
                 source_metadata=%s::jsonb,
-                is_active=CASE WHEN %s THEN TRUE ELSE is_active END,
+                is_active=CASE WHEN %s THEN TRUE WHEN %s THEN FALSE ELSE is_active END,
                 catalog_expires_at=CASE WHEN %s THEN NOW()+INTERVAL '48 hours' WHEN %s THEN NOW()+INTERVAL '12 hours' ELSE catalog_expires_at END,
                 updated_at=NOW()
                 WHERE id=%s""", (
@@ -459,6 +459,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 enriched.get("rating"), enriched.get("reviews_count"),
                 json.dumps(metadata),
                 bool(metadata.get("catalog_refresh_verified")),
+                bool(row.get("catalog_expired")),
                 bool(metadata.get("catalog_refresh_verified")),
                 bool(row.get("catalog_expired")) and not bool(metadata.get("catalog_refresh_verified")),
                 row["id"],
