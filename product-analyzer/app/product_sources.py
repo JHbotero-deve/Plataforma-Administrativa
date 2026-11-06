@@ -61,6 +61,15 @@ def _allowed_host(host, platform):
     return any(host == domain or host.endswith("." + domain) for domain in ALLOWED_HOSTS[platform])
 
 
+def _is_placeholder_title(value):
+    title = re.sub(r"\\s+", " ", str(value or "").strip().casefold())
+    normalized = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
+    return not title or title.startswith("producto ") or any(
+        phrase in normalized
+        for phrase in ("oferta destacada global", "producto verificado con envio rapido", "producto verificado con envio")
+    )
+
+
 def _walk_products(value):
     if isinstance(value, dict):
         kind = value.get("@type")
@@ -253,7 +262,7 @@ def enrich_product(product):
             product["category"] = inferred_category
             metadata["category_source"] = "title_inference"
     title = str(product.get("title") or "").strip()
-    complete = bool(title and not title.casefold().startswith("producto ") and product.get("price") and product.get("image_url") and product.get("category"))
+    complete = bool(title and not _is_placeholder_title(title) and product.get("price") and product.get("image_url") and product.get("category"))
     if complete:
         metadata.update({"enrichment_status": "complete", "enrichment_version": ENRICHMENT_VERSION, "missing_fields": []})
         product["source_metadata"] = metadata
@@ -263,7 +272,7 @@ def enrich_product(product):
         resolved_url = page.get("resolved_url") or url
         for field, key in (("title", "title"), ("price", "price"), ("previous_price", "previous_price"), ("currency", "currency"), ("image_url", "image_url"), ("description", "description"), ("rating", "rating"), ("reviews_count", "reviews_count"), ("category", "category")):
             current = product.get(field)
-            missing_title = field == "title" and (not current or str(current).casefold().startswith("producto "))
+            missing_title = field == "title" and _is_placeholder_title(current)
             replace_untrusted_legacy = metadata.get("metadata_source") == "url_only" and field in {"price", "currency"}
             if (current is None or current == "" or missing_title or replace_untrusted_legacy) and page.get(key) is not None:
                 product[field] = page[key]
@@ -307,7 +316,7 @@ def enrich_product(product):
     if match and (not product.get("external_id") or str(product["external_id"]).startswith("URL-")):
         product["external_id"] = match.group(1).upper() if platform == "amazon" else match.group(1)
     missing = []
-    if not product.get("title") or str(product.get("title")).casefold().startswith("producto "):
+    if not product.get("title") or _is_placeholder_title(product.get("title")):
         missing.append("title")
     if not product.get("price"):
         missing.append("price")
