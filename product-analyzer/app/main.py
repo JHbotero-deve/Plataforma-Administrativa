@@ -40,7 +40,7 @@ def expire_catalog():
 
 
 def run_pipeline():
-    print("== Iniciando análisis del catálogo local; tráfico a marketplaces bloqueado ==")
+    print("== Iniciando catálogo URL-first: solo páginas públicas de producto ==")
     expire_catalog()
     conn = get_connection()
     try:
