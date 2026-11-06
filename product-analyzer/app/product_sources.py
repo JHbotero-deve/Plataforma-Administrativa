@@ -392,7 +392,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
             (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) AS catalog_expired
             FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN sellers s ON s.id=p.seller_id
             WHERE p.product_url IS NOT NULL AND (
-                (p.is_active=TRUE AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL))
+                (p.is_active=TRUE AND (p.current_price IS NULL OR p.currency IS NULL OR p.currency = 'UNK' OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL))
                 OR (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW())
             )
             ORDER BY (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) DESC,p.catalog_expires_at ASC NULLS LAST,p.updated_at ASC LIMIT %s""", (max(limit, limit * 5),))
