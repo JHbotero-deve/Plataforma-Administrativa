@@ -59,7 +59,7 @@ def run_pipeline():
         expire_catalog()
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT p.id, p.title, p.current_price, p.currency, p.image_url,
+                SELECT p.id, p.title, p.current_price, p.currency, p.image_url, p.source_metadata,
                        p.product_url, p.affiliate_url, pl.name AS platform,
                        COALESCE(s.opportunity_score, 0) AS opportunity_score
                 FROM products p
@@ -70,6 +70,7 @@ def run_pipeline():
                   AND p.product_url IS NOT NULL AND p.product_url <> ''
                   AND p.title IS NOT NULL AND p.title NOT LIKE 'Producto %%'
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND pl.name IN ('amazon', 'aliexpress')
                 ORDER BY p.updated_at DESC LIMIT 1000
             """)
@@ -102,6 +103,7 @@ def run_pipeline():
                   AND p.category_id IS NOT NULL
                   AND p.title IS NOT NULL
                   AND p.title NOT LIKE 'Producto %%'
+                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND p.image_url IS NOT NULL
                   AND p.image_url <> ''
                 ORDER BY p.updated_at DESC
