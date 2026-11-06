@@ -71,6 +71,7 @@ def run_pipeline():
                   AND p.title IS NOT NULL AND LOWER(p.title) NOT LIKE 'producto amazon %%'
                   AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
                   AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
                   AND LOWER(p.title) <> 'producto'
                   AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
                   AND LOWER(p.title) NOT LIKE '%producto verificado con%'
