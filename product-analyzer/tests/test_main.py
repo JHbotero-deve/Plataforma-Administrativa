@@ -19,25 +19,30 @@ class WorkerPipelineTests(unittest.TestCase):
         ]
         cursor.fetchone.side_effect = [
             {"category": "accesorios", "currency": "USD"},
-            {"title": "Producto real", "current_price": 20, "product_url": "https://www.amazon.com/dp/B000000001", "platform": "amazon"},
+            {
+                "title": "Producto real",
+                "current_price": 20,
+                "product_url": "https://www.amazon.com/dp/B000000001",
+                "platform": "amazon",
+            },
         ]
 
         with (
             patch.object(main, "get_connection", return_value=connection),
-            patch.object(main, "expire_catalog"),
-            patch.object(main, "run_marketplace_ingestion", return_value={}) as ingest,
-            patch.object(main, "enrich_pending_products", return_value=12) as enrich,
+            patch.object(main, "expire_catalog") as expire,
             patch.object(main, "score_product", return_value=80) as score,
             patch.object(main, "send_telegram_alert", side_effect=RuntimeError("Telegram unavailable")) as alert,
-            patch.object(main, "creator_configured", return_value=False),
+            patch.object(main, "creator_configured", return_value=False) as creator,
+            patch("builtins.print") as output,
         ):
             main.run_pipeline()
 
-        ingest.assert_called_once_with(target_per_platform=100)
-        enrich.assert_called_once_with(connection, limit=120, max_workers=4)
+        expire.assert_called_once()
         score.assert_called_once_with(connection, 7, 30.0)
         alert.assert_called_once()
+        creator.assert_called_once()
         self.assertTrue(any("SELECT p.id" in call.args[0] for call in cursor.execute.call_args_list))
+        self.assertTrue(any("continúa" in str(call.args[0]) for call in output.call_args_list))
         connection.close.assert_called_once()
 
 
