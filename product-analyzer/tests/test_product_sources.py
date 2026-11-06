@@ -177,5 +177,43 @@ class ProductSourcesTests(unittest.TestCase):
         second.close.assert_called_once()
 
 
+    def test_accepts_official_short_links_and_rejects_generic_or_spoofed_hosts(self):
+        self.assertEqual(import_url("https://amzn.to/example")["platform"], "amazon")
+        self.assertEqual(import_url("https://s.click.aliexpress.com/e/example")["platform"], "aliexpress")
+        with self.assertRaises(ValueError):
+            import_url("https://bit.ly/example")
+        with self.assertRaises(ValueError):
+            import_url("https://amazon.com.evil.example/dp/B012345678")
+
+    def test_verified_public_price_replaces_legacy_url_only_placeholder(self):
+        product = {
+            "platform": "aliexpress",
+            "external_id": "URL-OLD",
+            "product_url": "https://www.aliexpress.com/item/123456789.html",
+            "title": "Producto Aliexpress URL-OLD",
+            "price": 25000,
+            "currency": "COP",
+            "image_url": None,
+            "category": None,
+            "source_metadata": {"metadata_source": "url_only", "original_url": "https://www.aliexpress.com/item/123456789.html"},
+        }
+        page = {
+            "resolved_url": product["product_url"],
+            "title": "Auriculares inalámbricos",
+            "price": 39.99,
+            "currency": "USD",
+            "image_url": "https://images.example/headphones.jpg",
+            "gallery_urls": ["https://images.example/headphones.jpg"],
+            "description": "Descripción de la página",
+            "category": "accesorios",
+        }
+        with patch.object(product_sources, "_public_product_page", return_value=page):
+            result = product_sources.enrich_product(product)
+        self.assertEqual(result["price"], 39.99)
+        self.assertEqual(result["currency"], "USD")
+        self.assertEqual(result["title"], "Auriculares inalámbricos")
+        self.assertEqual(result["source_metadata"]["metadata_source"], "public_product_page")
+
+
 if __name__ == "__main__":
     unittest.main()
