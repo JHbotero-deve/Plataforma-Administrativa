@@ -3,13 +3,15 @@ Central Product Analyzer REST API.
 """
 
 import asyncio
+import ipaddress
 import logging
 import os
 import secrets
+import socket
 import time
 import requests
 from typing import Optional
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urljoin, urlsplit
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import Response
@@ -284,26 +286,86 @@ def telegram_status():
         }
 
 
+MAX_PROXY_IMAGE_BYTES = 8 * 1024 * 1024
+MAX_PROXY_IMAGE_REDIRECTS = 3
+
+
+def _validate_public_image_url(value):
+    try:
+        parsed = urlsplit(str(value or "").strip())
+        host = (parsed.hostname or "").lower().rstrip(".")
+        port = parsed.port
+    except ValueError:
+        raise HTTPException(status_code=400, detail="URL de imagen inválida")
+    if parsed.scheme != "https" or not host or parsed.username or parsed.password or port not in (None, 443):
+        raise HTTPException(status_code=400, detail="La imagen debe usar HTTPS y no puede incluir credenciales ni puertos alternativos")
+    if host in {"localhost", "metadata.google.internal"} or host.endswith((".localhost", ".local", ".internal", ".test")):
+        raise HTTPException(status_code=400, detail="Host de imagen no permitido")
+    try:
+        addresses = {item[4][0] for item in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)}
+    except OSError:
+        raise HTTPException(status_code=400, detail="No se pudo validar el host de la imagen")
+    if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
+        raise HTTPException(status_code=400, detail="El host de imagen debe resolver únicamente a direcciones públicas")
+    return parsed
+
+
 @core_router.get("/media/image")
 def proxy_media_image(url: str = Query(...)):
-    if not url.startswith("http://") and not url.startswith("https://"):
-        raise HTTPException(status_code=400, detail="URL inválida")
-    try:
-        resp = requests.get(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36",
-                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-                "Referer": "https://www.amazon.com/",
-            },
-            timeout=15,
-        )
-        if not resp.ok:
-            raise HTTPException(status_code=resp.status_code, detail="No se pudo cargar la imagen externa")
-        content_type = resp.headers.get("content-type", "image/jpeg")
-        return Response(content=resp.content, media_type=content_type)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Error cargando imagen: {exc}")
+    current = url
+    for hop in range(MAX_PROXY_IMAGE_REDIRECTS + 1):
+        _validate_public_image_url(current)
+        response = None
+        try:
+            response = requests.get(
+                current,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (compatible; CentralImageProxy/1.0)",
+                    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*;q=0.8",
+                },
+                timeout=12,
+                allow_redirects=False,
+                stream=True,
+            )
+            if response.status_code in (301, 302, 303, 307, 308):
+                location = response.headers.get("Location")
+                response.close()
+                if not location:
+                    raise HTTPException(status_code=502, detail="Redirección de imagen sin destino")
+                if hop >= MAX_PROXY_IMAGE_REDIRECTS:
+                    raise HTTPException(status_code=502, detail="La imagen excedió el límite de redirecciones")
+                current = urljoin(current, location)
+                continue
+            if not response.ok:
+                raise HTTPException(status_code=502, detail="No se pudo cargar la imagen externa")
+            content_type = response.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+            if not content_type.startswith("image/"):
+                raise HTTPException(status_code=415, detail="El recurso solicitado no es una imagen")
+            length = response.headers.get("content-length")
+            if length and int(length) > MAX_PROXY_IMAGE_BYTES:
+                raise HTTPException(status_code=413, detail="La imagen supera el tamaño permitido")
+            chunks = []
+            size = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                size += len(chunk)
+                if size > MAX_PROXY_IMAGE_BYTES:
+                    raise HTTPException(status_code=413, detail="La imagen supera el tamaño permitido")
+                chunks.append(chunk)
+            return Response(
+                content=b"".join(chunks),
+                media_type=content_type,
+                headers={"Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff"},
+            )
+        except HTTPException:
+            raise
+        except (requests.RequestException, OSError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail=f"Error cargando imagen: {type(exc).__name__}")
+        finally:
+            if response is not None:
+                response.close()
+    raise HTTPException(status_code=502, detail="No se pudo resolver la imagen")
 
 
 @core_router.post("/admin/inject", dependencies=[Depends(require_admin)])
