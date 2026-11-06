@@ -68,7 +68,14 @@ def run_pipeline():
                 WHERE p.is_active = TRUE AND p.current_price > 0 AND p.currency NOT IN ('UNK', 'N/D')
                   AND p.image_url IS NOT NULL AND p.image_url <> ''
                   AND p.product_url IS NOT NULL AND p.product_url <> ''
-                  AND p.title IS NOT NULL AND p.title NOT LIKE 'Producto %%'
+                  AND p.title IS NOT NULL AND LOWER(p.title) NOT LIKE 'producto amazon %%'
+                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) <> 'producto'
+                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
+                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
+                  AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
+                  AND LOWER(p.title) NOT LIKE '%nombre real del producto%'
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                   AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND pl.name IN ('amazon', 'aliexpress')
@@ -102,7 +109,14 @@ def run_pipeline():
                   AND p.current_price > 0
                   AND p.category_id IS NOT NULL
                   AND p.title IS NOT NULL
-                  AND p.title NOT LIKE 'Producto %%'
+                  AND LOWER(p.title) NOT LIKE 'producto amazon %%'
+                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) <> 'producto'
+                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
+                  AND LOWER(p.title) NOT LIKE '%producto verificado con%'
+                  AND LOWER(p.title) NOT LIKE '%titulo real del producto%'
+                  AND LOWER(p.title) NOT LIKE '%nombre real del producto%'
                   AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND p.image_url IS NOT NULL
                   AND p.image_url <> ''
