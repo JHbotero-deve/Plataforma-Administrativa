@@ -1332,10 +1332,9 @@ let cart=JSON.parse(localStorage.getItem("central_cart")||"[]");
 let filtered=[], active=null, heroIndex=0, heroTimer=null, heroPaused=false;
 const HERO_INTERVAL=6000;
 
-function isMarketplaceImage(value){try{const host=new URL(String(value||"")).hostname.toLowerCase();return /(^|\.)amazon\./i.test(host)||/(^|\.)amazon$/i.test(host)||/(^|\.)media-amazon\.com$/i.test(host)||/(^|\.)ssl-images-amazon\.com$/i.test(host)||/(^|\.)images-amazon\.com$/i.test(host)||/(^|\.)amzn\.(?:to|eu|asia|com|ca|de|co\.uk)$/i.test(host)||host==="a.co"||/(^|\.)aliexpress\./i.test(host)||/(^|\.)alii\.pub$/i.test(host)||/(^|\.)taobao\.com$/i.test(host)||/(^|\.)aliexpress-media\.com$/i.test(host)||/(^|\.)alicdn\.com$/i.test(host)}catch{return false}}
-function imageProxy(value){const url=String(value||"").trim();if(!url)return"";try{if(/^https?:\/\//i.test(url))return isMarketplaceImage(url)?url:"/api/v1/media/image?url="+encodeURIComponent(url)}catch{}return url}
+function imageProxy(value){const url=String(value||"").trim();if(!url)return"";try{const parsed=new URL(url,location.origin);return parsed.protocol==="https:"||parsed.origin===location.origin?parsed.href:""}catch{return""}}
 function imageSrc(p){return imageProxy(p.image_url)||imageProxy((p.image_gallery||[]).find(Boolean)||"")}
-function modelSrc(p){const value=String(p.model_url||"").trim();return !isMarketplaceImage(value)&&/^https:\/\/[^\s]+\.(?:glb|gltf)(?:[?#].*)?$/i.test(value)?imageProxy(value):""}
+function modelSrc(p){const value=String(p.model_url||"").trim();try{const parsed=new URL(value,location.origin);return (parsed.protocol==="https:"||parsed.origin===location.origin)&&/\\.(?:glb|gltf)$/i.test(parsed.pathname)?parsed.href:""}catch{return""}}
 function modelMarkup(p,cls){const src=modelSrc(p);return src?'<model-viewer class="'+cls+'" src="'+esc(src)+'" alt="'+esc(p.title||"Modelo 3D")+'" camera-controls auto-rotate rotation-per-second="18deg" shadow-intensity="1" exposure="1" ar ar-modes="webxr scene-viewer quick-look" loading="lazy"></model-viewer><span class="model-hint">Arrastra para girar · 360°</span>':""}
 function saveCart(){localStorage.setItem("central_cart",JSON.stringify(cart));renderCart()}
 function isOwn(p){return String(p.platform||"").toLowerCase()==="personal"}

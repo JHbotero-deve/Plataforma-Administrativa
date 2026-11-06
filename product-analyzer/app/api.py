@@ -3,16 +3,13 @@ Central Product Analyzer REST API.
 """
 
 import asyncio
-import ipaddress
 import logging
-import urllib3
 import os
 import secrets
-import socket
 import time
 import requests
 from typing import Optional
-from urllib.parse import quote, urljoin, urlsplit
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import Response
@@ -285,147 +282,6 @@ def telegram_status():
             "chat_configured": bool(chat_id),
             "username": None,
         }
-
-
-MAX_PROXY_IMAGE_BYTES = 8 * 1024 * 1024
-MAX_PROXY_IMAGE_REDIRECTS = 3
-
-
-def _resolve_public_image_addresses(host):
-    try:
-        literal = ipaddress.ip_address(host)
-    except ValueError:
-        try:
-            records = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
-            raw_addresses = {item[4][0] for item in records}
-        except (OSError, ValueError):
-            raise HTTPException(status_code=400, detail="No se pudo validar el host de la imagen")
-    else:
-        raw_addresses = {str(literal)}
-    addresses = set()
-    for value in raw_addresses:
-        try:
-            if "%" in value:
-                raise ValueError("Las direcciones IPv6 con ámbito no están permitidas")
-            address = ipaddress.ip_address(value)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="El host de imagen resolvió a una dirección inválida")
-        if address.version == 6 and address.ipv4_mapped:
-            address = address.ipv4_mapped
-        if not address.is_global:
-            raise HTTPException(status_code=400, detail="El host de imagen debe resolver únicamente a direcciones públicas")
-        addresses.add(str(address))
-    if not addresses:
-        raise HTTPException(status_code=400, detail="El host de imagen no tiene direcciones públicas")
-    return sorted(addresses, key=lambda value: (ipaddress.ip_address(value).version, int(ipaddress.ip_address(value))))
-
-
-def _validate_public_image_url(value):
-    try:
-        parsed = urlsplit(str(value or "").strip())
-        host = (parsed.hostname or "").lower().rstrip(".")
-        port = parsed.port
-    except ValueError:
-        raise HTTPException(status_code=400, detail="URL de imagen inválida")
-    if parsed.scheme != "https" or not host or parsed.username or parsed.password or port not in (None, 443):
-        raise HTTPException(status_code=400, detail="La imagen debe usar HTTPS y no puede incluir credenciales ni puertos alternativos")
-    if host in {"localhost", "metadata.google.internal"} or host.endswith((".localhost", ".local", ".internal", ".test")):
-        raise HTTPException(status_code=400, detail="Host de imagen no permitido")
-    addresses = _resolve_public_image_addresses(host)
-    return parsed, addresses
-
-
-def _open_pinned_image_response(parsed, addresses):
-    host = parsed.hostname.encode("idna").decode("ascii").lower().rstrip(".")
-    target = quote(parsed.path or "/", safe="/%:@!$&'()*+,;=-._~")
-    if parsed.query:
-        target += "?" + quote(parsed.query, safe="/?:@!$&'()*+,;=-._~%[]")
-    host_header = f"[{host}]" if ":" in host else host
-    headers = {
-        "Host": host_header,
-        "User-Agent": "Mozilla/5.0 (compatible; CentralImageProxy/1.0)",
-        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*;q=0.8",
-    }
-    last_error = None
-    for address in addresses:
-        pool = urllib3.HTTPSConnectionPool(
-            host=address,
-            port=443,
-            maxsize=1,
-            block=True,
-            timeout=urllib3.Timeout(total=12, connect=5),
-            retries=False,
-            cert_reqs="CERT_REQUIRED",
-            assert_hostname=host,
-            server_hostname=host,
-        )
-        try:
-            response = pool.urlopen(
-                "GET",
-                target,
-                headers=headers,
-                redirect=False,
-                preload_content=False,
-                retries=False,
-            )
-            return pool, response
-        except (urllib3.exceptions.HTTPError, OSError, ValueError) as exc:
-            pool.close()
-            last_error = exc
-    if last_error:
-        raise last_error
-    raise OSError("No hay direcciones públicas validadas para la imagen")
-
-
-@core_router.get("/media/image")
-def proxy_media_image(url: str = Query(...)):
-    current = url
-    for hop in range(MAX_PROXY_IMAGE_REDIRECTS + 1):
-        parsed, addresses = _validate_public_image_url(current)
-        pool = None
-        response = None
-        try:
-            pool, response = _open_pinned_image_response(parsed, addresses)
-            if response.status in (301, 302, 303, 307, 308):
-                location = response.headers.get("Location")
-                if not location:
-                    raise HTTPException(status_code=502, detail="Redirección de imagen sin destino")
-                if hop >= MAX_PROXY_IMAGE_REDIRECTS:
-                    raise HTTPException(status_code=502, detail="La imagen excedió el límite de redirecciones")
-                current = urljoin(current, location)
-                continue
-            if response.status < 200 or response.status >= 300:
-                raise HTTPException(status_code=502, detail="No se pudo cargar la imagen externa")
-            content_type = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
-            if not content_type.startswith("image/"):
-                raise HTTPException(status_code=415, detail="El recurso solicitado no es una imagen")
-            length = response.headers.get("Content-Length")
-            if length and int(length) > MAX_PROXY_IMAGE_BYTES:
-                raise HTTPException(status_code=413, detail="La imagen supera el tamaño permitido")
-            chunks = []
-            size = 0
-            for chunk in response.stream(65536):
-                if not chunk:
-                    continue
-                size += len(chunk)
-                if size > MAX_PROXY_IMAGE_BYTES:
-                    raise HTTPException(status_code=413, detail="La imagen supera el tamaño permitido")
-                chunks.append(chunk)
-            return Response(
-                content=b"".join(chunks),
-                media_type=content_type,
-                headers={"Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff"},
-            )
-        except HTTPException:
-            raise
-        except (urllib3.exceptions.HTTPError, OSError, ValueError) as exc:
-            raise HTTPException(status_code=502, detail=f"Error cargando imagen: {type(exc).__name__}")
-        finally:
-            if response is not None:
-                response.close()
-            if pool is not None:
-                pool.close()
-    raise HTTPException(status_code=502, detail="No se pudo resolver la imagen")
 
 
 @core_router.post("/admin/inject", dependencies=[Depends(require_admin)])
