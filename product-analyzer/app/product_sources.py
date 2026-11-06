@@ -67,8 +67,17 @@ def _is_placeholder_title(value):
     normalized = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
     return not title or title.startswith("producto ") or any(
         phrase in normalized
-        for phrase in ("oferta destacada global", "producto verificado con envio rapido", "producto verificado con envio")
+        for phrase in ("oferta destacada global", "producto verificado con envio rapido", "producto verificado con envio", "titulo real del producto", "nombre real del producto")
     )
+
+
+def _is_placeholder_image_url(value):
+    try:
+        parsed = urlsplit(str(value or "").strip())
+        host = (parsed.hostname or "").lower().rstrip(".")
+        return host in {"enlace-de-la-imagen.jpg", "example.com", "www.example.com", "placeholder.com"} or "placeholder" in parsed.path.casefold()
+    except ValueError:
+        return True
 
 
 def _walk_products(value):
@@ -262,13 +271,19 @@ def enrich_product(product, force=False):
         return product
     metadata = dict(product.get("source_metadata") or {})
     manual_fields = set(metadata.get("manual_fields") or [])
+    if _is_placeholder_title(product.get("title")):
+        manual_fields.discard("title")
+    if _is_placeholder_image_url(product.get("image_url")):
+        product["image_url"] = None
+        manual_fields.discard("image_url")
+    metadata["manual_fields"] = sorted(manual_fields)
     if not product.get("category"):
         inferred_category = _category(None, product.get("title"))
         if inferred_category:
             product["category"] = inferred_category
             metadata["category_source"] = "title_inference"
     title = str(product.get("title") or "").strip()
-    complete = bool(title and not _is_placeholder_title(title) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and product.get("category"))
+    complete = bool(title and not _is_placeholder_title(title) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and not _is_placeholder_image_url(product.get("image_url")) and product.get("category"))
     if complete and not force:
         metadata.update({"enrichment_status": "complete", "enrichment_version": ENRICHMENT_VERSION, "missing_fields": []})
         product["source_metadata"] = metadata
@@ -288,7 +303,7 @@ def enrich_product(product, force=False):
             if should_update and field not in manual_fields and page.get(key) is not None:
                 product[field] = page[key]
         product["gallery_urls"] = list(dict.fromkeys((product.get("gallery_urls") or []) + (page.get("gallery_urls") or [])))[:10]
-        if not product.get("image_url") and product["gallery_urls"] and "image_url" not in manual_fields:
+        if (not product.get("image_url") or _is_placeholder_image_url(product.get("image_url"))) and product["gallery_urls"] and "image_url" not in manual_fields:
             product["image_url"] = product["gallery_urls"][0]
         if not product.get("seller") and page.get("seller"):
             product["seller"] = page["seller"]
@@ -312,7 +327,7 @@ def enrich_product(product, force=False):
             if page.get(key) is not None and field not in manual_fields:
                 field_sources[field] = "public_product_page"
         metadata["field_sources"] = field_sources
-        has_complete_data = bool(product.get("title") and not _is_placeholder_title(product.get("title")) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url"))
+        has_complete_data = bool(product.get("title") and not _is_placeholder_title(product.get("title")) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and not _is_placeholder_image_url(product.get("image_url")))
         metadata.update({
             "catalog_status": "current" if refresh_verified else "stale",
             "catalog_refresh_verified": refresh_verified,
@@ -357,7 +372,7 @@ def enrich_product(product, force=False):
         missing.append("currency")
     if not product.get("category"):
         missing.append("category")
-    if not product.get("image_url"):
+    if not product.get("image_url") or _is_placeholder_image_url(product.get("image_url")):
         missing.append("image_url")
     metadata["missing_fields"] = missing
     product["source_metadata"] = metadata
