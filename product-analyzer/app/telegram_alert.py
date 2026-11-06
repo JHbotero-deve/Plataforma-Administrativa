@@ -98,7 +98,8 @@ def _has_product_image(product):
 def _format_product(p):
     title = html.escape(str(p.get("title") or "Sin título")[:90])
     price = p.get("current_price")
-    currency = html.escape(str(p.get("currency") or "")[:10])
+    currency_value = str(p.get("currency") or "").upper()
+    currency = html.escape(currency_value if currency_value not in {"", "UNK", "N/D"} else "N/D")
     platform = html.escape(str(p.get("platform") or "N/D")[:40])
     category = html.escape(str(p.get("category") or "N/D")[:40])
     metadata = p.get("source_metadata") or {}
