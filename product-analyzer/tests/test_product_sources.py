@@ -286,7 +286,11 @@ class ProductSourcesTests(unittest.TestCase):
     def test_rejects_generic_global_offer_as_a_real_product_title(self):
         self.assertTrue(product_sources._is_placeholder_title("Oferta Destacada Global · Producto Verificado con Envío Rápido"))
         self.assertTrue(product_sources._is_placeholder_title("Producto Amazon B000000001"))
+        self.assertTrue(product_sources._is_placeholder_title("Título real del producto"))
+        self.assertFalse(product_sources._is_placeholder_title("Producto manual"))
         self.assertFalse(product_sources._is_placeholder_title("Auriculares inalámbricos Bluetooth"))
+        self.assertTrue(product_sources._is_placeholder_image_url("https://enlace-de-la-imagen.jpg"))
+        self.assertFalse(product_sources._is_placeholder_image_url("https://images.example/headphones.jpg"))
 
 
     def test_example_title_and_image_are_replaced_by_real_public_page_data(self):
