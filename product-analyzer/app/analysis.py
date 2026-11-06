@@ -63,7 +63,8 @@ def score_product(conn, product_id: int, category_avg_price: float):
     rating = p["rating"] if field_sources.get("rating") in verified_sources else None
     reviews_count = p["reviews_count"] if field_sources.get("reviews_count") in verified_sources else None
     sales_estimate = p["sales_estimate"] if field_sources.get("sales_estimate") in verified_sources else None
-    price_score = compute_price_score(float(p["current_price"]), category_avg_price, p["previous_price"])
+    previous_price = p["previous_price"] if field_sources.get("previous_price") in verified_sources else None
+    price_score = compute_price_score(float(p["current_price"]), category_avg_price, previous_price)
     demand_score = compute_demand_score(rating, reviews_count, sales_estimate)
     trend_score = compute_trend_score(history)
     opportunity_score = compute_opportunity_score(price_score, demand_score, trend_score)
