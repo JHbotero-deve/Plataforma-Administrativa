@@ -142,7 +142,7 @@ class ProductSourcesTests(unittest.TestCase):
         response.status_code = 302
         response.headers = {"Location": "https://127.0.0.1/admin"}
         with patch.object(product_sources.requests, "get", return_value=response):
-            with self.assertRaisesRegex(ValueError, "fuera de los dominios permitidos"):
+            with self.assertRaisesRegex(ValueError, "fuera de los dominios HTTPS permitidos"):
                 product_sources._public_product_page("https://amzn.to/example", "amazon")
         response.close.assert_called_once()
 
