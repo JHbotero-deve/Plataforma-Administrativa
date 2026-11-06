@@ -1332,9 +1332,9 @@ let cart=JSON.parse(localStorage.getItem("central_cart")||"[]");
 let filtered=[], active=null, heroIndex=0, heroTimer=null, heroPaused=false;
 const HERO_INTERVAL=6000;
 
-function imageProxy(value){const url=String(value||"").trim();if(!url)return"";try{const parsed=new URL(url,location.origin);return parsed.protocol==="https:"||parsed.origin===location.origin?parsed.href:""}catch{return""}}
+function imageProxy(value){const url=String(value||"").trim();if(!url)return"";try{const parsed=new URL(url,location.origin);return !parsed.username&&!parsed.password&&(parsed.protocol==="https:"||parsed.origin===location.origin)?parsed.href:""}catch{return""}}
 function imageSrc(p){return imageProxy(p.image_url)||imageProxy((p.image_gallery||[]).find(Boolean)||"")}
-function modelSrc(p){const value=String(p.model_url||"").trim();try{const parsed=new URL(value,location.origin);return (parsed.protocol==="https:"||parsed.origin===location.origin)&&/\\.(?:glb|gltf)$/i.test(parsed.pathname)?parsed.href:""}catch{return""}}
+function modelSrc(p){const value=String(p.model_url||"").trim();try{const parsed=new URL(value,location.origin);return !parsed.username&&!parsed.password&&(parsed.protocol==="https:"||parsed.origin===location.origin)&&/\.(?:glb|gltf)$/i.test(parsed.pathname)?parsed.href:""}catch{return""}}
 function modelMarkup(p,cls){const src=modelSrc(p);return src?'<model-viewer class="'+cls+'" src="'+esc(src)+'" alt="'+esc(p.title||"Modelo 3D")+'" camera-controls auto-rotate rotation-per-second="18deg" shadow-intensity="1" exposure="1" ar ar-modes="webxr scene-viewer quick-look" loading="lazy"></model-viewer><span class="model-hint">Arrastra para girar · 360°</span>':""}
 function saveCart(){localStorage.setItem("central_cart",JSON.stringify(cart));renderCart()}
 function isOwn(p){return String(p.platform||"").toLowerCase()==="personal"}
