@@ -52,11 +52,11 @@ def expire_catalog():
 
 def run_pipeline():
     print("== Iniciando catálogo URL-first: solo páginas públicas de producto ==")
-    expire_catalog()
     conn = get_connection()
     try:
         recovered = enrich_pending_products(conn, limit=80, max_workers=4)
-        print(f"[url-enrichment] productos enriquecidos desde sus URLs públicas: {recovered}")
+        print(f"[url-enrichment] productos enriquecidos/revalidados desde sus URLs públicas: {recovered}")
+        expire_catalog()
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT p.id, p.title, p.current_price, p.currency, p.image_url,
