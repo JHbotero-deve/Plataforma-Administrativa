@@ -223,6 +223,7 @@ def _top_products(limit=25):
                   AND p.current_price > 0 AND p.currency NOT IN ('UNK', 'N/D') AND p.category_id IS NOT NULL
                   AND p.title NOT LIKE 'Producto %%' AND p.image_url IS NOT NULL
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
@@ -450,6 +451,7 @@ def _model_active_products():
                 FROM products p
                 WHERE p.is_active = TRUE
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND p.current_price IS NOT NULL
                   AND p.current_price > 0
                   AND p.currency NOT IN ('UNK', 'N/D')
@@ -655,7 +657,7 @@ def _handle(token, chat_id, text):
                     SELECT COUNT(*) AS total,
                            COUNT(*) FILTER (WHERE is_active = TRUE) AS active,
                            COUNT(*) FILTER (WHERE is_active = FALSE) AS inactive,
-                           COUNT(*) FILTER (WHERE catalog_expires_at IS NOT NULL AND catalog_expires_at <= NOW()) AS stale,
+                           COUNT(*) FILTER (WHERE source_metadata->>'catalog_status' = 'stale' OR (catalog_expires_at IS NOT NULL AND catalog_expires_at <= NOW())) AS stale,
                            COUNT(*) FILTER (WHERE product_url IS NOT NULL AND product_url <> '') AS with_url
                     FROM products
                 """)
@@ -671,6 +673,8 @@ def _handle(token, chat_id, text):
                     FROM products p
                     JOIN product_scores s ON s.product_id = p.id
                     WHERE p.is_active = TRUE AND p.current_price IS NOT NULL AND p.currency NOT IN ('UNK', 'N/D')
+                      AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
+                      AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                     """
                 )
                 modeled = cur.fetchone()["modeled"]
