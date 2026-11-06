@@ -274,6 +274,7 @@ def enrich_product(product, force=False):
         product["source_metadata"] = metadata
         return product
     try:
+        legacy_url_only = metadata.get("metadata_source") == "url_only"
         page = _public_product_page(url, platform)
         resolved_url = page.get("resolved_url") or url
         has_page_data = any(page.get(key) for key in ("title", "price", "image_url", "description"))
@@ -282,7 +283,7 @@ def enrich_product(product, force=False):
             current = product.get(field)
             missing_title = field == "title" and _is_placeholder_title(current)
             missing_currency = field == "currency" and str(current or "").upper() in {"", "UNK", "N/D"}
-            replace_legacy = metadata.get("metadata_source") == "url_only" and field in {"price", "currency"}
+            replace_legacy = legacy_url_only and field in {"price", "currency"}
             should_update = force or current is None or current == "" or missing_title or missing_currency or replace_legacy
             if should_update and field not in manual_fields and page.get(key) is not None:
                 product[field] = page[key]
