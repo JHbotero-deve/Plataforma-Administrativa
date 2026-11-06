@@ -109,13 +109,16 @@ class MarketplaceSafetyTests(unittest.TestCase):
         self.assertIsNone(marketplace_for_url("https://notamazon.com/"))
         self.assertIsNone(marketplace_for_url("https://example.com/aliexpress.com"))
 
-    def test_frontends_keep_marketplace_image_handling(self):
+    def test_frontends_load_marketplace_images_without_server_proxy(self):
         frontend = Path(__file__).resolve().parents[1] / "frontend"
         admin = (frontend / "index.html").read_text(encoding="utf-8")
         store = (frontend / "tienda.html").read_text(encoding="utf-8")
         self.assertIn("isMarketplaceImage", admin)
         self.assertIn("function imageProxy", store)
-        self.assertIn("isMarketplaceImage", store)
+        self.assertIn('parsed.protocol==="https:"', store)
+        self.assertIn("parsed.username&&!parsed.password", store)
+        self.assertNotIn("/api/v1/media/image?url=", admin)
+        self.assertNotIn("/api/v1/media/image?url=", store)
         showcase = (Path(__file__).resolve().parents[1] / "headphones" / "src" / "App.tsx").read_text(encoding="utf-8")
         self.assertIn("const isMarketplace = marketplaceDomains.some", showcase)
 
