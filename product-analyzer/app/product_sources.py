@@ -62,7 +62,7 @@ def _allowed_host(host, platform):
 
 
 def _is_placeholder_title(value):
-    title = re.sub(r"\\s+", " ", str(value or "").strip().casefold())
+    title = re.sub(r"\s+", " ", str(value or "").strip().casefold())
     normalized = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
     return not title or title.startswith("producto ") or any(
         phrase in normalized
