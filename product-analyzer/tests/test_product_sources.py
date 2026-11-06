@@ -83,9 +83,9 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(result["product_url"], "https://www.amazon.com/dp/B012345678")
         self.assertEqual(result["source_metadata"]["original_url"], "https://amzn.to/example")
         self.assertEqual(result["source_metadata"]["enrichment_status"], "complete")
-        self.assertEqual(result["source_metadata"]["field_sources"]["title"], "user")
+        self.assertEqual(result["source_metadata"]["field_sources"]["title"], "public_product_page")
         self.assertEqual(result["source_metadata"]["field_sources"]["price"], "user")
-        self.assertEqual(result["source_metadata"]["field_sources"]["image_url"], "user")
+        self.assertEqual(result["source_metadata"]["field_sources"]["image_url"], "public_product_page")
         self.assertEqual(result["source_metadata"]["field_sources"]["currency"], "user")
         self.assertNotIn("network_enrichment_disabled", result["source_metadata"])
 
