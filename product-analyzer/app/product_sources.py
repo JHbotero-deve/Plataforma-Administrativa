@@ -361,12 +361,16 @@ def _enrich_pending_row(row):
 
 def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
     with conn.cursor() as cur:
-        cur.execute("""SELECT p.id,p.external_id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,p.affiliate_url,pl.name AS platform,c.name AS category,p.source_metadata,s.external_id AS seller_external_id,s.name AS seller_name
+        cur.execute("""SELECT p.id,p.external_id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,p.affiliate_url,pl.name AS platform,c.name AS category,p.source_metadata,s.external_id AS seller_external_id,s.name AS seller_name,p.is_active,
+            (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) AS catalog_expired
             FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN sellers s ON s.id=p.seller_id
-            WHERE p.is_active=TRUE AND p.product_url IS NOT NULL AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL)
-            ORDER BY p.updated_at ASC LIMIT %s""", (max(limit, limit * 5),))
+            WHERE p.product_url IS NOT NULL AND (
+                (p.is_active=TRUE AND (p.current_price IS NULL OR p.image_url IS NULL OR p.title LIKE 'Producto %%' OR p.category_id IS NULL))
+                OR (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW())
+            )
+            ORDER BY p.catalog_expires_at ASC NULLS FIRST,p.updated_at ASC LIMIT %s""", (max(limit, limit * 5),))
         candidates = cur.fetchall()
-    rows = [row for row in candidates if force or _retry_due(row.get("source_metadata") or {})][:limit]
+    rows = [row for row in candidates if force or row.get("catalog_expired") or _retry_due(row.get("source_metadata") or {})][:limit]
     if not rows:
         return 0
     with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(rows)))) as executor:
@@ -404,6 +408,8 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 rating=COALESCE(%s,rating),
                 reviews_count=COALESCE(%s,reviews_count),
                 source_metadata=%s::jsonb,
+                is_active=CASE WHEN %s THEN TRUE ELSE is_active END,
+                catalog_expires_at=CASE WHEN %s THEN NOW()+INTERVAL '48 hours' WHEN %s THEN NOW()+INTERVAL '12 hours' ELSE catalog_expires_at END,
                 updated_at=NOW()
                 WHERE id=%s""", (
                 candidate_external_id, candidate_external_id, candidate_external_id,
@@ -417,7 +423,11 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 enriched.get("price"), enriched.get("currency"), enriched.get("image_url"),
                 json.dumps(gallery), json.dumps(gallery),
                 enriched.get("rating"), enriched.get("reviews_count"),
-                json.dumps(metadata), row["id"],
+                json.dumps(metadata),
+                bool(metadata.get("catalog_refresh_verified")),
+                bool(metadata.get("catalog_refresh_verified")),
+                bool(row.get("catalog_expired")) and not bool(metadata.get("catalog_refresh_verified")),
+                row["id"],
             ))
         if metadata.get("metadata_source") == "public_product_page" and any(enriched.get(key) for key in ("price", "image_url")):
             recovered += 1
