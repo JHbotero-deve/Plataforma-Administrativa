@@ -101,9 +101,15 @@ def _format_product(p):
     currency = html.escape(str(p.get("currency") or "")[:10])
     platform = html.escape(str(p.get("platform") or "N/D")[:40])
     category = html.escape(str(p.get("category") or "N/D")[:40])
-    rating = html.escape(str(p.get("rating") if p.get("rating") is not None else "N/D")[:20])
-    reviews = html.escape(str(p.get("reviews_count") if p.get("reviews_count") is not None else "N/D")[:20])
-    sales = html.escape(str(p.get("sales_estimate") if p.get("sales_estimate") is not None else "N/D")[:20])
+    metadata = p.get("source_metadata") or {}
+    field_sources = metadata.get("field_sources") or {}
+    verified_sources = {"public_product_page", "user"}
+    rating_value = p.get("rating") if field_sources.get("rating") in verified_sources else None
+    reviews_value = p.get("reviews_count") if field_sources.get("reviews_count") in verified_sources else None
+    sales_value = p.get("sales_estimate") if field_sources.get("sales_estimate") in verified_sources else None
+    rating = html.escape(str(rating_value if rating_value is not None else "N/D")[:20])
+    reviews = html.escape(str(reviews_value if reviews_value is not None else "N/D")[:20])
+    sales = html.escape(str(sales_value if sales_value is not None else "N/D")[:20])
     opportunity = p.get("opportunity_score")
     price_score = p.get("price_score")
     demand_score = p.get("demand_score")
@@ -146,6 +152,8 @@ def _format_product(p):
         lines.append(f"Vendedor: {seller_text}")
     if description:
         lines.append(html.escape(description[:300]))
+    if metadata.get("catalog_status") == "stale":
+        lines.append("<b>Estado:</b> precio pendiente de verificación en la tienda")
     if missing:
         lines.append("<b>Datos faltantes:</b> " + html.escape(", ".join(missing)))
     if url:
@@ -197,7 +205,7 @@ def _top_products(limit=25):
             cur.execute(
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url, p.image_gallery,
-                       p.description, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
+                       p.description, p.source_metadata, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
@@ -213,6 +221,8 @@ def _top_products(limit=25):
                   AND COALESCE(s.opportunity_score, 0) >= 60
                   AND p.current_price > 0 AND p.category_id IS NOT NULL
                   AND p.title NOT LIKE 'Producto %%' AND p.image_url IS NOT NULL
+                  AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                  AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
                 ORDER BY COALESCE(s.opportunity_score, 0) DESC, p.updated_at DESC
                 LIMIT %s
                 """,
@@ -423,6 +433,7 @@ def _model_active_products():
                        ), p.current_price) AS category_avg
                 FROM products p
                 WHERE p.is_active = TRUE
+                  AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                   AND p.current_price IS NOT NULL
                   AND p.current_price > 0
                   AND p.category_id IS NOT NULL
@@ -584,6 +595,8 @@ def _handle(token, chat_id, text):
     if command == "/modelar":
         if not argument.strip():
             try:
+                if not _send(token, chat_id, "Iniciando modelado del catálogo local..."):
+                    return False
                 scored, missing_price, errors, remaining, enriched, recovery, retry = _model_active_products()
                 return _send(
                     token, chat_id,
@@ -609,8 +622,20 @@ def _handle(token, chat_id, text):
         conn = get_connection()
         try:
             with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) AS total FROM products WHERE is_active = TRUE")
-                total = cur.fetchone()["total"]
+                cur.execute("""
+                    SELECT COUNT(*) AS total,
+                           COUNT(*) FILTER (WHERE is_active = TRUE) AS active,
+                           COUNT(*) FILTER (WHERE is_active = FALSE) AS inactive,
+                           COUNT(*) FILTER (WHERE catalog_expires_at IS NOT NULL AND catalog_expires_at <= NOW()) AS stale,
+                           COUNT(*) FILTER (WHERE product_url IS NOT NULL AND product_url <> '') AS with_url
+                    FROM products
+                """)
+                counts = cur.fetchone()
+                total = int(counts["total"] or 0)
+                active = int(counts["active"] or 0)
+                inactive = int(counts["inactive"] or 0)
+                stale = int(counts["stale"] or 0)
+                with_url = int(counts["with_url"] or 0)
                 cur.execute(
                     """
                     SELECT COUNT(DISTINCT p.id) AS modeled
@@ -621,7 +646,9 @@ def _handle(token, chat_id, text):
                 )
                 modeled = cur.fetchone()["modeled"]
             message = (
-                f"<b>Estado del catálogo</b>\nProductos activos: {total}\n"
+                f"<b>Estado del catálogo</b>\nProductos registrados: {total}\n"
+                f"Productos activos: {active}\nProductos inactivos: {inactive}\n"
+                f"Productos por revalidar: {stale}\nProductos con URL: {with_url}\n"
                 f"Productos modelados: {modeled}"
             )
             if not total:
