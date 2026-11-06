@@ -10,7 +10,7 @@ import requests
 from analysis import score_product
 from db import get_connection, upsert_product
 from url_import import detect_platform, import_url
-from product_sources import ALLOWED_CATEGORIES, enrich_product, enrich_pending_products, _is_placeholder_title
+from product_sources import ALLOWED_CATEGORIES, enrich_product, enrich_pending_products, _is_placeholder_title, _is_placeholder_image_url
 
 POLL_INTERVAL = int(os.getenv("TELEGRAM_POLL_INTERVAL", "3"))
 API_BASE = "https://api.telegram.org"
