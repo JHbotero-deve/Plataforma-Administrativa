@@ -163,7 +163,7 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
                 affiliate_url,
                 product.get("price"),
                 product.get("previous_price"),
-                product.get("currency") or "COP",
+                product.get("currency") or "UNK",
                 product.get("rating"),
                 product.get("reviews_count", 0),
                 product.get("sales_estimate"),
