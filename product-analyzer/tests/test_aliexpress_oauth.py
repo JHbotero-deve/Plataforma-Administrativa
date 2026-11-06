@@ -18,7 +18,7 @@ import aliexpress_oauth
 import api
 
 
-class AliExpressOAuthTests(unittest.TestCase):
+class AliExpressOAuthTests(unittest.IsolatedAsyncioTestCase):
     def test_api_exposes_the_public_callback_route(self):
         with patch.object(aliexpress_oauth, "_consume_oauth_state", return_value=False):
             response = TestClient(api.app).get(
@@ -106,7 +106,7 @@ class AliExpressOAuthTests(unittest.TestCase):
         self.assertNotIn("refresh-secret", refresh_ciphertext)
         connection.commit.assert_called_once()
 
-    def test_invalid_state_rejects_callback_without_exchange_or_token_storage(self):
+    async def test_invalid_state_rejects_callback_without_exchange_or_token_storage(self):
         request = MagicMock()
         request.scope = {"query_string": b"code=private-code&state=invalid"}
 
@@ -115,7 +115,7 @@ class AliExpressOAuthTests(unittest.TestCase):
             patch.object(aliexpress_oauth, "_exchange_authorization_code") as exchange,
             patch.object(aliexpress_oauth, "_save_tokens") as save_tokens,
         ):
-            response = aliexpress_oauth.oauth_callback(
+            response = await aliexpress_oauth.oauth_callback(
                 request, code="private-code", state="invalid"
             )
 
@@ -145,7 +145,7 @@ class AliExpressOAuthTests(unittest.TestCase):
             self.assertEqual(call.args[1], (state_hash,))
             self.assertNotIn(state, call.args[1])
 
-    def test_callback_success_does_not_return_or_log_tokens(self):
+    async def test_callback_success_does_not_return_or_log_tokens(self):
         request = MagicMock()
         request.scope = {"query_string": b"code=private-code&state=one-time"}
 
@@ -161,7 +161,7 @@ class AliExpressOAuthTests(unittest.TestCase):
             ) as exchange,
             patch.object(aliexpress_oauth, "_save_tokens") as save_tokens,
         ):
-            response = aliexpress_oauth.oauth_callback(
+            response = await aliexpress_oauth.oauth_callback(
                 request, code="private-code", state="one-time", error=None
             )
 
