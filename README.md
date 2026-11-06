@@ -28,7 +28,7 @@ Esta sección conserva en el repositorio la especificación visual revisada para
 
 Una URL por sí sola no demuestra título, precio, imagen, calificación, reseñas ni ventas. Si el origen no proporciona datos y no se han suministrado mediante el panel o un CLI, esos campos quedan vacíos y el producto no se publica. Un título interno como `Producto Amazon ...` identifica un registro incompleto, no un nombre comercial.
 
-Las solicitudes automáticas a APIs, páginas, enlaces cortos y CDN de marketplaces están bloqueadas por la protección de red actual. No se deben evadir CAPTCHA, login ni controles de acceso. La importación manual puede conservar URL, título, categoría, precio e imágenes que aporte el usuario o una fuente legítima autorizada. Los datos desconocidos permanecen desconocidos.
+Las APIs externas de búsqueda y detalle de marketplaces no forman parte del flujo de catálogo. Los ayudantes resuelven enlaces cortos y leen metadatos HTML/Open Graph/JSON-LD de páginas públicas autorizadas; si hay login, CAPTCHA, bloqueo o falta de metadatos, el producto queda parcial. No se evaden controles de acceso. Los datos desconocidos permanecen desconocidos.
 
 Para ser elegible para análisis y publicación, una ficha necesita al menos título real, categoría, precio válido e imagen real. La publicación comercial también aplica las reglas de descuento y margen configuradas en Central. Las imágenes deben ser URLs HTTP/HTTPS válidas y accesibles o archivos alojados por Central.
 
@@ -97,4 +97,5 @@ Desde la carpeta `product-analyzer`, copiar `.env.example` a `.env` y ejecutar `
 ## Documentos técnicos
 
 - `docs/ARQUITECTURA-URL-FIRST.md`: principios y flujo de importación.
+- `docs/OPERACION-CENTRAL.md`: URLs de producción, endpoints, diagnóstico y recuperación.
 - `product-analyzer/README.md`: funcionamiento de API, worker, tienda, Telegram, base de datos y despliegue.
