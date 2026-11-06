@@ -302,8 +302,11 @@ def _validate_public_image_url(value):
     if host in {"localhost", "metadata.google.internal"} or host.endswith((".localhost", ".local", ".internal", ".test")):
         raise HTTPException(status_code=400, detail="Host de imagen no permitido")
     try:
-        addresses = {item[4][0] for item in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)}
-    except OSError:
+        try:
+            addresses = {str(ipaddress.ip_address(host))}
+        except ValueError:
+            addresses = {item[4][0] for item in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)}
+    except (OSError, ValueError):
         raise HTTPException(status_code=400, detail="No se pudo validar el host de la imagen")
     if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
         raise HTTPException(status_code=400, detail="El host de imagen debe resolver únicamente a direcciones públicas")
