@@ -302,6 +302,9 @@ def enrich_product(product, force=False):
         currency_matches = bool(page_currency and page_currency == str(product.get("currency") or "").upper())
         refresh_verified = bool(page.get("title") and page_price is not None and page_currency and page.get("image_url") and price_matches and currency_matches)
         field_sources = dict(metadata.get("field_sources") or {})
+        for field in ("title", "price", "previous_price", "currency", "image_url", "description", "rating", "reviews_count", "category", "seller"):
+            if field not in manual_fields:
+                field_sources.pop(field, None)
         for field in manual_fields:
             if product.get(field) is not None:
                 field_sources[field] = "user"
