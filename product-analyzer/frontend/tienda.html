@@ -1327,7 +1327,9 @@ const DEFAULT_SECTIONS=[
  {slug:"ofertas-destacadas",title:"Ofertas destacadas",category_names:[],target_count:100}
 ];
 let sectionSettings=DEFAULT_SECTIONS;
-let products=JSON.parse(localStorage.getItem("central_products_cache")||"[]");
+const CACHE_TTL_MS=21600000;
+let products=[];
+try{const cached=JSON.parse(localStorage.getItem("central_products_cache")||"[]");const cachedAt=Number(localStorage.getItem("central_products_cache_saved_at")||0);if(Array.isArray(cached)&&cachedAt>0&&Date.now()-cachedAt<=CACHE_TTL_MS)products=cached;else{localStorage.removeItem("central_products_cache");localStorage.removeItem("central_products_cache_saved_at")}}catch{localStorage.removeItem("central_products_cache");localStorage.removeItem("central_products_cache_saved_at")}
 let cart=JSON.parse(localStorage.getItem("central_cart")||"[]");
 let filtered=[], active=null, heroIndex=0, heroTimer=null, heroPaused=false;
 const HERO_INTERVAL=6000;
@@ -1350,8 +1352,8 @@ function renderHeroCarousel(){
   heroIndex=((heroIndex%featured.length)+featured.length)%featured.length;
   const offsets=featured.length>2?[-1,0,1]:featured.length===2?[0,1]:[0];
   cards.innerHTML=offsets.map(offset=>{
-    const product=featured[(heroIndex+offset+featured.length)%featured.length],position=offset===0?"is-active":offset<0?"is-prev":"is-next",src=imageSrc(product);
-    return '<a class="stage-product '+position+'" href="'+productUrl(product)+'" aria-label="Ver '+esc(product.title||"producto")+'"><span class="stage-product-media">'+(src?'<img src="'+esc(src)+'" alt="'+esc(product.title||"Producto destacado")+'" loading="lazy" referrerpolicy="no-referrer"><span class="no-image" hidden>Imagen no disponible</span>':'<span class="no-image">Imagen no disponible</span>')+'</span><span class="stage-product-copy"><span class="stage-product-category">'+esc(product.category||product.platform||"Destacado")+'</span><span class="stage-product-title">'+esc(product.title||"Producto")+'</span><span class="stage-product-price">'+esc(product.price_display||money(product.sale_price??product.current_price,product.currency))+'</span></span></a>'
+    const product=featured[(heroIndex+offset+featured.length)%featured.length],position=offset===0?"is-active":offset<0?"is-prev":"is-next",src=imageSrc(product),imageLoading=offset===0?'loading="eager" fetchpriority="high"':'loading="lazy"';
+    return '<a class="stage-product '+position+'" href="'+productUrl(product)+'" aria-label="Ver '+esc(product.title||"producto")+'"><span class="stage-product-media">'+(src?'<img src="'+esc(src)+'" alt="'+esc(product.title||"Producto destacado")+'" '+imageLoading+' referrerpolicy="no-referrer"><span class="no-image" hidden>Imagen no disponible</span>':'<span class="no-image">Imagen no disponible</span>')+'</span><span class="stage-product-copy"><span class="stage-product-category">'+esc(product.category||product.platform||"Destacado")+'</span><span class="stage-product-title">'+esc(product.title||"Producto")+'</span><span class="stage-product-price">'+esc(product.price_display||money(product.sale_price??product.current_price,product.currency))+'</span></span></a>'
   }).join("");
   cards.querySelectorAll(".stage-product img").forEach(image=>image.addEventListener("error",()=>{image.hidden=true;const fallback=image.nextElementSibling;if(fallback)fallback.hidden=false},{once:true}));
   status.innerHTML="<strong>"+String(heroIndex+1).padStart(2,"0")+"</strong> / "+String(featured.length).padStart(2,"0");
@@ -1412,9 +1414,11 @@ function renderGrid(){
   const host=$("grid"),q=$("search").value.trim(),selected=$("category").value;
   if(!filtered.length){host.className="grid";host.innerHTML='<div class="empty"><b>No hay productos</b>Prueba otra búsqueda o publica un producto desde Central.</div>';return}
   if(q||selected){host.className="grid";host.innerHTML=filtered.map(card).join("");return}
+  const sections=sectionSettings.filter(section=>section.category_names?.length||section.slug==="ofertas-destacadas");
   host.className="catalog-sections";
-  host.innerHTML=sectionSettings.filter(section=>section.category_names?.length).map(section=>{
-    const items=products.filter(product=>section.category_names.includes(product.category)).slice(0,Number(section.target_count)||100);
+  host.innerHTML=sections.map(section=>{
+    const source=section.slug==="ofertas-destacadas"?products:products.filter(product=>section.category_names.includes(product.category));
+    const items=source.slice(0,Number(section.target_count)||100);
     return '<section class="catalog-section"><div class="catalog-section-head"><h2>'+esc(section.title)+'</h2><span>'+items.length+' / '+Number(section.target_count||100)+' productos</span></div><div class="section-grid">'+(items.length?items.map(card).join(""):'<div class="empty">La sección se completará cuando haya productos que cumplan los criterios de publicación.</div>')+'</div></section>';
   }).join("");
 }
@@ -1436,9 +1440,9 @@ async function load(){
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),7000);
     const r=await fetch(endpoint,{cache:"no-store",signal:controller.signal});clearTimeout(timer);
     if(!r.ok)throw Error("HTTP "+r.status);
-    const d=await r.json();const list=Array.isArray(d)?d:(d.items||d.publications||d.data||[]);
-    if(!Array.isArray(list)||!list.length)throw Error("sin publicaciones");
-    products=list;heroIndex=0;localStorage.setItem("central_products_cache",JSON.stringify(products));cleanCart();setCategories();applyFilter();return;
+    const d=await r.json();const list=Array.isArray(d)?d:(d&&[d.items,d.publications,d.data].find(Array.isArray));
+    if(!list)throw Error("formato de publicaciones inválido");
+    products=list;heroIndex=0;localStorage.setItem("central_products_cache",JSON.stringify(products));localStorage.setItem("central_products_cache_saved_at",String(Date.now()));cleanCart();setCategories();applyFilter();return;
   }catch(e){}
   if(products.length){cleanCart();setCategories();applyFilter();return}
   $("grid").innerHTML='<div class="empty"><b>Catálogo vacío</b>Central está lista para recibir productos publicados.</div>';renderFeature();renderHeroCarousel();
