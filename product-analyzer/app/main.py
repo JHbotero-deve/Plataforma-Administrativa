@@ -64,8 +64,10 @@ def run_pipeline():
             catalog_rows = cur.fetchall()
         published = 0
         for row in catalog_rows:
-            if publish_catalog_product(conn, row["id"], row, row["opportunity_score"]):
+            if publish_catalog_product(conn, row["id"], row, row["opportunity_score"], commit=False):
                 published += 1
+        if published:
+            conn.commit()
         print(f"[storefront] productos reales elegibles publicados/actualizados: {published}")
 
         averages = {}
