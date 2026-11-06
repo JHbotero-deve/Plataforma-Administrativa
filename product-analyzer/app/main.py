@@ -38,6 +38,9 @@ def expire_catalog():
             cur.execute("""
                 UPDATE published_cards pc
                 SET subtitle = 'Precio pendiente de verificación',
+                    price_display = 'Precio pendiente de verificación',
+                    sale_price = NULL, cost_price = NULL, profit_amount = NULL,
+                    profit_margin_pct = NULL, opportunity_score = 0,
                     footer = 'Precio observado anteriormente · verifica el precio actual en la tienda',
                     updated_at = NOW()
                 FROM products p

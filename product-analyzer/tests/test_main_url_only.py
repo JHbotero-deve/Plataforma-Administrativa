@@ -43,6 +43,10 @@ class URLFirstWorkerTests(unittest.TestCase):
         self.assertIn("catalog_status", statements[0])
         self.assertNotIn("SET is_active = FALSE", statements[0])
         self.assertIn("UPDATE published_cards", statements[1])
+        self.assertIn("price_display = 'Precio pendiente de verificación'", statements[1])
+        self.assertIn("sale_price = NULL", statements[1])
+        self.assertIn("profit_amount = NULL", statements[1])
+        self.assertIn("opportunity_score = 0", statements[1])
         connection.commit.assert_called_once()
         connection.close.assert_called_once()
 
