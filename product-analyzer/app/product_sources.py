@@ -18,8 +18,8 @@ ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 MAX_REDIRECTS = 12
 ALLOWED_HOSTS = {
-    "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amazon.com.au", "amazon.in", "amazon.nl", "amazon.se", "amazon.pl", "amazon.ae", "amazon.sg", "amazon.com.tr", "amazon.com.br", "link.amazon", "amzn.to", "amzn.com", "a.co"),
-    "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub", "s.click.aliexpress.com"),
+    "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amazon.com.au", "amazon.in", "amazon.nl", "amazon.se", "amazon.pl", "amazon.ae", "amazon.sg", "amazon.com.tr", "amazon.com.br", "link.amazon", "amzn.to", "amzn.eu", "amzn.asia", "amzn.com", "amzn.ca", "amzn.de", "amzn.co.uk", "a.co"),
+    "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub", "s.click.aliexpress.com", "click.aliexpress.com"),
 }
 ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"}
 BROWSER_HEADERS = {
@@ -264,7 +264,8 @@ def enrich_product(product):
         for field, key in (("title", "title"), ("price", "price"), ("previous_price", "previous_price"), ("currency", "currency"), ("image_url", "image_url"), ("description", "description"), ("rating", "rating"), ("reviews_count", "reviews_count"), ("category", "category")):
             current = product.get(field)
             missing_title = field == "title" and (not current or str(current).casefold().startswith("producto "))
-            if (current is None or current == "" or missing_title) and page.get(key) is not None:
+            replace_untrusted_legacy = metadata.get("metadata_source") == "url_only" and field in {"price", "currency"}
+            if (current is None or current == "" or missing_title or replace_untrusted_legacy) and page.get(key) is not None:
                 product[field] = page[key]
         product["gallery_urls"] = list(dict.fromkeys((product.get("gallery_urls") or []) + (page.get("gallery_urls") or [])))[:10]
         if not product.get("image_url") and product["gallery_urls"]:
@@ -276,7 +277,7 @@ def enrich_product(product):
         metadata.update({
             "original_url": original_url,
             "resolved_url": resolved_url,
-            "metadata_source": "public_product_page" if any(page.get(key) for key in ("title", "price", "image_url", "description")) else metadata.get("metadata_source", "url_only"),
+            "metadata_source": "public_product_page" if any(page.get(key) for key in ("title", "price", "image_url", "description")) else "public_product_page_empty",
             "enrichment_status": "complete" if product.get("title") and not str(product["title"]).casefold().startswith("producto ") and product.get("price") and product.get("image_url") else "partial",
             "enrichment_version": ENRICHMENT_VERSION,
             "enriched_at": datetime.now(timezone.utc).isoformat(),
@@ -418,7 +419,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 enriched.get("rating"), enriched.get("reviews_count"),
                 json.dumps(metadata), row["id"],
             ))
-        if metadata.get("metadata_source") in {"public_product_page", "amazon_creators_api", "aliexpress_affiliate_api"} and any(enriched.get(key) for key in ("price", "image_url")):
+        if metadata.get("metadata_source") == "public_product_page" and any(enriched.get(key) for key in ("price", "image_url")):
             recovered += 1
     conn.commit()
     return recovered
