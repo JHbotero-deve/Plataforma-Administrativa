@@ -244,7 +244,7 @@ def _search_products(term, limit=8):
             cur.execute(
                 """
                 SELECT p.title, p.current_price, p.currency, p.product_url, p.affiliate_url, p.image_url, p.image_gallery,
-                       p.description, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
+                       p.description, p.source_metadata, seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
                        p.rating, p.reviews_count, p.sales_estimate,
                        pl.name AS platform, c.name AS category,
                        COALESCE(s.price_score, 0) AS price_score,
