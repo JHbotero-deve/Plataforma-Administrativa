@@ -289,5 +289,31 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertFalse(product_sources._is_placeholder_title("Auriculares inalámbricos Bluetooth"))
 
 
+    def test_example_title_and_image_are_replaced_by_real_public_page_data(self):
+        product = import_url(
+            "https://www.amazon.com/dp/B012345678",
+            category="tecnologia",
+            title="Título real del producto",
+            price=24.99,
+            currency="USD",
+            image_url="https://enlace-de-la-imagen.jpg",
+        )
+        self.assertIsNone(product["image_url"])
+        self.assertNotIn("image_url", product["source_metadata"]["manual_fields"])
+        page = {
+            "resolved_url": product["product_url"],
+            "title": "Auriculares inalámbricos",
+            "price": 24.99,
+            "currency": "USD",
+            "image_url": "https://images.example/headphones.jpg",
+            "gallery_urls": ["https://images.example/headphones.jpg"],
+        }
+        with patch.object(product_sources, "_public_product_page", return_value=page):
+            result = product_sources.enrich_product(product)
+        self.assertEqual(result["title"], "Auriculares inalámbricos")
+        self.assertEqual(result["image_url"], "https://images.example/headphones.jpg")
+        self.assertTrue(result["source_metadata"]["catalog_refresh_verified"])
+
+
 if __name__ == "__main__":
     unittest.main()
