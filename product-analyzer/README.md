@@ -1,51 +1,77 @@
-# Central
+# Central — Product Analyzer
 
-## Arquitectura
-- Frontend estático en Vercel desde `product-analyzer/frontend`.
-- API y worker en Railway desde `product-analyzer/app`.
-- PostgreSQL como persistencia.
-- AliExpress descubre automáticamente ofertas con su API oficial de afiliados; Amazon requiere acceso a su API de catálogo para búsquedas automáticas.
-- Los enlaces afiliados de Amazon y AliExpress se generan con sus respectivos datos de afiliación cuando están configurados.
-- Telegram para consulta y alertas.
-- Wompi preparado para pagos.
+Esta carpeta contiene la API, el worker y la aplicación frontend de Central.
 
-## Flujo
-AliExpress Affiliate API -> descubrimiento y revisión cada 2 horas -> PostgreSQL -> scoring -> API -> Vercel; las mejores ofertas nuevas se notifican por Telegram.
+## Componentes
 
-## Tarjetas
-Cada producto se representa en una tarjeta única. La zona multimedia admite imágenes reales y, cuando `model_url` apunta a un modelo GLB/GLTF accesible, activa el visor 3D dentro de la misma tarjeta. Sin modelo válido, no se simula 3D.
-Los productos activos caducan a las 48 horas; cuando vuelven a detectarse, su vigencia se renueva 48 horas.
+- `app/`: API FastAPI, lógica de catálogo, autenticación, publicaciones, pedidos, pagos y worker.
+- `frontend/`: panel administrativo, tienda, fichas, estilos, service worker y showcase de audífonos.
+- `headphones/`: aplicación fuente del showcase 3D en React/Vite. Su salida compilada se publica en `frontend/headphones/`.
+- `tests/`: pruebas unitarias y de regresión.
 
-## Regla de datos
-No existen productos demo, mocks ni valores de respaldo. Si la fuente real falla, el frontend informa la indisponibilidad y no inventa catálogo.
+## Experiencia de producto
 
-## Producción
-Las credenciales reales viven en las variables de entorno de Railway/Vercel y no se almacenan en Git.
+La guía visual aprobada contempla un hero de producto grande, tienda por categorías y tarjetas con perspectiva 3D, profundidad e interacción de luz. Las referencias contemplan audífonos, zapatos, camisetas y portátiles, con variaciones de color y fondos. La tienda incluye catálogo, detalle, galería, carrito y checkout para productos propios.
 
-## Importación por URL y descuentos al cliente
-Al pegar una URL pública de Amazon o AliExpress, Central intenta extraer título, descripción, precio actual, precio original, imagen principal y galería. El acceso se limita a páginas públicas y dominios permitidos; si la tienda exige sesión, bloquea la consulta o no publica el precio original, el producto queda guardado en el catálogo pero no se publica automáticamente.
+La implementación existente de `frontend/tienda.html` incorpora tarjetas con interacción de perspectiva; los productos pueden activar `model-viewer` cuando `model_url` apunta a un modelo GLB/GLTF válido. Sin modelo se conserva la imagen real. El showcase de audífonos se sirve en `/headphones/`. No se simulan modelos ni se rellenan fichas con datos inventados.
 
-La regla comercial es independiente del scoring: el precio de referencia es el precio original del proveedor; el precio al cliente se calcula con 40% de descuento. Solo se publica si el precio de venta supera el costo actual. El margen y el costo se almacenan en `published_cards` y se muestran únicamente en administración; las respuestas públicas entregan el precio final, precio de referencia y descuento, nunca el costo ni el porcentaje de ganancia. Las publicaciones externas se ordenan por margen interno descendente. Amazon agrega `AMAZON_PARTNER_TAG` y, si existe, `AMAZON_TRACKING_ID`. AliExpress genera el enlace afiliado mediante `aliexpress.affiliate.link.generate` usando App Key, App Secret y Tracking ID.
+Este README conserva las decisiones de diseño como especificación persistente. No sustituye el archivo fuente de Figma ni significa que sus frames se hayan sincronizado automáticamente.
 
-## Secciones y reposición automática de la tienda
+## Flujo de datos
 
-La tienda organiza el catálogo en nueve secciones (Tecnología, Hogar, Moda, Accesorios, Deportes, Belleza y cuidado personal, Salud y bienestar, Juguetes y Oficina y estudio) más Ofertas destacadas. Cada sección inicia con un objetivo de 100 productos, configurable desde Administración entre 100 y 500. Moda agrupa también las categorías heredadas ropa y calzado.
+1. Panel administrativo, Telegram o CLI envían una URL y los metadatos disponibles.
+2. La API valida URL, categoría, moneda, precio e imágenes HTTP/HTTPS.
+3. El catálogo se almacena en PostgreSQL y conserva la fuente y los datos suministrados.
+4. La capa de análisis puntúa solo productos con información suficiente.
+5. La publicación comercial exige los datos reales y las reglas de precio, descuento y margen.
+6. La tienda consulta publicaciones y secciones; no muestra registros incompletos como si fueran productos listos para comprar.
 
-El worker consulta productos reales mediante la API oficial de AliExpress, evita duplicados por identificador y publica solo fichas con imagen, precio original verificable, descuento efectivo del 40% y margen positivo. La reposición se ejecuta cada dos horas y consulta hasta cuatro páginas de 50 resultados por sección en cada ciclo. Ajusta STOREFRONT_SEARCH_MAX_PAGES (1–10) para cambiar el ritmo. Requiere ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET y ALIEXPRESS_TRACKING_ID. La reposición automática está habilitada por defecto y puede desactivarse con STOREFRONT_AUTO_REFILL_ENABLED=false. Si faltan credenciales o el origen no entrega datos verificables, no inventa ni publica productos.
+## Integridad del catálogo
 
-## Telegram
-El bot mantiene /top, /buscar, /modelar y /estado. También acepta URLs de Amazon y AliExpress. El endpoint autenticado `/api/v1/products/import-cli` guarda el producto y envía el enlace afiliado a Telegram. El servicio de Telegram en Railway requiere TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID; sin esas variables queda deshabilitado de forma segura.
+Los campos que no se recibieron se mantienen vacíos. Un registro URL-only puede tener un identificador técnico y un título interno de referencia, pero no se presenta como nombre comercial ni se publica. No se permiten valores de respaldo para precio, imagen, reseñas, calificación o ventas.
 
-**Modo de protección de marketplaces:** el worker no ejecuta búsquedas ni enriquecimiento automático de Amazon o AliExpress. Un guard global en `requests.Session.send` bloquea las solicitudes HTTP a dominios de ambas tiendas, sus API, enlaces cortos y CDN de imágenes antes de que salgan de la aplicación. Las importaciones manuales conservan URLs y metadatos entregados por el usuario; no consultan las páginas de las tiendas. Los enlaces afiliados existentes y las credenciales se conservan, pero no se generan enlaces nuevos mediante API. Las imágenes alojadas en dominios de marketplaces no se cargan automáticamente en el panel ni en la tienda.
+Las solicitudes automáticas a APIs, páginas, short links y CDN de Amazon/AliExpress están bloqueadas por el guard de red. No se evaden CAPTCHA ni login. Por tanto, una URL sin título, precio o imagen aportados no se convierte automáticamente en una ficha completa. Usa datos verificables suministrados mediante el panel o CLI autorizado.
 
-Los módulos de Amazon Creators, AliExpress Affiliate y AE-Dropshipper se conservan para no borrar integraciones ni credenciales. Mientras el guard esté activo, cualquier solicitud HTTP del backend a esos dominios —incluido el intercambio OAuth— se rechaza antes de salir. Telegram conserva los comandos y notificaciones de texto, pero no adjunta imágenes de marketplace ni permite vistas previas de enlaces, para evitar que los servidores de Telegram descarguen páginas o imágenes de esas tiendas. PostgreSQL, TikTok y los demás servicios no pertenecientes a Amazon/AliExpress siguen sus flujos independientes.
+## Despliegue frontend — Vercel
 
-## CLI autorizados
+- Proyecto: `central-7ykr`.
+- Repositorio: `JHbotero-deve/Plataforma-Administrativa`.
+- Rama de producción: `main`.
+- Root Directory del proyecto: `product-analyzer/frontend`.
+- Configuración de rutas y rewrites: `frontend/vercel.json`.
+- Proxy API: `https://gracious-renewal-production-76df.up.railway.app/api/v1/*`.
+- Rutas relevantes: `/`, `/tienda`, `/producto/:slug` y `/headphones/`.
 
-Central recibe datos obtenidos legítimamente por tus CLI o exportaciones, sin depender de APIs de marketplace. Configura `CENTRAL_API_URL` y `CENTRAL_INGEST_API_KEY`; la clave se envía por encabezado y nunca debe guardarse en el código.
+El HTML estático no necesita secretos de base de datos. Después de cada push verificar que el SHA del deployment coincida con `main` y que el dominio `central-7ykr.vercel.app` esté asignado al deployment nuevo, no a una versión anterior.
 
-Para un producto: `python scripts/importar-url-central.py --url "URL_DEL_PRODUCTO" --title "Nombre" --price 19.90 --previous-price 29.90 --currency USD --image "https://..." --category accesorios`. También admite `--external-id`, `--description`, `--rating`, `--reviews-count`, `--sales-estimate` y `--gallery` repetido. No inventes ni completes métricas que el origen no entregue.
+## Despliegue backend — Railway
 
-Para importar lotes: `python scripts/importar-lote-central.py --file productos.json --dry-run` valida primero el archivo. Después ejecuta el mismo comando sin `--dry-run` para enviar lotes al endpoint autenticado `/api/v1/products/import-cli/batch`. Admite JSON (lista, objeto con `products`/ `items`) y CSV. Campos canónicos: `url`, `external_id`, `category`, `title`, `description`, `price`, `previous_price`, `currency`, `image_url`, `gallery_urls`, `rating`, `reviews_count`, `sales_estimate`. También reconoce nombres comunes como `product_url`, `item_id`, `asin`, `name`, `current_price`, `original_price`, `main_image`, `review_count` y `sales`. Categorías desconocidas quedan sin clasificar; no se fuerza `accesorios`.
+Proyecto: `happy-recreation`, entorno `production`.
 
-El enriquecimiento web solo lee páginas públicas. Si el marketplace exige iniciar sesión, Central registra el bloqueo y aplica espera antes de reintentar; no intenta evadir controles de acceso. Los productos solo se puntúan automáticamente cuando tienen título real, precio, categoría e imagen.
+| Servicio | Carpeta raíz | Build | Start | Health |
+|---|---|---|---|---|
+| `gracious-renewal` (API) | `/product-analyzer/app` | Dockerfile `Dockerfile` | Uvicorn, puerto `PORT` | `/api/v1/health` |
+| `central-worker` | `product-analyzer/app` | Railpack | `python -u main.py` | Proceso continuo |
+| `central-telegram` | `product-analyzer/app` | Railpack | `python -u -c "from telegram_alert import run_bot; run_bot()"` | Proceso continuo |
+
+PostgreSQL es la base primaria. La API recibe tráfico desde Vercel; el worker procesa tareas del catálogo; Telegram funciona como interfaz de consulta y notificación, no como dependencia de la API.
+
+Variables de entorno críticas: `DATABASE_URL` en API y worker; `CENTRAL_AUTH_SECRET` y credenciales admin en API; `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `CENTRAL_API_URL` y `CENTRAL_INGEST_API_KEY` en Telegram. Los secretos se configuran directamente en Railway.
+
+## Validación de producción
+
+- GitHub `main`, Vercel y los servicios Railway deben apuntar al mismo SHA.
+- Vercel debe estar `READY`; los servicios de Railway deben estar `SUCCESS` y en estado `online`.
+- `GET /api/v1/health` debe devolver `status: ok` y `database: ok`.
+- `/tienda` y `/headphones/` deben responder HTTP 200.
+- Revisar cantidades de `/api/v1/products`, `/api/v1/publications` y `/api/v1/storefront/sections`.
+- Una tienda con cero publicaciones no muestra tarjetas; un catálogo con imagen nula no puede mostrar foto. No usar datos ficticios para ocultar esos vacíos.
+- Revisar logs de API, worker y Telegram después del despliegue.
+
+## Desarrollo local
+
+Desde esta carpeta, el Compose del proyecto levanta los servicios definidos en `docker-compose.yml`. Configura `.env` a partir de `.env.example`; no incluyas claves reales en Git.
+
+## Pruebas
+
+Desde la raíz del repositorio, el workflow `Central CI` compila el frontend, construye el showcase Headphones, compila Python, ejecuta las pruebas unitarias de `tests/` y construye la imagen Docker del backend. Ejecuta los mismos comandos del workflow antes de un cambio de arquitectura.

@@ -73,7 +73,6 @@ def import_url(
         raise ValueError("La URL debe comenzar con http:// o https://.")
 
     platform = detect_platform(url)
-
     resolved_url = url
     try:
         from product_sources import _resolve_product_url
@@ -83,20 +82,17 @@ def import_url(
 
     supplied_id = str(external_id or "").strip()
     external_id = supplied_id[:150] if supplied_id else _external_id(resolved_url, platform)
-    
     raw_title = (title or "").strip()
-    if not raw_title or raw_title.startswith("Producto "):
-        final_title = "Oferta Destacada Global · Producto Verificado con Envío Rápido"
-    else:
-        final_title = raw_title
-
-    final_image = (image_url or "").strip()
-    if not final_image:
-        final_image = "https://ae01.alicdn.com/kf/S628374d89a4443ff9e30a5fcf65392e2X.jpg"
-
-    final_price = price if price is not None and price > 0 else 24.99
-    final_currency = (currency or "USD").strip().upper()[:10]
-    final_category = category if category in {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"} else "tecnologia"
+    final_title = raw_title or f"Producto {platform.title()} {external_id}"
+    final_image = (image_url or "").strip() or None
+    final_price = price
+    final_currency = (currency or "USD").strip().upper()[:10] or "USD"
+    category_value = str(category or "").strip().lower()
+    allowed_categories = {
+        "ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda",
+        "deportes", "belleza", "bienestar", "juguetes", "oficina",
+    }
+    final_category = category_value if category_value in allowed_categories else None
 
     if final_price is not None and (
         not math.isfinite(float(final_price)) or float(final_price) <= 0
@@ -108,6 +104,16 @@ def import_url(
         if image.scheme not in ("http", "https") or not image.hostname:
             raise ValueError("La imagen debe ser una URL HTTP o HTTPS válida.")
 
+    missing_fields = []
+    if not raw_title:
+        missing_fields.append("title")
+    if final_price is None:
+        missing_fields.append("price")
+    if not final_category:
+        missing_fields.append("category")
+    if not final_image:
+        missing_fields.append("image_url")
+
     return {
         "platform": platform,
         "external_id": external_id,
@@ -116,17 +122,18 @@ def import_url(
         "image_url": final_image,
         "product_url": resolved_url or url,
         "price": final_price,
-        "currency": final_currency or "USD",
-        "rating": 4.8,
-        "reviews_count": 128,
-        "gallery_urls": [final_image],
-        "sales_estimate": 450,
+        "currency": final_currency,
+        "rating": None,
+        "reviews_count": 0,
+        "gallery_urls": [final_image] if final_image else [],
+        "sales_estimate": None,
         "source_metadata": {
             "import_method": "authorized_cli_url",
-            "metadata_source": "cli" if title or price is not None or image_url else "url_only",
-            "category_source": "user" if category in {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"} else None,
+            "metadata_source": "cli" if title or price is not None or image_url or final_category else "url_only",
+            "category_source": "user" if final_category else None,
             "original_url": url,
             "resolved_url": resolved_url or url,
             "gallery_urls": [final_image] if final_image else [],
+            "missing_fields": missing_fields,
         },
     }

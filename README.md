@@ -1,74 +1,100 @@
 # Central
 
-Central es una plataforma de catálogo, análisis de oportunidades y comercio digital. Su principio de ingestión es **URL-first**: el usuario o un ayudante proporciona el enlace del producto y Central trabaja a partir de esa página.
+Central es una plataforma full stack de catálogo, análisis de oportunidades y comercio digital. El frontend público y el panel administrativo comparten la API y PostgreSQL, pero mantienen experiencias separadas.
 
-## Principio de funcionamiento del catálogo
+## Guía visual aprobada: Figma, tienda y tarjetas 3D
 
-- La entrada de productos se realiza mediante URLs públicas de páginas de producto.
-- Los ayudantes de Central reciben, validan, resuelven y procesan esas URLs.
-- La extracción de información se realiza desde el contenido público de la página: metadatos HTML, Open Graph y datos estructurados como JSON-LD.
-- Se conserva la URL original y se registra la URL final resuelta.
-- El catálogo se guarda en PostgreSQL y pasa al flujo de análisis, puntuación y publicación.
-- Si la página no expone información, requiere autenticación, presenta CAPTCHA o bloquea la lectura, el ayudante registra el motivo y deja los campos faltantes pendientes. Nunca inventa precios, imágenes, ventas ni características.
+Esta sección conserva en el repositorio la especificación visual revisada para no perderla entre commits. Es una guía de implementación; no reemplaza el archivo fuente de Figma ni afirma que el conector haya sincronizado sus frames.
 
-**No se deben utilizar las APIs de catálogo, búsqueda o afiliación de Amazon, AliExpress u otros marketplaces para descubrir o enriquecer productos.** Las URLs son la fuente de entrada y los ayudantes son los encargados de procesarlas. Las credenciales de esas APIs no deben ser un requisito para importar, analizar o mostrar un producto.
+- Hero principal de producto a gran escala, con un producto protagonista y navegación visual clara.
+- Tarjetas de producto con perspectiva 3D, profundidad, inclinación por puntero, respuesta de luz y reflejos; la interacción debe respetar pantallas táctiles y `prefers-reduced-motion`.
+- Familias visuales de referencia: audífonos, zapatos, camisetas y portátiles, con variantes de color y fondos adecuados a cada producto.
+- Recorrido de tienda: hero, navegación y categorías, catálogo por secciones, ficha de producto, galería, carrito y proceso de compra para productos propios.
+- El escaparate de audífonos tiene su ruta independiente en `/headphones/`. La tienda está en `/tienda` y el panel administrativo en `/`.
+- Un visor 3D real solo se habilita cuando el producto tiene una URL válida a un modelo GLB/GLTF. Sin modelo se muestra la imagen real; nunca se simula un modelo 3D ni se inventa una foto.
+- Las tarjetas solo muestran información procedente del catálogo. No se deben generar precios, imágenes, reseñas, ventas, marcas ni atributos ficticios para completar un diseño.
 
-Esta regla aplica a la adquisición de datos del catálogo. No elimina servicios técnicos propios ni integraciones independientes necesarias para otras funciones, como la API interna de Central, notificaciones de Telegram o pagos de Wompi.
+## Funciones
 
-## Ayudantes y flujo esperado
+- Importación de productos por URL y por CLI autenticado, con conservación del enlace original y de los metadatos suministrados.
+- Catálogo en PostgreSQL, clasificación, puntuación de oportunidades, vencimiento y recuperación de registros.
+- Panel administrativo para catálogo, publicaciones, ayudantes, pedidos, métricas y configuración.
+- Tienda pública con búsqueda, filtros por categoría, productos destacados, fichas, tarjetas con interacción 3D y enlaces de compra externos.
+- Carrito y checkout Wompi únicamente para productos propios de Central.
+- Bot de Telegram para recibir enlaces, consultar catálogo y enviar avisos.
+- Worker independiente para tareas del catálogo; la API y el worker no dependen de que Telegram esté conectado.
 
-1. Recibir una URL desde el panel, Telegram, una herramienta autorizada o un ayudante.
-2. Validar el esquema HTTP/HTTPS, el dominio permitido y la seguridad de la redirección.
-3. Resolver enlaces cortos y conservar tanto el enlace original como el destino final.
-4. Leer el contenido público de la página y extraer título, descripción, precio, moneda, imágenes, categoría, vendedor y valoraciones cuando estén disponibles.
-5. Guardar el resultado y la evidencia de origen; marcar como parcial cualquier dato que la página no permita obtener.
-6. Enviar el producto al análisis y, si cumple las reglas, habilitar su publicación en la tienda.
+## Regla de integridad de datos
 
-Los ayudantes no deben evadir inicios de sesión, CAPTCHA, controles de acceso ni restricciones del sitio. Tampoco deben presentar datos estimados como si fueran datos confirmados por la página.
+Una URL por sí sola no demuestra título, precio, imagen, calificación, reseñas ni ventas. Si el origen no proporciona datos y no se han suministrado mediante el panel o un CLI, esos campos quedan vacíos y el producto no se publica. Un título interno como `Producto Amazon ...` identifica un registro incompleto, no un nombre comercial.
 
-## Experiencia de producto
+Las solicitudes automáticas a APIs, páginas, enlaces cortos y CDN de marketplaces están bloqueadas por la protección de red actual. No se deben evadir CAPTCHA, login ni controles de acceso. La importación manual puede conservar URL, título, categoría, precio e imágenes que aporte el usuario o una fuente legítima autorizada. Los datos desconocidos permanecen desconocidos.
 
-Central debe tener dos experiencias claramente separadas:
+Para ser elegible para análisis y publicación, una ficha necesita al menos título real, categoría, precio válido e imagen real. La publicación comercial también aplica las reglas de descuento y margen configuradas en Central. Las imágenes deben ser URLs HTTP/HTTPS válidas y accesibles o archivos alojados por Central.
 
-- **Tienda pública:** escaparate visual de productos, navegación por categorías, fichas atractivas y una experiencia inmersiva con elementos 3D cuando aporten valor. El diseño debe priorizar la presentación y compra de productos.
-- **Administración:** dashboard independiente con menú lateral, navegación clara por catálogo, ayudantes, análisis, publicaciones, pedidos, configuración y estado de los procesos.
+## Arquitectura de producción
 
-La tienda y el administrador comparten el catálogo y los servicios de Central, pero no deben ser la misma interfaz ni limitarse a cambiar colores o estilos. Las referencias visuales aprobadas orientan el diseño; no significan que la tienda 3D o el nuevo administrador ya estén implementados.
+| Componente | Plataforma | Configuración de producción |
+|---|---|---|
+| Frontend estático, panel y tienda | Vercel | Proyecto `central-7ykr`; código en `product-analyzer/frontend` |
+| API FastAPI | Railway | Proyecto `happy-recreation`, servicio `gracious-renewal`, raíz `/product-analyzer/app`, Dockerfile `Dockerfile`, puerto 8000 |
+| Worker del catálogo | Railway | Servicio `central-worker`, raíz `product-analyzer/app`, comando `python -u main.py` |
+| Bot de Telegram | Railway | Servicio `central-telegram`, raíz `product-analyzer/app`, arranque `python -u -c "from telegram_alert import run_bot; run_bot()"` |
+| Base de datos | Railway | PostgreSQL; conexión por `DATABASE_URL` |
+| Integraciones adicionales | Railway | Wompi, correo, TikTok y otros servicios según variables configuradas |
 
-## Arquitectura técnica
+### Frontend: Vercel
 
-- Frontend: `product-analyzer/frontend`, desplegado en Vercel.
-- Backend y API interna: `product-analyzer/app`, desplegados en Railway.
-- Worker: procesos de importación, enriquecimiento permitido, análisis y recuperación.
-- Persistencia: PostgreSQL.
-- Interfaz de ayudantes y notificaciones: Telegram y las herramientas internas disponibles.
-- Pagos: Wompi.
+El repositorio conectado es `JHbotero-deve/Plataforma-Administrativa` y la rama de producción es `main`. La raíz del proyecto Vercel debe ser `product-analyzer/frontend`; el frontend es estático y sus rutas se definen en `product-analyzer/frontend/vercel.json`.
 
-## Estado actual y trabajo pendiente
+El archivo `vercel.json` reescribe `/api/v1/*` hacia `https://gracious-renewal-production-76df.up.railway.app/api/v1/*` y `/api/*` hacia la API versionada. También conserva las rutas `/tienda`, `/catalogo`, `/tarjetas`, `/producto/:slug` y `/headphones/`. Los HTML principales usan políticas de revalidación para evitar servir páginas obsoletas.
 
-La arquitectura URL-first es el requisito funcional de producto. **El código actual todavía no cumple por completo esa regla.** Se han identificado estos puntos que deben corregirse antes de considerar terminada la migración:
+Después de cada push, verificar que el deployment READY tenga el mismo SHA de GitHub `main` y que `central-7ykr.vercel.app` esté asignado a ese deployment. Un deployment READY con solo el alias técnico `central-7ykr-git-main-*` no demuestra que el dominio principal se haya actualizado.
 
-- `product-analyzer/app/marketplace_ingestion.py` ejecuta búsquedas de candidatos mediante `amazon_creators.search_products` y `promotion_bots._search_bucket`.
-- `product-analyzer/app/product_sources.py` contiene lógica de enriquecimiento que reconoce fuentes de metadatos de APIs de marketplace además de páginas públicas.
-- `product-analyzer/app/url_import.py` ya permite recibir URLs, resolver enlaces y crear registros de producto; debe ser el punto de entrada principal, no un flujo secundario.
-- Deben retirarse del ciclo de catálogo las búsquedas y dependencias de credenciales de APIs de proveedores, sustituyéndolas por procesamiento de URLs mediante los ayudantes.
-- Deben existir pruebas para URL válida, redirecciones, dominio no permitido, página sin metadatos, página con bloqueo y producto con datos parciales.
+### Backend: Railway
 
-No se debe declarar completada la migración ni activar un despliegue hasta que el código, las pruebas y los procesos de producción reflejen esta arquitectura.
+Los servicios de API, worker y Telegram apuntan al mismo repositorio y rama `main`. La API se construye desde `product-analyzer/app/Dockerfile`, arranca Uvicorn en el puerto indicado por `PORT` y expone el health check `/api/v1/health`. El worker arranca `main.py`; Telegram arranca `run_bot()`.
 
-## Telegram
+Los servicios deben permanecer en el proyecto `happy-recreation`, entorno `production`. La API debe usar el dominio `gracious-renewal-production-76df.up.railway.app`, que es el destino del proxy de Vercel. El worker procesa tareas y el bot es un proceso independiente. PostgreSQL es la fuente de persistencia del catálogo.
 
-Telegram es una interfaz de entrada, consulta y notificación. No debe ser el único proceso que mantiene el análisis ni la publicación. La importación por URL debe poder ejecutarse desde las interfaces autorizadas y continuar en el worker aunque Telegram no esté disponible.
+Variables críticas por servicio:
+
+- API: `DATABASE_URL`, `CENTRAL_AUTH_SECRET`, credenciales del administrador, `CENTRAL_INGEST_API_KEY`, `PUBLIC_STORE_URL` y variables de integraciones que estén habilitadas.
+- Worker: `DATABASE_URL` y las variables de tareas/integraciones realmente activas.
+- Telegram: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `CENTRAL_API_URL` y `CENTRAL_INGEST_API_KEY`.
+- Vercel: al ser estático y usar rewrite al backend, no necesita copiar secretos de PostgreSQL ni claves privadas del backend.
+
+Los valores secretos permanecen en las variables de entorno de Railway/Vercel. Nunca se suben al repositorio ni se imprimen en logs.
+
+## Flujo de despliegue por push
+
+1. Hacer cambios en el repositorio y ejecutar las pruebas aplicables.
+2. Confirmar que el commit llega a `main` y guardar su SHA.
+3. GitHub Actions ejecuta `Central CI` y `CodeQL Advanced` para ese SHA.
+4. Vercel construye el frontend desde `product-analyzer/frontend` y crea un deployment de producción.
+5. Railway actualiza API, worker y Telegram desde `main`, cada uno con su raíz y comando correspondientes.
+6. Verificar que Vercel y los tres servicios de Railway declaren exactamente el SHA del commit de `main`.
+7. Verificar HTTP 200 en `/tienda`, `/headphones/` y `/api/v1/health`; el health debe responder `status: ok` y `database: ok`.
+8. Consultar `/api/v1/products`, `/api/v1/publications` y `/api/v1/storefront/sections`. Una página 200 no equivale a un catálogo publicado: las tarjetas requieren publicaciones con datos e imágenes reales.
+9. Verificar que el alias `central-7ykr.vercel.app` apunte al nuevo deployment. Si el deployment quedó solo con alias de rama, asignar el dominio principal al deployment correcto desde Vercel.
+
+## GitHub Actions y validación
+
+El workflow `Central CI` valida sintaxis JavaScript del panel y la tienda, compila el showcase Headphones, comprueba sus archivos estáticos, valida las rutas de Vercel, compila Python, ejecuta las pruebas y construye la imagen Docker del backend. `CodeQL Advanced` realiza el análisis de seguridad.
+
+No se debe considerar terminado un cambio cuando una etapa falla o queda omitida. El estado de Railway `SUCCESS` y de Vercel `READY` se revisa por separado; también se compara el SHA desplegado. La rama `main` debe protegerse en GitHub para exigir los checks aprobados antes de aceptar cambios.
+
+## Importación de un producto con datos reales
+
+Desde el panel o un CLI autorizado se pueden aportar título, categoría, precio, moneda, imagen principal, galería, descripción y métricas solo cuando la fuente las confirma. Para importación CLI se usan `scripts/importar-url-central.py` y `scripts/importar-lote-central.py`; primero validar lotes con `--dry-run`. El endpoint autenticado es `/api/v1/products/import-cli` y su variante batch.
+
+Si solo se entrega una URL, Central guarda el registro como incompleto y lo deja fuera de las publicaciones. El sistema no debe rellenarlo con una imagen por defecto, precio estimado, calificación ficticia ni un título promocional genérico.
 
 ## Desarrollo local
 
-Desde `product-analyzer`:
+Desde la carpeta `product-analyzer`, copiar `.env.example` a `.env` y ejecutar `docker compose up -d --build`. Las direcciones locales y servicios definidos por Compose se documentan en `product-analyzer/README.md`. No guardar `.env` en Git.
 
-```powershell
-Copy-Item .env.example .env
-docker compose up -d --build
-```
+## Documentos técnicos
 
-Frontend: http://localhost:3000 · API interna: http://localhost:8000 · Adminer: http://localhost:8080 · PostgreSQL: localhost:5435.
-
-Las credenciales deben configurarse como variables de entorno y no guardarse en Git.
+- `docs/ARQUITECTURA-URL-FIRST.md`: principios y flujo de importación.
+- `product-analyzer/README.md`: funcionamiento de API, worker, tienda, Telegram, base de datos y despliegue.

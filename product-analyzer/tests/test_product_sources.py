@@ -2,9 +2,46 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import product_sources
+from url_import import import_url
 
 
 class ProductSourcesTests(unittest.TestCase):
+    def test_url_only_import_keeps_unknown_product_data_empty(self):
+        url = "https://www.amazon.com/dp/B012345678"
+        with patch.object(product_sources, "_resolve_product_url", return_value=url) as resolve:
+            product = import_url(url)
+        resolve.assert_called_once_with(url, "amazon")
+        self.assertEqual(product["title"], "Producto Amazon B012345678")
+        self.assertIsNone(product["category"])
+        self.assertIsNone(product["price"])
+        self.assertIsNone(product["image_url"])
+        self.assertEqual(product["gallery_urls"], [])
+        self.assertIsNone(product["rating"])
+        self.assertEqual(product["reviews_count"], 0)
+        self.assertIsNone(product["sales_estimate"])
+        self.assertEqual(product["source_metadata"]["missing_fields"], ["title", "price", "category", "image_url"])
+
+    def test_url_import_preserves_only_cli_metadata_that_was_supplied(self):
+        url = "https://www.amazon.com/dp/B012345678"
+        with patch.object(product_sources, "_resolve_product_url", return_value=url):
+            product = import_url(
+                url,
+                category="calzado",
+                title="Zapatillas de prueba",
+                price=49.90,
+                image_url="https://images.example/zapatillas.jpg",
+            )
+        self.assertEqual(product["title"], "Zapatillas de prueba")
+        self.assertEqual(product["category"], "calzado")
+        self.assertEqual(product["price"], 49.90)
+        self.assertEqual(product["image_url"], "https://images.example/zapatillas.jpg")
+        self.assertEqual(product["gallery_urls"], ["https://images.example/zapatillas.jpg"])
+        self.assertIsNone(product["rating"])
+        self.assertEqual(product["reviews_count"], 0)
+        self.assertIsNone(product["sales_estimate"])
+        self.assertEqual(product["source_metadata"]["missing_fields"], [])
+
+
     def test_amazon_public_jsonld_extracts_product_metadata_without_api(self):
         response = MagicMock()
         response.status_code = 200
