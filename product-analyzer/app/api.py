@@ -673,9 +673,7 @@ def import_product_from_url(payload: ProductImport):
                 (product_id,),
             )
             saved = cur.fetchone()
-        customer_offer = publish_discounted_offer(conn, product_id, dict(saved), score)
-        if not customer_offer and product.get("platform") in {"amazon", "aliexpress"}:
-            customer_offer = publish_catalog_product(conn, product_id, dict(saved), score)
+        customer_offer = publish_catalog_product(conn, product_id, dict(saved), score)
         return {"product": saved, "opportunity_score": score, "customer_offer": customer_offer}
     finally:
         conn.close()
