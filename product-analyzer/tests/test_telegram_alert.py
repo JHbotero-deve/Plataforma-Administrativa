@@ -125,7 +125,7 @@ class TelegramCommandTests(unittest.TestCase):
         conn = MagicMock()
 
         with (
-            patch.object(telegram_alert, "import_url", return_value=product),
+            patch.object(telegram_alert, "import_url", return_value=product) as import_mock,
             patch.object(telegram_alert, "enrich_product", return_value=product),
             patch.object(telegram_alert, "get_connection", return_value=conn),
             patch.object(telegram_alert, "upsert_product", return_value=7) as upsert,
@@ -138,7 +138,7 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertIs(saved_product, product)
         self.assertIsNone(score)
         self.assertEqual(upsert.call_args.args[1:3], ("amazon", None))
-        self.assertIsNone(telegram_alert.import_url.call_args.kwargs["currency"])
+        self.assertIsNone(import_mock.call_args.kwargs["currency"])
         conn.close.assert_called_once()
 
     def test_send_error_does_not_log_the_bot_token(self):
