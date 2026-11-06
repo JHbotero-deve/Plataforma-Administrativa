@@ -225,6 +225,7 @@ def _top_products(limit=25):
                   AND LOWER(p.title) NOT LIKE 'producto amazon %%'
                   AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
                   AND LOWER(p.title) NOT LIKE 'producto url-%%'
+                  AND LOWER(p.title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
                   AND LOWER(p.title) <> 'producto'
                   AND LOWER(p.title) NOT LIKE '%oferta destacada global%'
                   AND LOWER(p.title) NOT LIKE '%producto verificado con%'
@@ -500,6 +501,7 @@ def _model_active_products():
                           AND LOWER(title) NOT LIKE 'producto amazon %%'
                           AND LOWER(title) NOT LIKE 'producto aliexpress %%'
                           AND LOWER(title) NOT LIKE 'producto url-%%'
+                          AND LOWER(title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
                           AND LOWER(title) <> 'producto'
                           AND LOWER(title) NOT LIKE '%oferta destacada global%'
                           AND LOWER(title) NOT LIKE '%producto verificado con%'
