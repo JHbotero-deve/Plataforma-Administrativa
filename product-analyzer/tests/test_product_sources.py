@@ -111,6 +111,8 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(result["source_metadata"]["enrichment_status"], "partial")
         self.assertIn("login required", result["source_metadata"]["enrichment_error"])
         self.assertIn("title", result["source_metadata"]["missing_fields"])
+        self.assertFalse(product_sources._retry_due(result["source_metadata"]))
+        result["source_metadata"]["enrichment_retry_after"] = "2000-01-01T00:00:00+00:00"
         self.assertTrue(product_sources._retry_due(result["source_metadata"]))
 
     def test_login_page_is_not_treated_as_product_metadata(self):
