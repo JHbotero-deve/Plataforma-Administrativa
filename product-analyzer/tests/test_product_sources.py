@@ -286,6 +286,7 @@ class ProductSourcesTests(unittest.TestCase):
     def test_rejects_generic_global_offer_as_a_real_product_title(self):
         self.assertTrue(product_sources._is_placeholder_title("Oferta Destacada Global · Producto Verificado con Envío Rápido"))
         self.assertTrue(product_sources._is_placeholder_title("Producto Amazon B000000001"))
+        self.assertTrue(product_sources._is_placeholder_title("Producto Amazon"))
         self.assertTrue(product_sources._is_placeholder_title("Título real del producto"))
         self.assertFalse(product_sources._is_placeholder_title("Producto manual"))
         self.assertFalse(product_sources._is_placeholder_title("Auriculares inalámbricos Bluetooth"))
@@ -317,6 +318,13 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(result["title"], "Auriculares inalámbricos")
         self.assertEqual(result["image_url"], "https://images.example/headphones.jpg")
         self.assertTrue(result["source_metadata"]["catalog_refresh_verified"])
+
+
+    def test_complete_old_enrichment_version_is_queued_for_revalidation(self):
+        self.assertTrue(product_sources._retry_due({
+            "enrichment_status": "complete",
+            "enrichment_version": product_sources.ENRICHMENT_VERSION - 1,
+        }))
 
 
 if __name__ == "__main__":
