@@ -353,5 +353,18 @@ class SupportedMarketplaceTests(unittest.TestCase):
             url_import.detect_platform("https://www.mercadolibre.com.co/item")
 
 
+
+    def test_producto_command_is_alias_for_agregar(self):
+        imported = (73, {"title": "Auriculares"}, 68.5)
+        with (
+            patch.object(telegram_alert, "_add_url", return_value=imported) as add_url,
+            patch.object(telegram_alert, "_send_imported", return_value=True) as send_imported,
+        ):
+            self.assertTrue(telegram_alert._handle(
+                "token", "chat", "/producto https://www.amazon.com/dp/B000000073"
+            ))
+        add_url.assert_called_once_with("https://www.amazon.com/dp/B000000073")
+        self.assertEqual(send_imported.call_args.args[-1], "<b>Producto agregado</b>")
+
 if __name__ == "__main__":
     unittest.main()
