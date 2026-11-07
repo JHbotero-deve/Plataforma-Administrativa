@@ -1,3 +1,4 @@
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -81,6 +82,25 @@ class ApiCatalogQualityTests(unittest.TestCase):
         connection.close.assert_called_once()
 
 
+
+    def test_telegram_polling_is_opt_in_for_the_api_service(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(api._telegram_polling_enabled())
+        with patch.dict(os.environ, {"ENABLE_TELEGRAM_BOT": "true"}, clear=True):
+            self.assertTrue(api._telegram_polling_enabled())
+
+    def test_pipeline_metrics_does_not_report_a_synthetic_successful_run(self):
+        connection, cursor = self._connection()
+        rows = [{"platform": "amazon", "product_count": 2, "with_url": 4, "stale": 1, "last_update": None}]
+        cursor.fetchall.return_value = rows
+        with patch.object(api, "get_connection", return_value=connection):
+            result = api.pipeline_metrics()
+        self.assertIsNone(result["latest"])
+        self.assertEqual(result["platforms"], rows)
+        query = cursor.execute.call_args.args[0]
+        self.assertIn("AS with_url", query)
+        self.assertIn("AS stale", query)
+        connection.close.assert_called_once()
 
 if __name__ == "__main__":
     unittest.main()
