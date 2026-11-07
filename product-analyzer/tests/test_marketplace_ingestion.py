@@ -52,7 +52,7 @@ class MarketplaceIngestionTests(unittest.TestCase):
         with (
             patch.object(marketplace_ingestion, "_search_candidates", side_effect=[[self.candidate], []]),
             patch.object(marketplace_ingestion, "enrich_product", return_value=partial),
-            patch.object(marketplace_ingestion, "_persist_verified") as persist,
+            patch.object(marketplace_ingestion, "_persist_verified", return_value=None) as persist,
         ):
             result = marketplace_ingestion.search_and_import("auriculares", limit=2)
         self.assertEqual(len(result["products"]), 1)
