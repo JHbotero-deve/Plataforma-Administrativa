@@ -6,6 +6,7 @@ import schedule
 from analysis import score_product
 from db import get_connection
 from init_db import init_database
+from marketplace_ingestion import run_marketplace_ingestion
 from notifications import send_telegram_alert
 from pricing import publish_catalog_product
 from product_sources import enrich_pending_products
@@ -185,6 +186,21 @@ def run_pipeline():
     print("== Ciclo completo ==")
 
 
+def _run_marketplace_discovery_safely():
+    try:
+        limit = int(os.getenv("MARKETPLACE_DISCOVERY_LIMIT", "8"))
+        results = run_marketplace_ingestion(target_per_platform=limit)
+        for platform, result in results.items():
+            print(
+                f"[marketplace-discovery] {platform}: recibidos={result['received']} "
+                f"verificados={result['verified_and_saved']} "
+                f"pendientes={result['pending_public_verification']} "
+                f"estado={result['status']}"
+            )
+    except Exception as exc:
+        print(f"[marketplace-discovery] ciclo omitido sin bloquear URLs: {type(exc).__name__}: {str(exc)[:180]}")
+
+
 def _run_pipeline_safely():
     try:
         run_pipeline()
@@ -209,7 +225,9 @@ def run_worker():
         )
     except Exception as exc:
         print(f"[worker] no se pudo precargar el catálogo; continúa el procesamiento: {type(exc).__name__}")
+    _run_marketplace_discovery_safely()
     _run_pipeline_safely()
+    schedule.every(2).hours.do(_run_marketplace_discovery_safely)
     schedule.every(15).minutes.do(_run_pipeline_safely)
     while True:
         schedule.run_pending()
