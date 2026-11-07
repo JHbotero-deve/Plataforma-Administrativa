@@ -30,6 +30,7 @@ class TelegramPollingLockTests(unittest.TestCase):
             patch("builtins.print") as output,
         ):
             self.assertIsNone(telegram_alert._acquire_polling_lock())
+        self.assertEqual(connection.cursor.call_count, 2)
         self.assertIn("pg_stat_activity", cursor.execute.call_args_list[1].args[0])
         messages = " ".join(str(call.args[0]) for call in output.call_args_list)
         self.assertIn("pid=4321", messages)

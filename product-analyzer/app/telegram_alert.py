@@ -788,16 +788,17 @@ def _acquire_polling_lock():
             cur.execute("SELECT pg_try_advisory_lock(%s) AS locked", (834271,))
             locked = bool(cur.fetchone()["locked"])
         if not locked:
-            cur.execute("""
-                SELECT a.pid, COALESCE(a.application_name, '') AS application_name,
-                       COALESCE(a.state, '') AS state, a.backend_start
-                FROM pg_locks l
-                JOIN pg_stat_activity a ON a.pid = l.pid
-                WHERE l.locktype = 'advisory' AND l.granted
-                  AND l.classid = 0 AND l.objid = 834271 AND l.objsubid = 1
-                LIMIT 3
-            """)
-            owners = cur.fetchall()
+            with conn.cursor() as diagnostic_cursor:
+                diagnostic_cursor.execute("""
+                    SELECT a.pid, COALESCE(a.application_name, '') AS application_name,
+                           COALESCE(a.state, '') AS state, a.backend_start
+                    FROM pg_locks l
+                    JOIN pg_stat_activity a ON a.pid = l.pid
+                    WHERE l.locktype = 'advisory' AND l.granted
+                      AND l.classid = 0 AND l.objid = 834271 AND l.objsubid = 1
+                    LIMIT 3
+                """)
+                owners = diagnostic_cursor.fetchall()
             if owners:
                 details = "; ".join(
                     f"pid={row['pid']} app={row['application_name']} "
