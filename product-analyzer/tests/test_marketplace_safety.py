@@ -80,6 +80,32 @@ class MarketplaceSafetyTests(unittest.TestCase):
                 with self.assertRaises(MarketplaceAccessBlocked):
                     requests.Session().send(request)
 
+    def test_allows_official_redirect_hops_only_with_same_marketplace_referer(self):
+        cases = (
+            ("https://www.amazon.com/gp/slredirect/picassoRedirect.html", "https://link.amazon/B000000001"),
+            ("https://www.aliexpress.com/redirect/123", "https://a.aliexpress.com/_m0K2w0r"),
+            ("https://login.aliexpress.com/sync", "https://www.aliexpress.com/redirect/123"),
+        )
+        for url, referer in cases:
+            with self.subTest(url=url):
+                session = requests.Session()
+                session.mount("https://", StaticAdapter())
+                request = requests.Request("GET", url, headers={"Referer": referer}).prepare()
+                self.assertEqual(session.send(request, timeout=1).status_code, 200)
+
+    def test_blocks_redirect_hops_without_same_marketplace_referer(self):
+        cases = (
+            ("https://www.aliexpress.com/redirect/123", None),
+            ("https://www.aliexpress.com/redirect/123", "https://www.amazon.com/dp/B000000001"),
+            ("https://api-sg.aliexpress.com/sync", "https://www.aliexpress.com/item/123.html"),
+        )
+        for url, referer in cases:
+            with self.subTest(url=url, referer=referer):
+                headers = {"Referer": referer} if referer else {}
+                request = requests.Request("GET", url, headers=headers).prepare()
+                with self.assertRaises(MarketplaceAccessBlocked):
+                    requests.Session().send(request)
+
     def test_allows_only_official_marketplace_api_post_endpoints(self):
         cases = (
             "https://creatorsapi.amazon/catalog/v1/searchItems",
