@@ -201,8 +201,8 @@ def _run_marketplace_discovery_safely():
             )
             for error in result.get("errors", [])[:3]:
                 safe_error = re.sub(
-                    r"(?i)(app[_-]?key|app[_-]?secret|client[_-]?id|client[_-]?secret|access[_-]?token|authorization)(\\s*[:=]\\s*)[^&\\s,]+",
-                    r"\\1\\2[redacted]",
+                    r"(?i)(app[_-]?key|app[_-]?secret|client[_-]?id|client[_-]?secret|access[_-]?token|authorization)(\s*[:=]\s*)[^&\s,]+",
+                    r"\1\2[redacted]",
                     str(error),
                 )
                 print(f"[marketplace-discovery] {platform} error={safe_error[:180]}")
