@@ -639,7 +639,8 @@ def _handle(token, chat_id, text):
             if external["errors"]:
                 message += "\nBúsqueda oficial no disponible: " + html.escape("; ".join(external["errors"][:2]))
             else:
-                message += "\nEnvía la URL del producto o usa /buscar auriculares para consultar marketplaces."
+                message += "\nNo hubo resultados en las fuentes oficiales."
+            message += "\nImporta directamente con /agregar <URL> o /producto <URL>."
             return _send(token, chat_id, message)
         if local_products:
             heading = f"<b>Resultados del catálogo ({len(local_products)})</b>"
