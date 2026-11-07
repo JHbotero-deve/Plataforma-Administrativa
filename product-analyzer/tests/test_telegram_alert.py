@@ -67,6 +67,7 @@ class TelegramCommandTests(unittest.TestCase):
 
         with (
             patch.object(telegram_alert, "_search_products", return_value=products) as search,
+            patch("marketplace_ingestion.search_and_import", return_value={"products": [], "errors": []}),
             patch.object(telegram_alert, "_send", send),
             patch.object(telegram_alert, "_send_product", return_value=True) as send_product,
         ):
@@ -82,6 +83,7 @@ class TelegramCommandTests(unittest.TestCase):
 
         with (
             patch.object(telegram_alert, "_search_products", return_value=[]),
+            patch("marketplace_ingestion.search_and_import", return_value={"products": [], "errors": ["API sin credenciales"]}),
             patch.object(telegram_alert, "_send", send),
         ):
             result = telegram_alert._handle("token", "chat", "/buscar teclado")
@@ -172,7 +174,7 @@ class TelegramCommandTests(unittest.TestCase):
         ):
             self.assertTrue(telegram_alert._handle("token", "chat", "/buscar"))
         search.assert_called_once_with("", limit=8)
-        self.assertIn("Catálogo importado", send.call_args.args[2])
+        self.assertIn("Resultados del catálogo", send.call_args_list[0].args[2])
         self.assertEqual(send_product.call_count, 1)
 
     def test_modeling_sends_progress_before_batch_result(self):
