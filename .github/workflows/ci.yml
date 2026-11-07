@@ -174,6 +174,8 @@ jobs:
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_api_catalog_quality.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_marketplace_search.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_marketplace_ingestion.py'
+          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_amazon_creators.py'
+          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_promotion_bots.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_main.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_main_url_only.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_marketplace_safety.py'
