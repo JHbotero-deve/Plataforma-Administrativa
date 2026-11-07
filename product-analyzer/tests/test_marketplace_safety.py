@@ -47,6 +47,7 @@ class MarketplaceSafetyTests(unittest.TestCase):
             "https://www.aliexpress.us/item/123456789.html",
             "https://amzn.to/example",
             "https://s.click.aliexpress.com/e/example",
+            "https://a.aliexpress.com/_m0K2w0r",
         )
         for url in cases:
             with self.subTest(url=url):
