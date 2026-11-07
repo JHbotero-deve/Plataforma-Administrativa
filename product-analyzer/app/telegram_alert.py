@@ -647,7 +647,7 @@ def _handle(token, chat_id, text):
                 return False
         return True
 
-    if command == "/agregar":
+    if command in ("/agregar", "/producto"):
         if not argument.strip():
             return _send(
                 token,
