@@ -36,6 +36,26 @@ class URLFirstWorkerTests(unittest.TestCase):
             thread.assert_called_once()
             thread.call_args.kwargs["target"]()
         discovery.assert_called_once()
+    def test_discovery_logs_provider_errors_without_secrets(self):
+        result = {
+            "amazon": {
+                "received": 0,
+                "verified_and_saved": 0,
+                "pending_public_verification": 0,
+                "status": "error",
+                "errors": ["RuntimeError: invalid_scope app_secret=TOPSECRET"],
+            }
+        }
+        with (
+            patch.object(main, "run_marketplace_ingestion", return_value=result),
+            patch("builtins.print") as output,
+        ):
+            main._run_marketplace_discovery_safely()
+        messages = " ".join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn("invalid_scope", messages)
+        self.assertIn("[redacted]", messages)
+        self.assertNotIn("TOPSECRET", messages)
+
     def test_discovery_failure_does_not_stop_worker(self):
         with patch.object(main, "run_marketplace_ingestion", side_effect=RuntimeError("API unavailable")):
             main._run_marketplace_discovery_safely()
