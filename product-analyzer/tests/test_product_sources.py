@@ -381,7 +381,7 @@ class ProductSourcesTests(unittest.TestCase):
         cursor.fetchall.return_value = [row]
         with patch.object(product_sources, "_enrich_pending_row", return_value=enriched) as enrich:
             recovered = product_sources.enrich_pending_products(connection, limit=1)
-        query = cursor.execute.call_args.args[0]
+        query = cursor.execute.call_args_list[0].args[0]
         self.assertIn("COALESCE(p.source_metadata->>'enrichment_version', '') <> %s", query)
         self.assertNotIn("p.is_active=TRUE AND COALESCE(p.source_metadata->>'enrichment_version'", query)
         self.assertNotIn("p.is_active=TRUE AND (p.current_price IS NULL", query)
