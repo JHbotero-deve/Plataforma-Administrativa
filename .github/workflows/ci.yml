@@ -156,6 +156,24 @@ jobs:
               subprocess.run(["node", "--check", "/tmp/central-login.js"], check=True)
           PY
 
+      - name: Validate admin control-center routes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          html = Path("product-analyzer/frontend/index.html").read_text(encoding="utf-8")
+          required = ("#inteligencia", "#oportunidades", "#importar", "#publicaciones", "#salesAdmin", "#telegram", "#estado")
+          if any(f'href="{route}"' not in html for route in required):
+              raise SystemExit("Admin sidebar is missing a required section route.")
+          if 'href="/visual-refresh.css?v=20261107-admin2"' not in html:
+              raise SystemExit("Admin visual refresh cache version is missing.")
+          if "/admin/inject" in html or "btnAdminInject" in html:
+              raise SystemExit("Deprecated marketplace injection action remains in the admin UI.")
+          css = Path("product-analyzer/frontend/visual-refresh.css").read_text(encoding="utf-8")
+          if "body.admin-mode .nav{" not in css or "body.admin-mode main{" not in css or "margin-left:252px" not in css:
+              raise SystemExit("Responsive admin sidebar styles are missing.")
+          PY
+
       - name: Validate backend Python
         shell: bash
         run: |
@@ -173,6 +191,9 @@ jobs:
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_telegram_alert.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_api_catalog_quality.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_marketplace_search.py'
+          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_marketplace_ingestion.py'
+          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_amazon_creators.py'
+          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_promotion_bots.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_main.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_main_url_only.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_marketplace_safety.py'

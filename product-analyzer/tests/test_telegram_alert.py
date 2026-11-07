@@ -67,6 +67,7 @@ class TelegramCommandTests(unittest.TestCase):
 
         with (
             patch.object(telegram_alert, "_search_products", return_value=products) as search,
+            patch("marketplace_ingestion.search_and_import", return_value={"products": [], "errors": []}),
             patch.object(telegram_alert, "_send", send),
             patch.object(telegram_alert, "_send_product", return_value=True) as send_product,
         ):
@@ -82,13 +83,14 @@ class TelegramCommandTests(unittest.TestCase):
 
         with (
             patch.object(telegram_alert, "_search_products", return_value=[]),
+            patch("marketplace_ingestion.search_and_import", return_value={"products": [], "errors": ["API sin credenciales"]}),
             patch.object(telegram_alert, "_send", send),
         ):
             result = telegram_alert._handle("token", "chat", "/buscar teclado")
 
         self.assertTrue(result)
         self.assertIn("No hay coincidencias", send.call_args.args[2])
-        self.assertIn("/agregar URL", send.call_args.args[2])
+        self.assertIn("/agregar <URL>", send.call_args.args[2])
 
     def test_search_matches_category_as_well_as_title(self):
         connection = MagicMock()
@@ -172,7 +174,7 @@ class TelegramCommandTests(unittest.TestCase):
         ):
             self.assertTrue(telegram_alert._handle("token", "chat", "/buscar"))
         search.assert_called_once_with("", limit=8)
-        self.assertIn("Catálogo importado", send.call_args.args[2])
+        self.assertIn("Resultados del catálogo", send.call_args_list[0].args[2])
         self.assertEqual(send_product.call_count, 1)
 
     def test_modeling_sends_progress_before_batch_result(self):
@@ -353,6 +355,23 @@ class SupportedMarketplaceTests(unittest.TestCase):
             url_import.detect_platform("https://www.mercadolibre.com.co/item")
 
 
+
+    def test_buscar_uses_official_marketplaces_when_local_catalog_has_no_match(self):
+        candidate = {
+            "id": None,
+            "title": "Auriculares encontrados",
+            "platform": "amazon",
+            "product_url": "https://www.amazon.com/dp/B000000001",
+            "verified": False,
+        }
+        with (
+            patch.object(telegram_alert, "_search_products", return_value=[]),
+            patch("marketplace_ingestion.search_and_import", return_value={"products": [candidate], "errors": []}),
+            patch.object(telegram_alert, "_send", return_value=True) as send,
+        ):
+            self.assertTrue(telegram_alert._handle("token", "chat", "/buscar auriculares"))
+        self.assertIn("Candidato encontrado", send.call_args.args[2])
+        self.assertIn("pendiente", send.call_args.args[2])
 
     def test_producto_command_is_alias_for_agregar(self):
         imported = (73, {"title": "Auriculares"}, 68.5)

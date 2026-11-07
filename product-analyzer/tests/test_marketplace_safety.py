@@ -70,12 +70,32 @@ class MarketplaceSafetyTests(unittest.TestCase):
             ("GET", "https://www.amazon.com/s?k=headphones"),
             ("POST", "https://www.amazon.com/dp/B000000001"),
             ("POST", "https://www.aliexpress.com/item/123456789.html"),
+            ("POST", "https://creatorsapi.amazon/catalog/v1/unknown"),
+            ("POST", "https://api-sg.aliexpress.com/unknown"),
+            ("GET", "https://api-sg.aliexpress.com/sync"),
         )
         for method, url in cases:
             with self.subTest(method=method, url=url):
                 request = requests.Request(method, url).prepare()
                 with self.assertRaises(MarketplaceAccessBlocked):
                     requests.Session().send(request)
+
+    def test_allows_only_official_marketplace_api_post_endpoints(self):
+        cases = (
+            "https://creatorsapi.amazon/catalog/v1/searchItems",
+            "https://creatorsapi.amazon/catalog/v1/getItems",
+            "https://api.amazon.com/auth/o2/token",
+            "https://api.amazon.co.uk/auth/o2/token",
+            "https://api.amazon.co.jp/auth/o2/token",
+            "https://api-sg.aliexpress.com/sync",
+            "https://eco.taobao.com/router/rest",
+        )
+        for url in cases:
+            with self.subTest(url=url):
+                session = requests.Session()
+                session.mount("https://", StaticAdapter())
+                response = session.post(url, data={"signed": "request"}, timeout=1)
+                self.assertEqual(response.status_code, 200)
 
     def test_allows_only_get_requests_for_marketplace_image_cdn_paths(self):
         cases = (

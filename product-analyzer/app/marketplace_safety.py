@@ -38,6 +38,14 @@ IMAGE_PATH_RE = re.compile(r"\.(?:avif|gif|jpe?g|png|webp)(?:$|/)", re.I)
 PRODUCT_PATHS = (
     "/dp/", "/gp/product/", "/gp/aw/d/",
 )
+OFFICIAL_API_PATHS = {
+    "creatorsapi.amazon": {"/catalog/v1/searchItems", "/catalog/v1/getItems"},
+    "api.amazon.com": {"/auth/o2/token"},
+    "api.amazon.co.uk": {"/auth/o2/token"},
+    "api.amazon.co.jp": {"/auth/o2/token"},
+    "api-sg.aliexpress.com": {"/sync"},
+    "eco.taobao.com": {"/router/rest"},
+}
 
 
 class MarketplaceAccessBlocked(requests.RequestException):
@@ -84,6 +92,19 @@ def _is_public_product_page(request):
         return bool(re.match(r"^/item/\d+(?:\.html)?(?:/|$)", parsed.path, re.I))
     return False
 
+def _is_official_api_request(request):
+    if str(getattr(request, "method", "")).upper() != "POST":
+        return False
+    try:
+        parsed = urlsplit(str(getattr(request, "url", "") or ""))
+        host = (parsed.hostname or "").lower().rstrip(".")
+        if parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None, 443):
+            return False
+    except ValueError:
+        return False
+    return parsed.path in OFFICIAL_API_PATHS.get(host, set())
+
+
 def install_marketplace_request_guard():
     original_send = requests.sessions.Session.send
     if getattr(original_send, "_marketplace_request_guard", False):
@@ -92,9 +113,9 @@ def install_marketplace_request_guard():
     @wraps(original_send)
     def guarded_send(session, request, **kwargs):
         marketplace = marketplace_for_url(getattr(request, "url", None))
-        if marketplace and not _is_public_product_page(request):
+        if marketplace and not (_is_public_product_page(request) or _is_official_api_request(request)):
             raise MarketplaceAccessBlocked(
-                f"Solicitud no permitida a {marketplace}; solo se admiten GET de páginas públicas de producto y enlaces cortos oficiales."
+                f"Solicitud no permitida a {marketplace}; solo se admiten páginas públicas, enlaces cortos oficiales y endpoints API oficiales allowlisted."
             )
         return original_send(session, request, **kwargs)
 
