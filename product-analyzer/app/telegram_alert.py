@@ -621,31 +621,55 @@ def _handle(token, chat_id, text):
 
     if command == "/buscar":
         term = argument.strip()
-        if not term:
-            products = _search_products("", limit=8)
-            if not products:
-                return _send(token, chat_id, "No hay productos con título comercial en el catálogo activo. Envía una URL de Amazon/AliExpress para agregar uno.")
-            if not _send(token, chat_id, f"<b>Catálogo importado ({len(products)} productos)</b>"):
+        if term and _is_http_url(term):
+            result, payload, score = _add_url(term)
+            if result is None:
+                return _send(token, chat_id, "<b>No pude importar el enlace</b>\\n" + html.escape(str(payload)))
+            return _send_imported(token, chat_id, result, payload, score, "<b>Producto importado desde URL</b>")
+        local_products = _search_products(term[:100] if term else "", limit=8)
+        external = {"products": [], "errors": []}
+        if term and len(local_products) < 8:
+            try:
+                from marketplace_ingestion import search_and_import
+                external = search_and_import(term, limit=8 - len(local_products))
+            except Exception as exc:
+                external["errors"].append(f"{type(exc).__name__}: {str(exc)[:160]}")
+        if not local_products and not external["products"]:
+            message = "No hay coincidencias en el catálogo."
+            if external["errors"]:
+                message += "\\nBúsqueda oficial no disponible: " + html.escape("; ".join(external["errors"][:2]))
+            else:
+                message += "\\nEnvía la URL del producto o usa /buscar auriculares para consultar marketplaces."
+            return _send(token, chat_id, message)
+        if local_products:
+            heading = f"<b>Resultados del catálogo ({len(local_products)})</b>"
+            if not _send(token, chat_id, heading):
                 return False
-            for index, product in enumerate(products, 1):
+            for index, product in enumerate(local_products, 1):
                 product["title"] = f"{index}. {product['title']}"
                 if not _send_product(token, chat_id, product):
                     return False
-            return True
-        if _is_http_url(term):
-            result, payload, score = _add_url(term)
-            if result is None:
-                return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
-            return _send_imported(token, chat_id, result, payload, score, "<b>Producto importado desde URL</b>")
-        products = _search_products(term[:100], limit=8)
-        if not products:
-            return _send(token, chat_id, "No hay coincidencias en el catálogo importado. Envía la URL del producto o usa /agregar URL para incorporarlo.")
-        if not _send(token, chat_id, f"<b>Resultados del catálogo ({len(products)})</b>"):
-            return False
-        for index, product in enumerate(products, 1):
-            product["title"] = f"{index}. {product['title']}"
-            if not _send_product(token, chat_id, product):
+        for candidate in external["products"]:
+            if candidate.get("verified") and candidate.get("id"):
+                rows = _products_by_ids([candidate["id"]], limit=1)
+                if rows:
+                    if not _send_product(token, chat_id, rows[0]):
+                        return False
+                    continue
+            link = _product_link(candidate.get("product_url"))
+            title = html.escape(str(candidate.get("title") or "Candidato sin título")[:180])
+            platform = html.escape(str(candidate.get("platform") or "marketplace").title())
+            message = (
+                "<b>Candidato encontrado; lectura pública pendiente</b>\\n"
+                f"{title}\\nPlataforma: {platform}\\n"
+                "Precio y oportunidad: pendientes de verificación pública."
+            )
+            if link:
+                message += '\\n<a href="' + html.escape(link, quote=True) + '">Abrir producto original</a>'
+            if not _send(token, chat_id, message):
                 return False
+        if external["errors"]:
+            return _send(token, chat_id, "<b>Fuentes con error</b>\\n" + html.escape("; ".join(external["errors"][:2])))
         return True
 
     if command in ("/agregar", "/producto"):
