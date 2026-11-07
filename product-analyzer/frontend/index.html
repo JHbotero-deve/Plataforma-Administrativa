@@ -2253,9 +2253,14 @@
         }
         if (intelResult.status === "fulfilled") renderIntelligence(intelResult.value);
         if (pipelineResult.status === "fulfilled") {
-          const pipeline = pipelineResult.value, run = pipeline.latest;
-          const runStatus = run?.status === "success" ? "OK" : "ATENCIÓN";
-          $("pipelineMeta").textContent = run ? ("Último ciclo: " + runStatus + " · " + date(run.finished_at) + " · Amazon " + Number(run.amazon_products || 0) + " · AliExpress por URL " + Number(run.aliexpress_products || 0) + " · TikTok " + Number(run.tiktok_products || 0) + " · Telegram preparados " + Number(run.telegram_prepared || 0) + (Number(run.error_count || 0) ? " · errores " + Number(run.error_count) : "")) : "Sin ejecuciones registradas";
+          const pipeline = pipelineResult.value;
+          const platforms = Array.isArray(pipeline.platforms) ? pipeline.platforms : [];
+          const amazon = platforms.find(item => item.platform === "amazon") || {};
+          const aliexpress = platforms.find(item => item.platform === "aliexpress") || {};
+          const active = Number(amazon.product_count || 0) + Number(aliexpress.product_count || 0);
+          const urls = Number(amazon.with_url || 0) + Number(aliexpress.with_url || 0);
+          const stale = Number(amazon.stale || 0) + Number(aliexpress.stale || 0);
+          $("pipelineMeta").textContent = "Catálogo observado " + date(pipeline.observed_at) + " · Amazon " + Number(amazon.product_count || 0) + " · AliExpress " + Number(aliexpress.product_count || 0) + " · URLs " + urls + "/" + active + " · por revalidar " + stale;
         }
         status(itemsResult.status === "fulfilled" ? "ok" : "error", itemsResult.status === "fulfilled" ? "Central conectado" : "Productos no disponibles");
       }
