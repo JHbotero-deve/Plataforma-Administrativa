@@ -90,7 +90,8 @@ def search_and_import(query, limit=8):
             try:
                 verified = enrich_product(candidate, force=True)
                 verified_metadata = verified.get("source_metadata") or {}
-                saved = _persist_verified(verified, category)
+                is_verified = bool(verified_metadata.get("catalog_refresh_verified") and verified_metadata.get("enrichment_status") == "complete")
+                saved = _persist_verified(verified, category) if is_verified else None
                 products.append({
                     "id": saved[0] if saved else None,
                     "title": verified.get("title") or candidate.get("title"),
@@ -135,7 +136,9 @@ def run_marketplace_ingestion(target_per_platform=8):
                 candidate["category"] = category
                 try:
                     enriched = enrich_product(candidate, force=True)
-                    saved = _persist_verified(enriched, category)
+                    metadata = enriched.get("source_metadata") or {}
+                    is_verified = bool(metadata.get("catalog_refresh_verified") and metadata.get("enrichment_status") == "complete")
+                    saved = _persist_verified(enriched, category) if is_verified else None
                     if saved:
                         verified += 1
                     else:
