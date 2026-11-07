@@ -14,6 +14,30 @@ import telegram_alert
 import url_import
 
 
+class TelegramPollingLockTests(unittest.TestCase):
+    def test_busy_lock_logs_owner_metadata_without_exposing_queries(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = {"locked": False}
+        cursor.fetchall.return_value = [{
+            "pid": 4321,
+            "application_name": "psycopg2",
+            "state": "idle",
+            "backend_start": "2026-11-07 04:00:00",
+        }]
+        with (
+            patch.object(telegram_alert, "get_connection", return_value=connection),
+            patch("builtins.print") as output,
+        ):
+            self.assertIsNone(telegram_alert._acquire_polling_lock())
+        self.assertIn("pg_stat_activity", cursor.execute.call_args_list[1].args[0])
+        messages = " ".join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn("pid=4321", messages)
+        self.assertIn("app=psycopg2", messages)
+        self.assertNotIn("SELECT", messages)
+        connection.close.assert_called_once()
+
+
 class TelegramCommandTests(unittest.TestCase):
     def test_batch_modeling_reports_missing_data_separately_from_batch_limit(self):
         connection = MagicMock()
