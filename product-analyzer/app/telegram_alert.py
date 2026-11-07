@@ -624,7 +624,7 @@ def _handle(token, chat_id, text):
         if term and _is_http_url(term):
             result, payload, score = _add_url(term)
             if result is None:
-                return _send(token, chat_id, "<b>No pude importar el enlace</b>\\n" + html.escape(str(payload)))
+                return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
             return _send_imported(token, chat_id, result, payload, score, "<b>Producto importado desde URL</b>")
         local_products = _search_products(term[:100] if term else "", limit=8)
         external = {"products": [], "errors": []}
@@ -637,9 +637,9 @@ def _handle(token, chat_id, text):
         if not local_products and not external["products"]:
             message = "No hay coincidencias en el catálogo."
             if external["errors"]:
-                message += "\\nBúsqueda oficial no disponible: " + html.escape("; ".join(external["errors"][:2]))
+                message += "\nBúsqueda oficial no disponible: " + html.escape("; ".join(external["errors"][:2]))
             else:
-                message += "\\nEnvía la URL del producto o usa /buscar auriculares para consultar marketplaces."
+                message += "\nEnvía la URL del producto o usa /buscar auriculares para consultar marketplaces."
             return _send(token, chat_id, message)
         if local_products:
             heading = f"<b>Resultados del catálogo ({len(local_products)})</b>"
@@ -660,16 +660,16 @@ def _handle(token, chat_id, text):
             title = html.escape(str(candidate.get("title") or "Candidato sin título")[:180])
             platform = html.escape(str(candidate.get("platform") or "marketplace").title())
             message = (
-                "<b>Candidato encontrado; lectura pública pendiente</b>\\n"
-                f"{title}\\nPlataforma: {platform}\\n"
+                "<b>Candidato encontrado; lectura pública pendiente</b>\n"
+                f"{title}\nPlataforma: {platform}\n"
                 "Precio y oportunidad: pendientes de verificación pública."
             )
             if link:
-                message += '\\n<a href="' + html.escape(link, quote=True) + '">Abrir producto original</a>'
+                message += '\n<a href="' + html.escape(link, quote=True) + '">Abrir producto original</a>'
             if not _send(token, chat_id, message):
                 return False
         if external["errors"]:
-            return _send(token, chat_id, "<b>Fuentes con error</b>\\n" + html.escape("; ".join(external["errors"][:2])))
+            return _send(token, chat_id, "<b>Fuentes con error</b>\n" + html.escape("; ".join(external["errors"][:2])))
         return True
 
     if command in ("/agregar", "/producto"):
