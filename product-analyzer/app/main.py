@@ -1,4 +1,5 @@
 import os
+import threading
 import time
 
 import schedule
@@ -201,6 +202,26 @@ def _run_marketplace_discovery_safely():
         print(f"[marketplace-discovery] ciclo omitido sin bloquear URLs: {type(exc).__name__}: {str(exc)[:180]}")
 
 
+_MARKETPLACE_DISCOVERY_LOCK = threading.Lock()
+
+
+def _start_marketplace_discovery():
+    if not _MARKETPLACE_DISCOVERY_LOCK.acquire(blocking=False):
+        print("[marketplace-discovery] ciclo anterior sigue en ejecución; se omite este disparo")
+        return
+
+    def run():
+        try:
+            _run_marketplace_discovery_safely()
+        finally:
+            _MARKETPLACE_DISCOVERY_LOCK.release()
+
+    try:
+        threading.Thread(target=run, name="marketplace-discovery", daemon=True).start()
+    except Exception:
+        _MARKETPLACE_DISCOVERY_LOCK.release()
+        raise
+
 def _run_pipeline_safely():
     try:
         run_pipeline()
@@ -225,9 +246,9 @@ def run_worker():
         )
     except Exception as exc:
         print(f"[worker] no se pudo precargar el catálogo; continúa el procesamiento: {type(exc).__name__}")
-    _run_marketplace_discovery_safely()
     _run_pipeline_safely()
-    schedule.every(2).hours.do(_run_marketplace_discovery_safely)
+    _start_marketplace_discovery()
+    schedule.every(2).hours.do(_start_marketplace_discovery)
     schedule.every(15).minutes.do(_run_pipeline_safely)
     while True:
         schedule.run_pending()
