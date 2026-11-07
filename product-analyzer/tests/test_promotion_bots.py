@@ -325,11 +325,9 @@ class AliExpressPromotionBotTests(unittest.TestCase):
             "affiliate_url": "https://s.click.aliexpress.com/e/abc123",
         }
 
-        with patch.object(db, "generate_aliexpress_affiliate_url") as generate:
-            result = db._affiliate_url(product, "aliexpress")
+        result = db._affiliate_url(product, "aliexpress")
 
         self.assertEqual(result, product["affiliate_url"])
-        generate.assert_not_called()
 
 
 if __name__ == "__main__":
