@@ -59,7 +59,7 @@ class TelegramCommandTests(unittest.TestCase):
             result = telegram_alert._handle("token", "chat", "/agregar")
 
         self.assertTrue(result)
-        self.assertIn("/agregar <URL>", send.call_args.args[2])
+        self.assertIn("/agregar URL", send.call_args.args[2])
 
     def test_search_command_uses_only_local_catalog(self):
         send = MagicMock(return_value=True)
