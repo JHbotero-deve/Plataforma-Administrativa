@@ -27,10 +27,9 @@ class URLFirstWorkerTests(unittest.TestCase):
         discovery.assert_not_called()
         connection.close.assert_called_once()
 
-    def test_legacy_marketplace_ingestion_is_disabled(self):
-        result = marketplace_ingestion.run_marketplace_ingestion()
-        self.assertEqual(result["status"], "disabled")
-        self.assertIn("URLs", result["reason"])
+    def test_discovery_failure_does_not_stop_worker(self):
+        with patch.object(main, "run_marketplace_ingestion", side_effect=RuntimeError("API unavailable")):
+            main._run_marketplace_discovery_safely()
 
 
     def test_expired_catalog_products_are_marked_stale_without_deactivation(self):
