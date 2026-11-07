@@ -14,7 +14,7 @@ import requests
 from db import _affiliate_url
 from url_import import ASIN_RE
 
-ENRICHMENT_VERSION = 10
+ENRICHMENT_VERSION = 11
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 MAX_REDIRECTS = 12
@@ -148,6 +148,7 @@ def _public_product_page(url, platform):
     current = url
     seen_urls = set()
     redirect_hosts = []
+    referer_url = None
     for hop in range(MAX_REDIRECTS + 1):
         parsed = urlsplit(current)
         host = (parsed.hostname or "").lower().rstrip(".")
@@ -162,7 +163,10 @@ def _public_product_page(url, platform):
         if normalized in seen_urls:
             raise RuntimeError("La tienda devolvió un ciclo de redirección, normalmente causado por un inicio de sesión obligatorio.")
         seen_urls.add(normalized)
-        response = requests.get(current, headers=BROWSER_HEADERS, timeout=15, allow_redirects=False)
+        headers = dict(BROWSER_HEADERS)
+        if referer_url:
+            headers["Referer"] = referer_url
+        response = requests.get(current, headers=headers, timeout=15, allow_redirects=False)
         if response.status_code in (301, 302, 303, 307, 308):
             redirect_hosts.append(host)
             location = response.headers.get("Location")
@@ -171,6 +175,7 @@ def _public_product_page(url, platform):
                 raise RuntimeError("La tienda no entregó el destino del enlace.")
             if hop >= MAX_REDIRECTS:
                 raise RuntimeError(f"La tienda excedió el límite de {MAX_REDIRECTS} redirecciones.")
+            referer_url = current
             current = urljoin(current, location)
             continue
         try:

@@ -193,8 +193,25 @@ class ProductSourcesTests(unittest.TestCase):
             result = product_sources._public_product_page("https://amzn.to/example", "amazon")
         self.assertEqual(result["resolved_url"], "https://www.amazon.com/dp/B012345678")
         self.assertEqual(request.call_count, 2)
+        self.assertEqual(request.call_args_list[1].kwargs["headers"]["Referer"], "https://amzn.to/example")
         first.close.assert_called_once()
         second.close.assert_called_once()
+
+    def test_shortlink_redirects_send_referer_to_official_destination(self):
+        first = MagicMock()
+        first.status_code = 302
+        first.headers = {"Location": "https://www.aliexpress.com/redirect/123"}
+        second = MagicMock()
+        second.status_code = 302
+        second.headers = {"Location": "https://www.aliexpress.com/item/123456789.html"}
+        third = MagicMock()
+        third.status_code = 200
+        third.text = '<html><meta property="og:title" content="Organizador de cocina"></html>'
+        with patch.object(product_sources.requests, "get", side_effect=[first, second, third]) as request:
+            result = product_sources._public_product_page("https://a.aliexpress.com/_m0K2w0r", "aliexpress")
+        self.assertEqual(result["resolved_url"], "https://www.aliexpress.com/item/123456789.html")
+        self.assertEqual(request.call_args_list[1].kwargs["headers"]["Referer"], "https://a.aliexpress.com/_m0K2w0r")
+        self.assertEqual(request.call_args_list[2].kwargs["headers"]["Referer"], "https://www.aliexpress.com/redirect/123")
 
     def test_http_redirect_to_official_marketplace_is_upgraded_to_https(self):
         first = MagicMock()
