@@ -14,7 +14,7 @@ import requests
 from db import _affiliate_url
 from url_import import ASIN_RE
 
-ENRICHMENT_VERSION = 9
+ENRICHMENT_VERSION = 10
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 MAX_REDIRECTS = 12
@@ -151,8 +151,13 @@ def _public_product_page(url, platform):
     for hop in range(MAX_REDIRECTS + 1):
         parsed = urlsplit(current)
         host = (parsed.hostname or "").lower().rstrip(".")
+        port = parsed.port
+        if platform in ALLOWED_HOSTS and parsed.scheme == "http" and not parsed.username and not parsed.password and port in (None, 80) and _allowed_host(host, platform):
+            current = parsed._replace(scheme="https", netloc=host).geturl()
+            parsed = urlsplit(current)
+            host = (parsed.hostname or "").lower().rstrip(".")
         if platform not in ALLOWED_HOSTS or parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None, 443) or not _allowed_host(host, platform):
-            raise ValueError("La URL redirigió fuera de los dominios HTTPS permitidos de la tienda.")
+            raise ValueError(f"La URL redirigió fuera de los dominios HTTPS permitidos de la tienda (host={host or 'desconocido'}, esquema={parsed.scheme or 'vacío'}).")
         normalized = _normalized_url(current)
         if normalized in seen_urls:
             raise RuntimeError("La tienda devolvió un ciclo de redirección, normalmente causado por un inicio de sesión obligatorio.")
@@ -441,7 +446,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
             )
             ORDER BY p.is_active DESC,(p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) DESC,p.catalog_expires_at ASC NULLS LAST,p.updated_at ASC LIMIT %s""", (str(ENRICHMENT_VERSION), max(limit, limit * 5)))
         candidates = cur.fetchall()
-    due_rows = [row for row in candidates if force or row.get("catalog_expired") or _retry_due(row.get("source_metadata") or {})]
+    due_rows = [row for row in candidates if force or row.get("catalog_expired") or str((row.get("source_metadata") or {}).get("enrichment_version") or "") != str(ENRICHMENT_VERSION) or _retry_due(row.get("source_metadata") or {})]
     rows = due_rows[:limit]
     if not rows:
         print(f"[url-enrichment] candidatos={len(candidates)} listos_para_reintento={len(due_rows)} intentadas=0 recuperadas=0")

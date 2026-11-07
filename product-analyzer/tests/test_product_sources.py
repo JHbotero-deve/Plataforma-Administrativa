@@ -117,6 +117,46 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertIn("ORDER BY p.is_active DESC", query)
         self.assertEqual(parameters, (str(product_sources.ENRICHMENT_VERSION), 15))
 
+    def test_old_enrichment_version_bypasses_retry_backoff(self):
+        row = {
+            "id": 91,
+            "external_id": "URL-OLD",
+            "title": "Producto Amazon URL-OLD",
+            "current_price": None,
+            "currency": None,
+            "image_url": None,
+            "image_gallery": [],
+            "rating": None,
+            "reviews_count": None,
+            "product_url": "https://link.amazon/B012345678",
+            "affiliate_url": None,
+            "platform": "amazon",
+            "category": None,
+            "source_metadata": {
+                "enrichment_version": "9",
+                "enrichment_retry_after": "2099-01-01T00:00:00+00:00",
+            },
+            "seller_external_id": None,
+            "seller_name": None,
+            "is_active": True,
+            "catalog_expired": False,
+        }
+        connection = MagicMock()
+        connection.cursor.return_value.__enter__.return_value.fetchall.return_value = [row]
+        partial = {
+            **row,
+            "gallery_urls": [],
+            "source_metadata": {
+                "enrichment_version": product_sources.ENRICHMENT_VERSION,
+                "enrichment_status": "partial",
+                "catalog_refresh_verified": False,
+            },
+        }
+        with patch.object(product_sources, "_enrich_pending_row", return_value=partial) as enrich:
+            self.assertEqual(product_sources.enrich_pending_products(connection, limit=1), 0)
+        enrich.assert_called_once()
+        self.assertTrue(enrich.call_args.args[1])
+
     def test_failed_public_page_keeps_product_partial_and_retryable(self):
         product = {
             "platform": "amazon",
@@ -156,12 +196,26 @@ class ProductSourcesTests(unittest.TestCase):
         first.close.assert_called_once()
         second.close.assert_called_once()
 
+    def test_http_redirect_to_official_marketplace_is_upgraded_to_https(self):
+        first = MagicMock()
+        first.status_code = 302
+        first.headers = {"Location": "http://www.amazon.com/dp/B012345678"}
+        second = MagicMock()
+        second.status_code = 200
+        second.text = '<html><meta property="og:title" content="Tenis"></html>'
+        with patch.object(product_sources.requests, "get", side_effect=[first, second]) as request:
+            result = product_sources._public_product_page("https://amzn.to/example", "amazon")
+        self.assertEqual(result["resolved_url"], "https://www.amazon.com/dp/B012345678")
+        self.assertEqual(request.call_args_list[1].args[0], "https://www.amazon.com/dp/B012345678")
+        first.close.assert_called_once()
+        second.close.assert_called_once()
+
     def test_redirect_to_untrusted_host_is_rejected(self):
         response = MagicMock()
         response.status_code = 302
         response.headers = {"Location": "https://127.0.0.1/admin"}
         with patch.object(product_sources.requests, "get", return_value=response):
-            with self.assertRaisesRegex(ValueError, "fuera de los dominios HTTPS permitidos"):
+            with self.assertRaisesRegex(ValueError, "host=127.0.0.1"):
                 product_sources._public_product_page("https://amzn.to/example", "amazon")
         response.close.assert_called_once()
 
