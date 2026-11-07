@@ -21,6 +21,22 @@ class MarketplaceIngestionTests(unittest.TestCase):
             "source_metadata": {"import_method": "amazon_creators_api"},
         }
 
+    def test_discovery_stops_repeating_each_provider_after_auth_failure(self):
+        calls = []
+
+        def fail_auth(platform, query, category, limit):
+            calls.append(platform)
+            message = "invalid_scope" if platform == "amazon" else "InvalidAppKey"
+            raise RuntimeError(message)
+
+        with patch.object(marketplace_ingestion, "_search_candidates", side_effect=fail_auth):
+            result = marketplace_ingestion.run_marketplace_ingestion(target_per_platform=8)
+        self.assertEqual(calls, ["amazon", "aliexpress"])
+        self.assertEqual(len(result["amazon"]["errors"]), 1)
+        self.assertEqual(len(result["aliexpress"]["errors"]), 1)
+        self.assertEqual(result["amazon"]["status"], "error")
+        self.assertEqual(result["aliexpress"]["status"], "error")
+
     def test_search_keeps_aliexpress_failure_independent_from_amazon(self):
         verified = {
             **self.candidate,
