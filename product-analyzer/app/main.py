@@ -1,4 +1,5 @@
 import os
+import re
 import threading
 import time
 
@@ -198,6 +199,13 @@ def _run_marketplace_discovery_safely():
                 f"pendientes={result['pending_public_verification']} "
                 f"estado={result['status']}"
             )
+            for error in result.get("errors", [])[:3]:
+                safe_error = re.sub(
+                    r"(?i)(app[_-]?key|app[_-]?secret|client[_-]?id|client[_-]?secret|access[_-]?token|authorization)(\s*[:=]\s*)[^&\s,]+",
+                    r"\1\2[redacted]",
+                    str(error),
+                )
+                print(f"[marketplace-discovery] {platform} error={safe_error[:180]}")
     except Exception as exc:
         print(f"[marketplace-discovery] ciclo omitido sin bloquear URLs: {type(exc).__name__}: {str(exc)[:180]}")
 
