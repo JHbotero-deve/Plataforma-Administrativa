@@ -69,7 +69,7 @@ class MarketplaceIngestionTests(unittest.TestCase):
         self.assertEqual(len(result["products"]), 1)
         self.assertFalse(result["products"][0]["verified"])
         self.assertIsNone(result["products"][0]["id"])
-        persist.assert_called_once()
+        persist.assert_not_called()
 
 
 if __name__ == "__main__":
