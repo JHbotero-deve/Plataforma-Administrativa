@@ -20,7 +20,7 @@ ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 MAX_REDIRECTS = 12
 ALLOWED_HOSTS = {
     "amazon": ("amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk", "amazon.de", "amazon.es", "amazon.fr", "amazon.it", "amazon.co.jp", "amazon.com.au", "amazon.in", "amazon.nl", "amazon.se", "amazon.pl", "amazon.ae", "amazon.sg", "amazon.com.tr", "amazon.com.br", "link.amazon", "amzn.to", "amzn.eu", "amzn.asia", "amzn.com", "amzn.ca", "amzn.de", "amzn.co.uk", "a.co"),
-    "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "alii.pub", "s.click.aliexpress.com", "click.aliexpress.com"),
+    "aliexpress": ("aliexpress.com", "aliexpress.us", "aliexpress.ru", "a.aliexpress.com", "alii.pub", "s.click.aliexpress.com", "click.aliexpress.com"),
 }
 ALLOWED_CATEGORIES = {"ropa", "calzado", "accesorios", "tecnologia", "hogar", "moda", "deportes", "belleza", "bienestar", "juguetes", "oficina"}
 BROWSER_HEADERS = {
@@ -441,8 +441,10 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
             )
             ORDER BY p.is_active DESC,(p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) DESC,p.catalog_expires_at ASC NULLS LAST,p.updated_at ASC LIMIT %s""", (str(ENRICHMENT_VERSION), max(limit, limit * 5)))
         candidates = cur.fetchall()
-    rows = [row for row in candidates if force or row.get("catalog_expired") or _retry_due(row.get("source_metadata") or {})][:limit]
+    due_rows = [row for row in candidates if force or row.get("catalog_expired") or _retry_due(row.get("source_metadata") or {})]
+    rows = due_rows[:limit]
     if not rows:
+        print(f"[url-enrichment] candidatos={len(candidates)} listos_para_reintento={len(due_rows)} intentadas=0 recuperadas=0")
         return 0
     with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(rows)))) as executor:
         enriched_rows = list(executor.map(_enrich_pending_row, rows, [bool(force or row.get("catalog_expired") or str((row.get("source_metadata") or {}).get("enrichment_version") or "") != str(ENRICHMENT_VERSION)) for row in rows]))
@@ -503,4 +505,8 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
         if metadata.get("metadata_source") == "public_product_page" and any(enriched.get(key) for key in ("price", "image_url")):
             recovered += 1
     conn.commit()
+    complete = sum(1 for item in enriched_rows if (item.get("source_metadata") or {}).get("enrichment_status") == "complete")
+    verified = sum(1 for item in enriched_rows if (item.get("source_metadata") or {}).get("catalog_refresh_verified"))
+    reactivated = sum(1 for row, item in zip(rows, enriched_rows) if not row.get("is_active") and (item.get("source_metadata") or {}).get("catalog_refresh_verified"))
+    print(f"[url-enrichment] intentadas={len(rows)} completas={complete} parciales={len(rows) - complete} revalidadas={verified} reactivadas={reactivated} recuperadas={recovered}")
     return recovered
