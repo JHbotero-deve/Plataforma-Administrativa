@@ -14,7 +14,7 @@ import requests
 from db import _affiliate_url
 from url_import import ASIN_RE
 
-ENRICHMENT_VERSION = 9
+ENRICHMENT_VERSION = 10
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 MAX_REDIRECTS = 12
@@ -151,8 +151,13 @@ def _public_product_page(url, platform):
     for hop in range(MAX_REDIRECTS + 1):
         parsed = urlsplit(current)
         host = (parsed.hostname or "").lower().rstrip(".")
+        port = parsed.port
+        if platform in ALLOWED_HOSTS and parsed.scheme == "http" and not parsed.username and not parsed.password and port in (None, 80) and _allowed_host(host, platform):
+            current = parsed._replace(scheme="https", netloc=host).geturl()
+            parsed = urlsplit(current)
+            host = (parsed.hostname or "").lower().rstrip(".")
         if platform not in ALLOWED_HOSTS or parsed.scheme != "https" or parsed.username or parsed.password or parsed.port not in (None, 443) or not _allowed_host(host, platform):
-            raise ValueError("La URL redirigió fuera de los dominios HTTPS permitidos de la tienda.")
+            raise ValueError(f"La URL redirigió fuera de los dominios HTTPS permitidos de la tienda (host={host or 'desconocido'}, esquema={parsed.scheme or 'vacío'}).")
         normalized = _normalized_url(current)
         if normalized in seen_urls:
             raise RuntimeError("La tienda devolvió un ciclo de redirección, normalmente causado por un inicio de sesión obligatorio.")
