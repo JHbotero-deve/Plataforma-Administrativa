@@ -342,5 +342,16 @@ class ProductSourcesTests(unittest.TestCase):
         }))
 
 
+    def test_a_aliexpress_shortlink_redirect_is_allowed(self):
+        first = MagicMock()
+        first.status_code = 302
+        first.headers = {"Location": "https://www.aliexpress.com/item/123.html"}
+        second = MagicMock()
+        second.status_code = 200
+        second.text = '<html><meta property="og:title" content="Auriculares"></html>'
+        with patch.object(product_sources.requests, "get", side_effect=[first, second]):
+            result = product_sources._public_product_page("https://a.aliexpress.com/_m0K2w0r", "aliexpress")
+        self.assertEqual(result["resolved_url"], "https://www.aliexpress.com/item/123.html")
+
 if __name__ == "__main__":
     unittest.main()
