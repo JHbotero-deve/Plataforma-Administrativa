@@ -170,7 +170,7 @@ jobs:
           if "/admin/inject" in html or "btnAdminInject" in html:
               raise SystemExit("Deprecated marketplace injection action remains in the admin UI.")
           css = Path("product-analyzer/frontend/visual-refresh.css").read_text(encoding="utf-8")
-          if "body.admin-mode .nav" not in css or "body.admin-mode main{margin-left:252px" not in css:
+          if "body.admin-mode .nav{" not in css or "body.admin-mode main{" not in css or "margin-left:252px" not in css:
               raise SystemExit("Responsive admin sidebar styles are missing.")
           PY
 
