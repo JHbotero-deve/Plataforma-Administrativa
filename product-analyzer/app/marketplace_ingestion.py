@@ -115,6 +115,7 @@ def search_and_import(query, limit=8):
 def run_marketplace_ingestion(target_per_platform=8):
     """Ciclo de descubrimiento independiente: una API fallida no detiene la otra."""
     target = _limit(target_per_platform)
+    per_query = max(1, math.ceil(target / len(DISCOVERY_QUERIES)))
     results = {}
     for platform in ("amazon", "aliexpress"):
         received = 0
@@ -123,7 +124,7 @@ def run_marketplace_ingestion(target_per_platform=8):
         errors = []
         for category, query in DISCOVERY_QUERIES:
             try:
-                candidates = _search_candidates(platform, query, category, min(10, target))
+                candidates = _search_candidates(platform, query, category, min(10, per_query))
             except Exception as exc:
                 errors.append(f"{category}: {type(exc).__name__}: {str(exc)[:160]}")
                 continue
