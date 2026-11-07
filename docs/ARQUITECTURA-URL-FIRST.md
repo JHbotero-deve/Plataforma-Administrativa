@@ -4,7 +4,7 @@
 
 Central debe obtener los productos a partir de URLs de páginas públicas. El usuario, el administrador o un ayudante entrega el enlace; los ayudantes de Central procesan esa página, guardan la información disponible y entregan el producto al motor de análisis.
 
-La búsqueda de productos y el enriquecimiento del catálogo no deben depender de APIs de Amazon, AliExpress ni de otros marketplaces. Las credenciales de APIs de proveedores no pueden ser un requisito para importar, analizar o publicar un producto.
+La importación, lectura y enriquecimiento de una URL pública no dependen de APIs de Amazon, AliExpress ni de otros marketplaces. Las APIs oficiales son una vía opcional y separada para descubrir candidatos; nunca son requisito para importar, analizar o publicar un producto recibido por URL.
 
 ## Qué significa trabajar con URLs
 
@@ -51,14 +51,16 @@ Flujo obligatorio:
 
 ## Qué queda fuera del flujo de catálogo
 
-No usar APIs de proveedores para:
+Las APIs oficiales de marketplaces se permiten únicamente como fuente opcional de candidatos para descubrimiento:
 
-- descubrir productos o ejecutar búsquedas automáticas en marketplaces;
-- obtener fichas de productos como sustituto de procesar la URL;
-- enriquecer productos que ya fueron recibidos por URL;
-- bloquear la importación cuando una API de proveedor no tiene credenciales o rechaza la autenticación.
+- Amazon Creators API y AliExpress Affiliate API pueden buscar por término cuando sus credenciales oficiales están configuradas.
+- Cada candidato debe aportar una URL de producto válida; la ficha pública de esa URL se vuelve a leer antes de guardar, puntuar o publicar.
+- Los datos de API no sustituyen una lectura pública fallida ni convierten un candidato parcial en producto verificado.
+- Una API sin credenciales, con error 401/403, límite o caída solo desactiva su propia búsqueda; la otra fuente, Telegram, la importación URL-first y el worker siguen funcionando.
+- No se eluden CAPTCHA, login, controles de acceso ni restricciones de los marketplaces.
+- Los enlaces afiliados se gestionan aparte de la lectura pública. No se presenta una URL normal como afiliada.
 
-Las APIs internas de Central y los servicios de otras funciones (por ejemplo, Telegram para notificaciones y Wompi para pagos) son independientes de esta regla. La prohibición se refiere a las APIs de marketplace para adquirir datos de catálogo.
+La importación de una URL sigue siendo independiente: recibe, resuelve, lee y conserva la página pública sin requerir claves de afiliación. Las APIs internas de Central y servicios como Telegram y Wompi siguen siendo independientes.
 
 ## Experiencias de usuario
 
@@ -86,9 +88,11 @@ Estado de la rama de recuperación URL-first:
 
 - `product-analyzer/app/url_import.py` valida el enlace y conserva la URL original; no realiza búsquedas ni llamadas a APIs de marketplaces.
 - `product-analyzer/app/product_sources.py` sigue redirecciones con validación de cada host y extrae metadatos públicos HTML, Open Graph y JSON-LD. Los campos manuales tienen prioridad.
-- `product-analyzer/app/marketplace_ingestion.py` y `marketplace_search.py` se conservaron como stubs de compatibilidad, sin llamadas externas.
-- Se retiraron los módulos de búsqueda/enriquecimiento por API `amazon_creators.py`, `promotion_bots.py` y `affiliate_links.py`.
-- Telegram `/buscar` consulta únicamente el catálogo local; para incorporar un artículo se envía su URL o se usa `/agregar`.
+- `product-analyzer/app/marketplace_ingestion.py` ejecuta discovery oficial opcional por Amazon y AliExpress, vuelve a verificar cada URL pública y solo persiste/puntúa fichas completas y confirmadas.
+- `amazon_creators.py`, `promotion_bots.py` y `affiliate_links.py` contienen los clientes oficiales; sus errores se aíslan por marketplace y no bloquean la ruta URL-first.
+- El worker ejecuta la recuperación URL-first cada 15 minutos y dispara discovery en un hilo independiente cada 2 horas, evitando que una búsqueda externa retrase la lectura de URLs.
+- Telegram `/buscar <término>` consulta primero el catálogo local y después las fuentes oficiales disponibles; `/buscar <URL>`, `/producto <URL>` y `/agregar <URL>` importan directamente el enlace.
+- Los candidatos sin verificación pública se muestran como pendientes, sin precio inventado, puntuación ni publicación.
 - El endpoint administrativo heredado `/admin/inject` devuelve HTTP 410 y no ejecuta búsquedas externas.
 - El worker procesa URLs parciales, puntúa fichas utilizables y publica productos completos al precio real de la fuente, sin fabricar descuentos ni costes.
 
@@ -97,12 +101,12 @@ La lectura de páginas públicas puede fallar por login, CAPTCHA, límites o fal
 ## Criterios para dar la migración por terminada
 
 - [x] El worker no ejecuta búsquedas de catálogo mediante APIs de marketplaces.
-- [x] La importación por URL es el único flujo de adquisición de productos.
+- [x] La importación por URL es el flujo primario; el discovery oficial es opcional y separado.
 - [x] El enriquecimiento se basa en la página pública enlazada y en datos suministrados explícitamente por el usuario.
-- [x] No se requieren claves de API de Amazon o AliExpress para importar, analizar o mostrar productos.
+- [x] No se requieren claves de API de Amazon o AliExpress para importar, analizar o mostrar productos recibidos por URL.
 - [x] Los errores de acceso, CAPTCHA, login y falta de metadatos se registran como estados parciales o fallidos con causa.
 - [x] Se conservan URL original, URL resuelta y procedencia de datos.
-- [ ] Las pruebas cubren URL válida, enlaces cortos, redirecciones, dominios prohibidos, SSRF, metadatos ausentes y respuestas bloqueadas.
+- [ ] Las pruebas cubren URL válida, enlaces cortos, redirecciones, dominios prohibidos, SSRF, metadatos ausentes, respuestas bloqueadas y errores aislados de APIs oficiales.
 - [ ] La tienda pública y el administrador existen como experiencias separadas; el administrador tiene menú lateral y la tienda implementa el diseño visual aprobado.
 - [ ] Los despliegues se validan en preview antes de publicar en producción.
 
