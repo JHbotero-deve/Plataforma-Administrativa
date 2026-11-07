@@ -41,6 +41,17 @@ class MarketplaceIngestionTests(unittest.TestCase):
         self.assertTrue(any(error.startswith("aliexpress:") for error in result["errors"]))
         persist.assert_called_once()
 
+    def test_persistence_guard_rejects_unverified_page_before_database_access(self):
+        partial = {
+            **self.candidate,
+            "source_metadata": {
+                "enrichment_status": "partial",
+                "catalog_refresh_verified": False,
+            },
+        }
+        with patch.object(marketplace_ingestion, "get_connection") as get_connection:
+            self.assertIsNone(marketplace_ingestion._persist_verified(partial, "busquedas"))
+        get_connection.assert_not_called()
     def test_unverified_public_page_is_returned_but_never_persisted(self):
         partial = {
             **self.candidate,
@@ -58,7 +69,7 @@ class MarketplaceIngestionTests(unittest.TestCase):
         self.assertEqual(len(result["products"]), 1)
         self.assertFalse(result["products"][0]["verified"])
         self.assertIsNone(result["products"][0]["id"])
-        persist.assert_not_called()
+        persist.assert_called_once()
 
 
 if __name__ == "__main__":
