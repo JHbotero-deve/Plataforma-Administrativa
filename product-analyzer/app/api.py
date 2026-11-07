@@ -55,6 +55,10 @@ telegram_bot_task = None
 catalog_worker_task = None
 
 
+def _telegram_polling_enabled():
+    return os.getenv("ENABLE_TELEGRAM_BOT", "false").strip().lower() in ("true", "1", "yes")
+
+
 @app.on_event("startup")
 async def ensure_admin_draft_storage():
     global notification_worker_task, telegram_bot_task, catalog_worker_task
@@ -64,7 +68,7 @@ async def ensure_admin_draft_storage():
     notification_worker_task = asyncio.create_task(notification_delivery_loop())
 
     token, _ = _config_telegram()
-    if token and os.getenv("ENABLE_TELEGRAM_BOT", "true").lower() in ("true", "1", "yes"):
+    if token and _telegram_polling_enabled():
         telegram_bot_task = asyncio.create_task(telegram_bot_delivery_loop())
 
     if os.getenv("ENABLE_BACKGROUND_WORKER", "false").lower() in ("true", "1", "yes"):
@@ -297,26 +301,19 @@ def pipeline_metrics():
     try:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT pl.name AS platform, COUNT(p.id) AS product_count,
-                       MAX(p.updated_at) AS last_update
+                SELECT pl.name AS platform,
+                       COUNT(p.id) FILTER (WHERE p.is_active = TRUE) AS product_count,
+                       COUNT(p.id) FILTER (WHERE p.product_url IS NOT NULL AND p.product_url <> '') AS with_url,
+                       COUNT(p.id) FILTER (WHERE p.source_metadata->>'catalog_status' = 'stale'
+                           OR (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW())) AS stale,
+                       MAX(p.updated_at) FILTER (WHERE p.is_active = TRUE) AS last_update
                 FROM platforms pl
-                LEFT JOIN products p
-                  ON p.platform_id = pl.id AND p.is_active = TRUE
+                LEFT JOIN products p ON p.platform_id = pl.id
                 GROUP BY pl.name
                 ORDER BY pl.name
             """)
             rows = cur.fetchall()
-            return {
-                "latest": {
-                    "status": "success",
-                    "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "amazon_products": sum(r["product_count"] for r in rows if r["platform"] == "amazon"),
-                    "tiktok_products": 0,
-                    "telegram_prepared": sum(r["product_count"] for r in rows),
-                    "error_count": 0,
-                },
-                "platforms": rows,
-            }
+            return {"latest": None, "observed_at": time.strftime("%Y-%m-%d %H:%M:%S"), "platforms": rows}
     finally:
         conn.close()
 
