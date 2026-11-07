@@ -1,5 +1,6 @@
 import sys
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 APP_PATH = Path(__file__).resolve().parents[1] / "app"
@@ -14,7 +15,7 @@ class MarketplaceSearchTests(unittest.TestCase):
             "products": [{"id": 7, "verified": True}],
             "errors": [],
         }
-        with unittest.mock.patch("marketplace_ingestion.search_and_import", return_value=imported) as search:
+        with patch("marketplace_ingestion.search_and_import", return_value=imported) as search:
             result = marketplace_search.search_and_publish("wireless headphones")
         search.assert_called_once_with("wireless headphones", limit=8)
         self.assertEqual(result["status"], "completed")
