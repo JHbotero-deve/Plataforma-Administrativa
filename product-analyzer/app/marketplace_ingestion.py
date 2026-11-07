@@ -113,6 +113,15 @@ def search_and_import(query, limit=8):
     return {"products": products, "errors": errors}
 
 
+def _is_provider_auth_error(error):
+    message = str(error or "").casefold()
+    return any(term in message for term in (
+        "invalid_scope", "invalid_client", "invalidappkey", "invalid app key",
+        "invalidappsecret", "invalid app secret", "insufficientpermission",
+        "insufficient permission", "unauthorized",
+    ))
+
+
 def run_marketplace_ingestion(target_per_platform=8):
     """Ciclo de descubrimiento independiente: una API fallida no detiene la otra."""
     target = _limit(target_per_platform)
@@ -128,6 +137,8 @@ def run_marketplace_ingestion(target_per_platform=8):
                 candidates = _search_candidates(platform, query, category, min(10, per_query))
             except Exception as exc:
                 errors.append(f"{category}: {type(exc).__name__}: {str(exc)[:160]}")
+                if _is_provider_auth_error(exc):
+                    break
                 continue
             received += len(candidates)
             for candidate in candidates:

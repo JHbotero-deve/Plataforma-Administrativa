@@ -53,7 +53,7 @@ class URLFirstWorkerTests(unittest.TestCase):
             main._run_marketplace_discovery_safely()
         messages = " ".join(str(call.args[0]) for call in output.call_args_list)
         self.assertIn("invalid_scope", messages)
-        self.assertIn("[redacted]", messages)
+        self.assertIn("[credential redacted]", messages)
         self.assertNotIn("TOPSECRET", messages)
 
     def test_discovery_failure_does_not_stop_worker(self):
