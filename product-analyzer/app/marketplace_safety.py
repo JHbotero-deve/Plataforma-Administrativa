@@ -117,11 +117,11 @@ def _is_official_redirect_request(request):
     if not marketplace or marketplace_for_url(referer.geturl()) != marketplace:
         return False
     if marketplace == "Amazon":
-        destination_allowed = _host_matches(host, AMAZON_PAGE_DOMAINS)
-        referer_allowed = referer_host in AMAZON_SHORTLINKS or _host_matches(referer_host, AMAZON_PAGE_DOMAINS)
+        destination_allowed = host not in OFFICIAL_API_PATHS and _host_matches(host, AMAZON_PAGE_DOMAINS)
+        referer_allowed = referer_host not in OFFICIAL_API_PATHS and (referer_host in AMAZON_SHORTLINKS or _host_matches(referer_host, AMAZON_PAGE_DOMAINS))
     else:
-        destination_allowed = _host_matches(host, ALIEXPRESS_PAGE_DOMAINS)
-        referer_allowed = referer_host in ALIEXPRESS_SHORTLINKS or _host_matches(referer_host, ALIEXPRESS_PAGE_DOMAINS)
+        destination_allowed = host not in OFFICIAL_API_PATHS and _host_matches(host, ALIEXPRESS_PAGE_DOMAINS)
+        referer_allowed = referer_host not in OFFICIAL_API_PATHS and (referer_host in ALIEXPRESS_SHORTLINKS or _host_matches(referer_host, ALIEXPRESS_PAGE_DOMAINS))
     return destination_allowed and referer_allowed
 
 
