@@ -354,6 +354,23 @@ class SupportedMarketplaceTests(unittest.TestCase):
 
 
 
+    def test_buscar_uses_official_marketplaces_when_local_catalog_has_no_match(self):
+        candidate = {
+            "id": None,
+            "title": "Auriculares encontrados",
+            "platform": "amazon",
+            "product_url": "https://www.amazon.com/dp/B000000001",
+            "verified": False,
+        }
+        with (
+            patch.object(telegram_alert, "_search_products", return_value=[]),
+            patch("marketplace_ingestion.search_and_import", return_value={"products": [candidate], "errors": []}),
+            patch.object(telegram_alert, "_send", return_value=True) as send,
+        ):
+            self.assertTrue(telegram_alert._handle("token", "chat", "/buscar auriculares"))
+        self.assertIn("Candidato encontrado", send.call_args.args[2])
+        self.assertIn("pendiente", send.call_args.args[2])
+
     def test_producto_command_is_alias_for_agregar(self):
         imported = (73, {"title": "Auriculares"}, 68.5)
         with (
