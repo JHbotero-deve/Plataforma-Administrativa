@@ -27,6 +27,15 @@ class URLFirstWorkerTests(unittest.TestCase):
         discovery.assert_not_called()
         connection.close.assert_called_once()
 
+    def test_discovery_runs_in_a_background_thread(self):
+        with (
+            patch.object(main.threading, "Thread") as thread,
+            patch.object(main, "_run_marketplace_discovery_safely") as discovery,
+        ):
+            main._start_marketplace_discovery()
+            thread.assert_called_once()
+            thread.call_args.kwargs["target"]()
+        discovery.assert_called_once()
     def test_discovery_failure_does_not_stop_worker(self):
         with patch.object(main, "run_marketplace_ingestion", side_effect=RuntimeError("API unavailable")):
             main._run_marketplace_discovery_safely()
