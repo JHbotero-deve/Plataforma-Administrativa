@@ -8,15 +8,21 @@ sys.path.insert(0, str(APP_PATH))
 import marketplace_search
 
 
-class MarketplaceSearchRetirementTests(unittest.TestCase):
-    def test_external_marketplace_search_is_disabled(self):
-        result = marketplace_search.search_and_publish("wireless headphones")
-        self.assertEqual(result["status"], "disabled")
-        self.assertEqual(result["found"], 0)
+class MarketplaceSearchTests(unittest.TestCase):
+    def test_external_search_uses_official_marketplace_importer(self):
+        imported = {
+            "products": [{"id": 7, "verified": True}],
+            "errors": [],
+        }
+        with unittest.mock.patch("marketplace_ingestion.search_and_import", return_value=imported) as search:
+            result = marketplace_search.search_and_publish("wireless headphones")
+        search.assert_called_once_with("wireless headphones", limit=8)
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["found"], 1)
+        self.assertEqual(result["verified"], 1)
         self.assertEqual(result["published"], 0)
-        self.assertIn("URL", result["errors"][0])
 
-    def test_legacy_search_queue_does_not_process_requests(self):
+    def test_legacy_search_queue_remains_inert(self):
         self.assertEqual(marketplace_search.process_marketplace_search_requests(), 0)
 
 
