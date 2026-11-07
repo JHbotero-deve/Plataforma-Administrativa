@@ -90,7 +90,7 @@ class TelegramCommandTests(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertIn("No hay coincidencias", send.call_args.args[2])
-        self.assertIn("/agregar URL", send.call_args.args[2])
+        self.assertIn("/agregar <URL>", send.call_args.args[2])
 
     def test_search_matches_category_as_well_as_title(self):
         connection = MagicMock()
