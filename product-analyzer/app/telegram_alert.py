@@ -598,6 +598,7 @@ def _handle(token, chat_id, text):
             "/buscar término — buscar en el catálogo ya importado\n"
             "/modelar — revalidar URLs públicas y puntuar el catálogo local\n"
             "/agregar URL — importar Amazon o AliExpress; admite datos manuales\n"
+            "/producto URL — alias de /agregar\n"
             "Publicación — selecciona productos en Studio y usa «Publicar en Central»\n"
             "/estado — estado del catálogo\n"
             "/help — ayuda"
@@ -647,7 +648,7 @@ def _handle(token, chat_id, text):
                 return False
         return True
 
-    if command == "/agregar":
+    if command in ("/agregar", "/producto"):
         if not argument.strip():
             return _send(
                 token,

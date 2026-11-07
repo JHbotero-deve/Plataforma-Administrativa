@@ -114,6 +114,7 @@ class ProductSourcesTests(unittest.TestCase):
         query, parameters = cursor.execute.call_args.args
         self.assertIn("enrichment_version", query)
         self.assertIn("catalog_status", query)
+        self.assertIn("ORDER BY p.is_active DESC", query)
         self.assertEqual(parameters, (str(product_sources.ENRICHMENT_VERSION), 15))
 
     def test_failed_public_page_keeps_product_partial_and_retryable(self):
@@ -340,6 +341,54 @@ class ProductSourcesTests(unittest.TestCase):
             "enrichment_version": product_sources.ENRICHMENT_VERSION - 1,
         }))
 
+
+    def test_a_aliexpress_shortlink_redirect_is_allowed(self):
+        first = MagicMock()
+        first.status_code = 302
+        first.headers = {"Location": "https://www.aliexpress.com/item/123.html"}
+        second = MagicMock()
+        second.status_code = 200
+        second.text = '<html><meta property="og:title" content="Auriculares"></html>'
+        with patch.object(product_sources.requests, "get", side_effect=[first, second]):
+            result = product_sources._public_product_page("https://a.aliexpress.com/_m0K2w0r", "aliexpress")
+        self.assertEqual(result["resolved_url"], "https://www.aliexpress.com/item/123.html")
+
+
+    def test_inactive_products_with_old_enrichment_version_are_revalidated(self):
+        row = {
+            "id": 91, "external_id": "B000000091", "title": "Producto Amazon B000000091",
+            "current_price": None, "currency": None, "image_url": None, "image_gallery": [],
+            "rating": None, "reviews_count": None,
+            "product_url": "https://www.amazon.com/dp/B000000091", "affiliate_url": None,
+            "platform": "amazon", "category": None,
+            "source_metadata": {"enrichment_version": product_sources.ENRICHMENT_VERSION - 1},
+            "seller_external_id": None, "seller_name": None, "is_active": False,
+            "catalog_expired": False,
+        }
+        enriched = {
+            "external_id": row["external_id"], "product_url": row["product_url"],
+            "title": "Auriculares recuperados", "price": 19.99, "currency": "USD",
+            "image_url": "https://images.example/earbuds.jpg", "gallery_urls": [],
+            "rating": None, "reviews_count": None, "category": "tecnologia", "seller": None,
+            "source_metadata": {
+                "enrichment_version": product_sources.ENRICHMENT_VERSION,
+                "enrichment_status": "partial", "metadata_source": "public_product_page",
+                "catalog_refresh_verified": False,
+            },
+        }
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [row]
+        with patch.object(product_sources, "_enrich_pending_row", return_value=enriched) as enrich:
+            recovered = product_sources.enrich_pending_products(connection, limit=1)
+        query = cursor.execute.call_args_list[0].args[0]
+        self.assertIn("COALESCE(p.source_metadata->>'enrichment_version', '') <> %s", query)
+        self.assertNotIn("p.is_active=TRUE AND COALESCE(p.source_metadata->>'enrichment_version'", query)
+        self.assertNotIn("p.is_active=TRUE AND (p.current_price IS NULL", query)
+        enrich.assert_called_once()
+        self.assertEqual(enrich.call_args.args[0]["id"], 91)
+        self.assertEqual(recovered, 1)
+        connection.commit.assert_called_once()
 
 if __name__ == "__main__":
     unittest.main()

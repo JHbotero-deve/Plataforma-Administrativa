@@ -23,7 +23,7 @@ AMAZON_DOMAINS = (
 )
 AMAZON_SHORTLINKS = {"amzn.to", "amzn.eu", "amzn.asia", "amzn.com", "amzn.ca", "amzn.de", "amzn.co.uk", "a.co", "link.amazon"}
 ALIEXPRESS_DOMAINS = ("aliexpress.com", "aliexpress.us", "aliexpress.ru")
-ALIEXPRESS_SHORTLINKS = {"s.click.aliexpress.com", "click.aliexpress.com", "alii.pub"}
+ALIEXPRESS_SHORTLINKS = {"a.aliexpress.com", "s.click.aliexpress.com", "click.aliexpress.com", "alii.pub"}
 ASIN_RE = re.compile(r"/(?:dp|gp/product|gp/aw/d)/([A-Z0-9]{10})(?:[/?]|$)", re.I)
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 

@@ -23,7 +23,7 @@ AMAZON_SHORTLINKS = {
     "amzn.de", "amzn.co.uk", "a.co", "link.amazon",
 }
 ALIEXPRESS_SHORTLINKS = {
-    "s.click.aliexpress.com", "click.aliexpress.com", "alii.pub",
+    "a.aliexpress.com", "s.click.aliexpress.com", "click.aliexpress.com", "alii.pub",
 }
 AMAZON_PAGE_DOMAINS = {
     "amazon.com", "amazon.ca", "amazon.com.mx", "amazon.co.uk",
