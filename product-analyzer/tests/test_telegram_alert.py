@@ -338,6 +338,7 @@ class SupportedMarketplaceTests(unittest.TestCase):
             ),
             "aliexpress",
         )
+        self.assertEqual(url_import.detect_platform("https://a.aliexpress.com/_m0K2w0r"), "aliexpress")
 
     def test_manual_import_accepts_full_catalog_categories(self):
         product = url_import.import_url(
