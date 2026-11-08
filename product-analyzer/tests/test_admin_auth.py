@@ -222,6 +222,7 @@ class AdminAuthenticationTests(unittest.TestCase):
     def test_internal_catalog_reads_require_admin_session(self):
         guarded_routes = [
             *api.core_router.routes,
+            *api.tiktok_creator_router.routes,
         ]
         expected = {
             ("GET", "/pipeline/metrics"),
@@ -230,6 +231,9 @@ class AdminAuthenticationTests(unittest.TestCase):
             ("GET", "/products/{product_id}"),
             ("GET", "/comparison"),
             ("GET", "/opportunities/top"),
+            ("GET", "/status"),
+            ("GET", "/profile"),
+            ("GET", "/products"),
         }
         protected = set()
 
