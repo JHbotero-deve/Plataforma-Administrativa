@@ -73,21 +73,52 @@ def verify_session_token(token: str) -> bool:
     )
 
 
-def _admin_origin_allowed(origin: str) -> bool:
-    if not origin:
-        return True
+def _normalize_origin(value: str) -> str | None:
     try:
-        parsed = urlsplit(origin)
-        host = (parsed.hostname or "").lower()
-        if host.endswith(".vercel.app") or host in {"localhost", "127.0.0.1"}:
-            return True
-        store_url = urlsplit(
-            os.getenv("PUBLIC_STORE_URL", "https://central-7ykr.vercel.app").strip()
-        )
-        expected = f"{store_url.scheme}://{store_url.netloc}".rstrip("/").lower()
-        return origin.rstrip("/").lower() == expected
+        parsed = urlsplit(str(value or "").strip())
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
+        ):
+            return None
+        host = parsed.hostname.lower().rstrip(".")
+        port = parsed.port
+        if (parsed.scheme == "https" and port == 443) or (parsed.scheme == "http" and port == 80):
+            port = None
+        if ":" in host:
+            host = f"[{host}]"
+        return f"{parsed.scheme}://{host}" + (f":{port}" if port else "")
     except ValueError:
+        return None
+
+
+def _admin_origin_allowed(origin: str) -> bool:
+    normalized = _normalize_origin(origin)
+    if not normalized:
         return False
+    configured_origins = os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:3000,http://localhost:8000,"
+        "https://central-five-pied.vercel.app,"
+        "https://central-jorgedevop27-9650.vercel.app,"
+        "https://central-git-main-jorgedevop27-9650.vercel.app",
+    )
+    allowed = {
+        value
+        for item in configured_origins.split(",")
+        if (value := _normalize_origin(item))
+    }
+    store_origin = _normalize_origin(
+        os.getenv("PUBLIC_STORE_URL", "https://central-7ykr.vercel.app")
+    )
+    if store_origin:
+        allowed.add(store_origin)
+    return normalized in allowed
 
 
 def require_admin(request: Request) -> str:
