@@ -219,6 +219,30 @@ class AdminAuthenticationTests(unittest.TestCase):
 
         self.assertTrue(expected.issubset(protected))
 
+    def test_internal_catalog_reads_require_admin_session(self):
+        guarded_routes = [
+            *api.core_router.routes,
+        ]
+        expected = {
+            ("GET", "/pipeline/metrics"),
+            ("GET", "/pipeline/summary"),
+            ("GET", "/products"),
+            ("GET", "/products/{product_id}"),
+            ("GET", "/comparison"),
+            ("GET", "/opportunities/top"),
+        }
+        protected = set()
+
+        for route in guarded_routes:
+            for method in route.methods or ():
+                if any(
+                    dependency.call is admin_auth.require_admin
+                    for dependency in route.dependant.dependencies
+                ):
+                    protected.add((method, route.path))
+
+        self.assertTrue(expected.issubset(protected))
+
     def test_publication_order_rejects_duplicate_ids(self):
         with self.assertRaises(HTTPException) as error:
             publications.reorder_publications(
