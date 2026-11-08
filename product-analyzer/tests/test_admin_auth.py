@@ -248,9 +248,9 @@ class AdminAuthenticationTests(unittest.TestCase):
 
         self.assertTrue(
             {
-                ("GET", "/status"),
-                ("GET", "/profile"),
-                ("GET", "/products"),
+                ("GET", "/tiktok/creator/status"),
+                ("GET", "/tiktok/creator/profile"),
+                ("GET", "/tiktok/creator/products"),
             }.issubset(creator_protected)
         )
 
