@@ -7,7 +7,7 @@ from tiktok_creator import creator_configured, get_creator_profile, sync_showcas
 router = APIRouter(prefix="/tiktok/creator", tags=["tiktok-creator"])
 
 
-@router.get("/status")
+@router.get("/status", dependencies=[Depends(require_admin)])
 def creator_status():
     conn = get_connection()
     try:
@@ -29,7 +29,7 @@ def creator_status():
         conn.close()
 
 
-@router.get("/profile")
+@router.get("/profile", dependencies=[Depends(require_admin)])
 def creator_profile():
     if not creator_configured():
         raise HTTPException(status_code=503, detail="TikTok Creator no está configurado")
@@ -49,7 +49,7 @@ def creator_sync(limit: int = Query(200, ge=1, le=2000)):
         raise HTTPException(status_code=502, detail=str(exc))
 
 
-@router.get("/products")
+@router.get("/products", dependencies=[Depends(require_admin)])
 def creator_products(limit: int = Query(100, ge=1, le=500)):
     conn = get_connection()
     try:
