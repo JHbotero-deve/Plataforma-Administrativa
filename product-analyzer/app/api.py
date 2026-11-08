@@ -295,7 +295,7 @@ def admin_inject():
         detail="La búsqueda por APIs de marketplaces fue retirada. Usa la importación y el enriquecimiento URL-first.",
     )
 
-@core_router.get("/pipeline/metrics")
+@core_router.get("/pipeline/metrics", dependencies=[Depends(require_admin)])
 def pipeline_metrics():
     conn = get_connection()
     try:
@@ -397,7 +397,7 @@ def intelligence_overview():
         conn.close()
 
 
-@core_router.get("/pipeline/summary")
+@core_router.get("/pipeline/summary", dependencies=[Depends(require_admin)])
 def pipeline_summary():
     conn = get_connection()
     try:
@@ -418,7 +418,7 @@ def pipeline_summary():
         conn.close()
 
 
-@core_router.get("/products")
+@core_router.get("/products", dependencies=[Depends(require_admin)])
 def list_products(
     category: Optional[str] = Query(None),
     platform: Optional[str] = Query(None),
@@ -877,7 +877,7 @@ def set_product_model(product_id: int, update: ModelUpdate):
         conn.close()
 
 
-@core_router.get("/products/{product_id}")
+@core_router.get("/products/{product_id}", dependencies=[Depends(require_admin)])
 def get_product(product_id: int):
     conn = get_connection()
     try:
@@ -912,7 +912,7 @@ def get_product(product_id: int):
         conn.close()
 
 
-@core_router.get("/comparison")
+@core_router.get("/comparison", dependencies=[Depends(require_admin)])
 def price_comparison(limit: int = Query(100, ge=1, le=500)):
     conn = get_connection()
     try:
@@ -923,7 +923,7 @@ def price_comparison(limit: int = Query(100, ge=1, le=500)):
         conn.close()
 
 
-@core_router.get("/opportunities/top")
+@core_router.get("/opportunities/top", dependencies=[Depends(require_admin)])
 def top_opportunities(limit: int = Query(20, ge=1, le=100)):
     conn = get_connection()
     try:
