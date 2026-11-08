@@ -220,32 +220,39 @@ class AdminAuthenticationTests(unittest.TestCase):
         self.assertTrue(expected.issubset(protected))
 
     def test_internal_catalog_reads_require_admin_session(self):
-        guarded_routes = [
-            *api.core_router.routes,
-            *api.tiktok_creator_router.routes,
-        ]
-        expected = {
+        core_protected = set()
+        for route in api.core_router.routes:
+            if any(
+                dependency.call is admin_auth.require_admin
+                for dependency in route.dependant.dependencies
+            ):
+                core_protected.update((method, route.path) for method in route.methods or ())
+
+        expected_core = {
             ("GET", "/pipeline/metrics"),
             ("GET", "/pipeline/summary"),
             ("GET", "/products"),
             ("GET", "/products/{product_id}"),
             ("GET", "/comparison"),
             ("GET", "/opportunities/top"),
-            ("GET", "/status"),
-            ("GET", "/profile"),
-            ("GET", "/products"),
         }
-        protected = set()
+        self.assertTrue(expected_core.issubset(core_protected))
 
-        for route in guarded_routes:
-            for method in route.methods or ():
-                if any(
-                    dependency.call is admin_auth.require_admin
-                    for dependency in route.dependant.dependencies
-                ):
-                    protected.add((method, route.path))
+        creator_protected = set()
+        for route in api.tiktok_creator_router.routes:
+            if any(
+                dependency.call is admin_auth.require_admin
+                for dependency in route.dependant.dependencies
+            ):
+                creator_protected.update((method, route.path) for method in route.methods or ())
 
-        self.assertTrue(expected.issubset(protected))
+        self.assertTrue(
+            {
+                ("GET", "/status"),
+                ("GET", "/profile"),
+                ("GET", "/products"),
+            }.issubset(creator_protected)
+        )
 
     def test_publication_order_rejects_duplicate_ids(self):
         with self.assertRaises(HTTPException) as error:
