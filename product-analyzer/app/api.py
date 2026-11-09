@@ -990,14 +990,24 @@ def top_opportunities(limit: int = Query(20, ge=1, le=100)):
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT p.id, p.title, pl.name AS platform, c.name AS category,
+                SELECT p.id,
+                       p.title, pl.name AS platform, c.name AS category,
                        p.current_price, p.currency,
                        CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
                        CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
                        CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
                        s.price_score, s.demand_score, s.trend_score, s.opportunity_score,
                        p.product_url, p.image_url, p.updated_at, p.catalog_expires_at,
-                       p.model_url, p.model_shape, p.source_metadata
+                       p.model_url, p.model_shape, p.source_metadata,
+                       COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) AS missing_fields,
+                       CASE WHEN COALESCE(p.source_metadata->>'catalog_status', 'current') = 'current'
+                                  AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
+                            THEN 'verified' ELSE 'incomplete' END AS data_quality
                 FROM product_scores s
                 JOIN products p ON p.id = s.product_id
                 JOIN platforms pl ON pl.id = p.platform_id
@@ -1011,21 +1021,21 @@ def top_opportunities(limit: int = Query(20, ge=1, le=100)):
                   AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
                   AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
                   AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
-                  AND LOWER(p.title) NOT LIKE 'producto amazon %%'
-                  AND LOWER(p.title) NOT LIKE 'producto aliexpress %%'
-                  AND LOWER(p.title) NOT LIKE 'producto url-%%'
-                  AND LOWER(p.title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
-                  AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
-                  AND LOWER(p.title) NOT LIKE '%%producto verificado con%%'
-                  AND LOWER(p.title) NOT LIKE '%%titulo real del producto%%'
-                  AND LOWER(p.title) NOT LIKE '%%nombre real del producto%%'
+                  AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto amazon %%'
+                  AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto aliexpress %%'
+                  AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto url-%%'
+                  AND LOWER(COALESCE(p.title, '')) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
+                  AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%oferta destacada global%%'
+                  AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%producto verificado con%%'
+                  AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%titulo real del producto%%'
+                  AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%nombre real del producto%%'
                   AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
-                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
+                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') = 'current'
                 ORDER BY s.opportunity_score DESC, p.updated_at DESC
                 LIMIT %s
                 """,
