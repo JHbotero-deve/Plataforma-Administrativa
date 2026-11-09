@@ -129,6 +129,49 @@ class AdminAuthenticationTests(unittest.TestCase):
             "admin@example.com",
         )
 
+    def test_mutation_rejects_unconfigured_vercel_subdomains(self):
+        token = admin_auth.create_session_token("admin@example.com")
+
+        with self.assertRaises(HTTPException) as error:
+            admin_auth.require_admin(
+                self.request(
+                    method="PATCH",
+                    token=token,
+                    origin="https://attacker.vercel.app",
+                )
+            )
+
+        self.assertEqual(error.exception.status_code, 403)
+
+    def test_mutation_accepts_an_explicitly_configured_origin(self):
+        token = admin_auth.create_session_token("admin@example.com")
+        os.environ["ALLOWED_ORIGINS"] = "https://admin.example.com"
+
+        self.assertEqual(
+            admin_auth.require_admin(
+                self.request(
+                    method="PATCH",
+                    token=token,
+                    origin="https://admin.example.com",
+                )
+            ),
+            "admin@example.com",
+        )
+
+    def test_mutation_rejects_origins_with_paths(self):
+        token = admin_auth.create_session_token("admin@example.com")
+
+        with self.assertRaises(HTTPException) as error:
+            admin_auth.require_admin(
+                self.request(
+                    method="PATCH",
+                    token=token,
+                    origin="https://central-7ykr.vercel.app.evil.test/path",
+                )
+            )
+
+        self.assertEqual(error.exception.status_code, 403)
+
     def test_session_cookie_is_http_only_secure_and_same_site(self):
         response = Response()
         admin_auth.set_admin_cookie(response, "admin@example.com")
@@ -175,6 +218,41 @@ class AdminAuthenticationTests(unittest.TestCase):
                     protected.add((method, route.path))
 
         self.assertTrue(expected.issubset(protected))
+
+    def test_internal_catalog_reads_require_admin_session(self):
+        core_protected = set()
+        for route in api.core_router.routes:
+            if any(
+                dependency.call is admin_auth.require_admin
+                for dependency in route.dependant.dependencies
+            ):
+                core_protected.update((method, route.path) for method in route.methods or ())
+
+        expected_core = {
+            ("GET", "/pipeline/metrics"),
+            ("GET", "/pipeline/summary"),
+            ("GET", "/products"),
+            ("GET", "/products/{product_id}"),
+            ("GET", "/comparison"),
+            ("GET", "/opportunities/top"),
+        }
+        self.assertTrue(expected_core.issubset(core_protected))
+
+        creator_protected = set()
+        for route in api.tiktok_creator_router.routes:
+            if any(
+                dependency.call is admin_auth.require_admin
+                for dependency in route.dependant.dependencies
+            ):
+                creator_protected.update((method, route.path) for method in route.methods or ())
+
+        self.assertTrue(
+            {
+                ("GET", "/tiktok/creator/status"),
+                ("GET", "/tiktok/creator/profile"),
+                ("GET", "/tiktok/creator/products"),
+            }.issubset(creator_protected)
+        )
 
     def test_publication_order_rejects_duplicate_ids(self):
         with self.assertRaises(HTTPException) as error:
