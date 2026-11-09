@@ -29,6 +29,8 @@ class ApiCatalogQualityTests(unittest.TestCase):
         self.assertIn("THEN p.description ELSE NULL END AS description", query)
         self.assertIn("THEN seller.name ELSE NULL END AS seller_name", query)
         self.assertIn("THEN COALESCE(p.image_gallery, '[]'::jsonb) ELSE '[]'::jsonb END AS image_gallery", query)
+        self.assertIn("THEN p.stock ELSE NULL END AS stock", query)
+        self.assertIn("THEN c.name ELSE NULL END AS category", query)
         self.assertIn("AS data_quality", query)
         connection.close.assert_called_once()
 
@@ -67,7 +69,7 @@ class ApiCatalogQualityTests(unittest.TestCase):
         self.assertIn("previous_price", query)
         self.assertIn("THEN p.description ELSE NULL END AS description", query)
         self.assertIn("THEN seller.name ELSE NULL END AS seller_name", query)
-        self.assertIn("COALESCE(p.image_gallery, '[]'::jsonb) AS image_gallery", query)
+        self.assertIn("THEN COALESCE(p.image_gallery, '[]'::jsonb) ELSE '[]'::jsonb END AS image_gallery", query)
         connection.close.assert_called_once()
 
     def test_affiliate_click_and_sitemap_exclude_stale_cards(self):
