@@ -641,14 +641,10 @@ def _handle(token, chat_id, text):
         heading = f"<b>Resultados del catálogo ({len(local_products)})</b>"
         if not _send(token, chat_id, heading):
             return False
-        if local_products:
-            heading = f"<b>Resultados del catálogo ({len(local_products)})</b>"
-            if not _send(token, chat_id, heading):
+        for index, product in enumerate(local_products, 1):
+            product["title"] = f"{index}. {product['title']}"
+            if not _send_product(token, chat_id, product):
                 return False
-            for index, product in enumerate(local_products, 1):
-                product["title"] = f"{index}. {product['title']}"
-                if not _send_product(token, chat_id, product):
-                    return False
         return True
 
     if command in ("/agregar", "/producto"):
@@ -707,7 +703,11 @@ def _handle(token, chat_id, text):
                            COUNT(*) FILTER (WHERE is_active = TRUE) AS active,
                            COUNT(*) FILTER (WHERE is_active = FALSE) AS inactive,
                            COUNT(*) FILTER (WHERE source_metadata->>'catalog_status' = 'stale' OR (catalog_expires_at IS NOT NULL AND catalog_expires_at <= NOW())) AS stale,
-                           COUNT(*) FILTER (WHERE product_url IS NOT NULL AND product_url <> '') AS with_url
+                           COUNT(*) FILTER (WHERE product_url IS NOT NULL AND product_url <> '') AS with_url,
+                           COUNT(*) FILTER (WHERE is_active = TRUE AND current_price IS NULL) AS missing_price,
+                           COUNT(*) FILTER (WHERE is_active = TRUE AND image_url IS NULL) AS missing_image,
+                           COUNT(*) FILTER (WHERE is_active = TRUE AND category_id IS NULL) AS missing_category,
+                           COUNT(*) FILTER (WHERE is_active = TRUE AND source_metadata->>'enrichment_status' IN ('partial','retry','blocked')) AS pending_recovery
                     FROM products
                 """)
                 counts = cur.fetchone()
@@ -716,6 +716,10 @@ def _handle(token, chat_id, text):
                 inactive = int(counts["inactive"] or 0)
                 stale = int(counts["stale"] or 0)
                 with_url = int(counts["with_url"] or 0)
+                missing_price = int(counts.get("missing_price") or 0)
+                missing_image = int(counts.get("missing_image") or 0)
+                missing_category = int(counts.get("missing_category") or 0)
+                pending_recovery = int(counts.get("pending_recovery") or 0)
                 cur.execute(
                     """
                     SELECT COUNT(DISTINCT p.id) AS modeled
@@ -724,6 +728,13 @@ def _handle(token, chat_id, text):
                     WHERE p.is_active = TRUE AND p.current_price IS NOT NULL AND p.currency NOT IN ('UNK', 'N/D')
                       AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                       AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                      AND p.image_url IS NOT NULL AND p.category_id IS NOT NULL
+                      AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                      AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                      AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                      AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                      AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
+                      AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url', 'category'])
                     """
                 )
                 modeled = cur.fetchone()["modeled"]
@@ -731,7 +742,9 @@ def _handle(token, chat_id, text):
                 f"<b>Estado del catálogo</b>\nProductos registrados: {total}\n"
                 f"Productos activos: {active}\nProductos inactivos: {inactive}\n"
                 f"Productos por revalidar: {stale}\nProductos con URL: {with_url}\n"
-                f"Productos modelados: {modeled}"
+                f"Pendientes de recuperación: {pending_recovery}\n"
+                f"Sin precio: {missing_price} | Sin imagen: {missing_image} | Sin categoría: {missing_category}\n"
+                f"Productos modelados y verificados: {modeled}"
             )
             if not total:
                 message += "\nAgrega el primer producto con /agregar URL."
