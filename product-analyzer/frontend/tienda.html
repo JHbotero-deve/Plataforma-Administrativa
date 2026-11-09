@@ -1427,7 +1427,7 @@ document.addEventListener("error",event=>{const image=event.target;if(!image.mat
 function modelSrc(p){const value=String(p.model_url||"").trim();try{const parsed=new URL(value,location.origin);return !parsed.username&&!parsed.password&&(parsed.protocol==="https:"||parsed.origin===location.origin)&&/\.(?:glb|gltf)$/i.test(parsed.pathname)?parsed.href:""}catch{return""}}
 function modelMarkup(p,cls){const src=modelSrc(p);return src?'<model-viewer class="'+cls+'" src="'+esc(src)+'" alt="'+esc(p.title||"Modelo 3D")+'" camera-controls auto-rotate rotation-per-second="18deg" shadow-intensity="1" exposure="1" ar ar-modes="webxr scene-viewer quick-look" loading="lazy"></model-viewer><span class="model-hint">Arrastra para girar · 360°</span>':""}
 function saveCart(){localStorage.setItem("central_cart",JSON.stringify(cart));renderCart()}
-function isOwn(p){return String(p.platform||"").toLowerCase()==="personal"}
+function isOwn(p){return String(p.platform||"").toLowerCase()==="personal"||String(p.checkout_mode||"").toUpperCase()==="CENTRAL"}
 function cleanCart(){cart=cart.filter(x=>{const p=products.find(p=>String(p.product_id||p.id)===String(x.product_id));return p&&isOwn(p)});saveCart()}
 function externalUrl(p){return p.product_url||p.affiliate_url||""}
 function purchaseChannel(p){const platform=String(p.platform||"").toLowerCase();return platform==="aliexpress"?"AliExpress":platform==="amazon"?"Amazon":"su enlace de compra"}
