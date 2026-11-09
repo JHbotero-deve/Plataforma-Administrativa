@@ -374,15 +374,20 @@ def enrich_product(product, force=False):
         else:
             metadata.pop("enrichment_retry_after", None)
     except Exception as exc:
+        field_sources = dict(metadata.get("field_sources") or {})
+        manual_complete = all(field_sources.get(field) == "user" and product.get(field) not in (None, "") for field in ("title", "price", "currency", "image_url", "category"))
         metadata.update({
             "original_url": metadata.get("original_url") or url,
-            "enrichment_status": "partial",
+            "enrichment_status": "complete" if manual_complete else "partial",
             "enrichment_version": ENRICHMENT_VERSION,
             "catalog_refresh_verified": False,
-            "catalog_status": "stale",
+            "catalog_status": "current" if manual_complete else "stale",
             "enrichment_error": f"{type(exc).__name__}: {str(exc)[:180]}",
-            "enrichment_retry_after": (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat(),
         })
+        if manual_complete:
+            metadata.pop("enrichment_retry_after", None)
+        else:
+            metadata["enrichment_retry_after"] = (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat()
         metadata.pop("network_enrichment_disabled", None)
     if not product.get("category"):
         inferred_category = _category(None, product.get("title"))

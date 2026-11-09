@@ -329,6 +329,49 @@
       border-color: #566579
     }
 
+    .import-manual {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel)
+    }
+
+    .import-manual summary {
+      cursor: pointer;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 600
+    }
+
+    .import-manual-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px
+    }
+
+    .import-manual-grid label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px
+    }
+
+    .import-manual-grid .wide {
+      grid-column: 1 / -1
+    }
+
+    @media(max-width:800px) {
+      .import-manual-grid {
+        grid-template-columns: 1fr
+      }
+
+      .import-manual-grid .wide {
+        grid-column: auto
+      }
+    }
+
     .import-result {
       margin-top: 12px;
       min-height: 20px;
@@ -1638,11 +1681,21 @@
               </select></label>
             <button class="btn primary" id="importBtn" type="submit">Importar producto</button>
           </div>
+          <details class="import-manual">
+            <summary>Completar datos manualmente si la tienda no permite leerlos</summary>
+            <div class="import-manual-grid">
+              <label class="wide">Nombre real del producto<input class="field" id="importTitle" maxlength="500" placeholder="Ej. Audífonos inalámbricos ANC"></label>
+              <label>Precio actual<input class="field" id="importPrice" type="number" min="0.01" step="0.01" placeholder="129900"></label>
+              <label>Precio anterior<input class="field" id="importPreviousPrice" type="number" min="0.01" step="0.01" placeholder="199900"></label>
+              <label>Moneda<select class="field" id="importCurrency"><option value="">Detectar automáticamente</option><option value="COP">COP</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="MXN">MXN</option></select></label>
+              <label class="wide">URL de imagen principal<input class="field" id="importImage" type="url" maxlength="2000" placeholder="https://..."></label>
+              <label class="wide">Descripción<textarea class="field" id="importDescription" maxlength="5000" rows="3" placeholder="Descripción real del producto"></textarea></label>
+            </div>
+          </details>
         </form>
-        <p class="import-help">Pega una URL pública de Amazon o AliExpress. Central extrae nombre, descripción, fotos y
-          precios disponibles. Solo publica ofertas con al menos 40% de descuento real y margen positivo; el costo y la
-          ganancia quedan visibles únicamente en administración. Si la tienda exige iniciar sesión o no entrega el
-          precio original, el producto se guarda sin publicarse.</p>
+        <p class="import-help">Pega una URL pública de Amazon o AliExpress. Central intenta extraer nombre, descripción, fotos y
+          precios. Si la tienda bloquea la lectura, completa los datos manualmente para que el producto pueda entrar al catálogo.</p>
+        <p class="import-help">Solo se publican ofertas con al menos 40% de descuento real y margen positivo. Si la tienda no entrega el precio anterior, puedes completarlo manualmente; el costo y la ganancia quedan visibles únicamente en administración.</p>
         <div class="import-fallback"><a class="btn small" href="https://central-7ykr.vercel.app/tarjetas">Abrir creador
             de tarjetas</a></div>
         <div class="import-result" id="importResult" role="status" aria-live="polite"></div>
@@ -2082,10 +2135,11 @@
           if (!saved) return;
           if (typeof saved.url === "string") $("url").value = saved.url;
           if (typeof saved.category === "string" && [...$("category").options].some(option => option.value === saved.category)) $("category").value = saved.category;
+          for (const id of ["importTitle", "importPrice", "importPreviousPrice", "importCurrency", "importImage", "importDescription"]) if (typeof saved[id] === "string") $(id).value = saved[id];
         } catch { }
       }
       function saveImportDraft() {
-        try { localStorage.setItem(importDraftKey, JSON.stringify({ url: $("url").value, category: $("category").value, updated_at: new Date().toISOString() })) }
+        try { localStorage.setItem(importDraftKey, JSON.stringify({ url: $("url").value, category: $("category").value, importTitle: $("importTitle").value, importPrice: $("importPrice").value, importPreviousPrice: $("importPreviousPrice").value, importCurrency: $("importCurrency").value, importImage: $("importImage").value, importDescription: $("importDescription").value, updated_at: new Date().toISOString() })) }
         catch { $("importResult").textContent = "No se pudo guardar el borrador local; mantén esta página abierta hasta completar la importación." }
       }
       function schedulePublicationDraft(form) {
@@ -2303,7 +2357,17 @@
       async function submitImport(e) {
         e.preventDefault();
         const btn = $("importBtn"), out = $("importResult");
-        const body = { url: $("url").value.trim(), category: $("category").value || null };
+        const priceValue = $("importPrice").value.trim();
+        const body = {
+          url: $("url").value.trim(),
+          category: $("category").value || null,
+          title: $("importTitle").value.trim() || null,
+          price: priceValue ? Number(priceValue) : null,
+          previous_price: $("importPreviousPrice").value.trim() ? Number($("importPreviousPrice").value) : null,
+          currency: $("importCurrency").value || null,
+          image_url: $("importImage").value.trim() || null,
+          description: $("importDescription").value.trim() || null
+        };
         btn.disabled = true;
         btn.textContent = "Importando…";
         out.textContent = navigator.onLine ? "Leyendo el producto y guardando sus datos reales…" : "Guardando la importación en la cola local…";
@@ -2311,7 +2375,7 @@
           try {
             enqueueOfflineAction({ type: "import", path: "/products/import-url", method: "POST", body });
             out.textContent = "Importación guardada en este dispositivo; se procesará al recuperar conexión.";
-            $("url").value = "";
+            $("importForm").reset();
             localStorage.removeItem(importDraftKey);
           } catch (error) { out.textContent = "No se guardó la importación local: " + error.message }
           finally { btn.disabled = false; btn.textContent = "Importar producto" }
@@ -2326,10 +2390,12 @@
           });
           const data = await r.json();
           if (!r.ok) throw new Error(data.detail || "No fue posible importar el producto.");
-          out.textContent = "Producto importado: " + (data.product?.title || "Guardado") +
-            (data.customer_offer ? " · publicado con " + Math.round(data.customer_offer.discount_pct) + "% de descuento para clientes" : " · guardado sin publicar: requiere 40% de descuento real y margen positivo") +
+          const missing = data.product?.source_metadata?.missing_fields || [];
+          out.textContent = "Producto guardado: " + (data.product?.title || "Guardado") +
+            (missing.length ? " · faltan datos: " + missing.join(", ") : " · ficha completa") +
+            (data.customer_offer ? " · oferta publicada con " + Math.round(data.customer_offer.discount_pct) + "% de descuento" : " · no publicado: debe cumplir el descuento y margen mínimos") +
             (data.product?.affiliate_url ? " · enlace afiliado listo" : " · enlace afiliado pendiente");
-          $("url").value = "";
+          $("importForm").reset();
           try { localStorage.removeItem(importDraftKey) } catch { }
           await load();
           await loadPublications();
