@@ -479,7 +479,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
         cur.execute("""SELECT p.id,p.external_id,p.title,p.current_price,p.currency,p.image_url,p.image_gallery,p.rating,p.reviews_count,p.product_url,p.affiliate_url,pl.name AS platform,c.name AS category,p.source_metadata,s.external_id AS seller_external_id,s.name AS seller_name,p.is_active,
             (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) AS catalog_expired
             FROM products p JOIN platforms pl ON pl.id=p.platform_id LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN sellers s ON s.id=p.seller_id
-            WHERE p.product_url IS NOT NULL AND (
+            WHERE p.product_url IS NOT NULL AND pl.name IN ('amazon','aliexpress') AND (
                 (p.current_price IS NULL OR p.currency IS NULL OR p.currency = 'UNK' OR p.image_url IS NULL OR LOWER(p.title) LIKE 'producto amazon %%' OR LOWER(p.title) LIKE 'producto aliexpress %%' OR LOWER(p.title) LIKE 'producto url-%%' OR LOWER(p.title) IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url') OR LOWER(p.title) LIKE '%%titulo real del producto%%' OR LOWER(p.title) LIKE '%%nombre real del producto%%' OR LOWER(p.title) LIKE '%%oferta destacada global%%' OR LOWER(p.title) LIKE '%%producto verificado con%%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%%enlace-de-la-imagen.jpg%%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%%placeholder%%' OR LOWER(COALESCE(p.image_url, '')) LIKE '%%example.com%%' OR p.category_id IS NULL)
                 OR (p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW())
                 OR (LOWER(p.title) LIKE '%%oferta destacada global%%' OR LOWER(p.title) LIKE '%%producto verificado con%%')
