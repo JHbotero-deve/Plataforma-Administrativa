@@ -29,8 +29,9 @@ class StorefrontSectionTests(unittest.TestCase):
     def test_public_cards_require_verified_category_and_reject_api_provenance(self):
         import storefront_sections
         quality_filter = storefront_sections.PUBLIC_CARD_QUALITY_FILTER
-        self.assertNotIn("'aliexpress_affiliate_api'", quality_filter)
+        self.assertIn("'aliexpress_affiliate_api'", quality_filter)
         self.assertIn("field_sources'->>'title' IN ('public_product_page', 'user')", quality_filter)
+        self.assertNotIn("field_sources'->>'title' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')", quality_filter)
         self.assertIn("field_sources'->>'category'", quality_filter)
         self.assertIn("'category'", quality_filter)
 
