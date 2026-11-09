@@ -538,68 +538,6 @@ class ProductSourcesTests(unittest.TestCase):
         page.close.assert_called_once()
 
 
-    def test_aliexpress_product_detail_api_normalizes_official_fields(self):
-        payload = {
-            "aliexpress_affiliate_productdetail_get_response": {
-                "resp_result": {
-                    "resp_code": 200,
-                    "result": {
-                        "products": {
-                            "product": [{
-                                "product_id": "1005001234567890",
-                                "product_title": "Auriculares Bluetooth",
-                                "target_sale_price": "19.99",
-                                "target_sale_price_currency": "USD",
-                                "product_main_image_url": "https://ae01.alicdn.com/kf/headphones.jpg",
-                                "product_small_image_urls": {"string": ["https://ae01.alicdn.com/kf/headphones.jpg"]},
-                                "second_level_category_name": "Consumer Electronics",
-                                "product_detail_url": "https://www.aliexpress.com/item/1005001234567890.html",
-                            }]
-                        }
-                    },
-                }
-            }
-        }
-        with patch.object(product_sources, "aliexpress_api_request", return_value=payload) as request:
-            result = product_sources._aliexpress_product_detail("1005001234567890")
-        self.assertEqual(result["title"], "Auriculares Bluetooth")
-        self.assertEqual(result["price"], 19.99)
-        self.assertEqual(result["currency"], "USD")
-        self.assertEqual(result["category"], "tecnologia")
-        self.assertEqual(result["image_url"], "https://ae01.alicdn.com/kf/headphones.jpg")
-        self.assertEqual(result["_field_sources"]["title"], "aliexpress_affiliate_api")
-        self.assertEqual(request.call_args.args[0], "aliexpress.affiliate.productdetail.get")
-        self.assertEqual(request.call_args.args[1]["country"], "CO")
-        self.assertIn("product_title", request.call_args.args[1]["fields"])
-
-    def test_aliexpress_url_uses_affiliate_detail_when_public_page_is_incomplete(self):
-        url = "https://www.aliexpress.com/item/1005001234567890.html"
-        page = {
-            "resolved_url": url, "title": None, "price": None, "currency": None,
-            "image_url": None, "gallery_urls": [], "category": None,
-        }
-        details = {
-            "title": "Auriculares Bluetooth", "price": 19.99, "currency": "USD",
-            "image_url": "https://ae01.alicdn.com/kf/headphones.jpg",
-            "gallery_urls": ["https://ae01.alicdn.com/kf/headphones.jpg"],
-            "category": "tecnologia", "resolved_url": url,
-            "_field_sources": {field: "aliexpress_affiliate_api" for field in ("title", "price", "currency", "image_url", "category")},
-        }
-        product = import_url(url)
-        with (
-            patch.object(product_sources, "_public_product_page", return_value=page),
-            patch.object(product_sources, "_aliexpress_product_detail", return_value=details),
-        ):
-            result = product_sources.enrich_product(product)
-        self.assertEqual(result["title"], "Auriculares Bluetooth")
-        self.assertEqual(result["price"], 19.99)
-        self.assertEqual(result["category"], "tecnologia")
-        self.assertEqual(result["source_metadata"]["metadata_source"], "aliexpress_affiliate_api")
-        self.assertTrue(result["source_metadata"]["catalog_refresh_verified"])
-        self.assertEqual(result["source_metadata"]["missing_fields"], [])
-        for field in ("title", "price", "currency", "image_url", "category"):
-            self.assertEqual(result["source_metadata"]["field_sources"][field], "aliexpress_affiliate_api")
-
     def test_title_inferred_category_remains_unverified(self):
         product = import_url("https://www.aliexpress.com/item/1005001234567890.html")
         page = {
@@ -615,25 +553,21 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertFalse(result["source_metadata"]["catalog_refresh_verified"])
 
 
-    def test_aliexpress_affiliate_api_fallback_survives_public_page_block(self):
+    def test_aliexpress_page_block_is_reported_without_api_fallback(self):
         url = "https://www.aliexpress.com/item/1005001234567890.html"
-        details = {
-            "title": "Auriculares Bluetooth", "price": 19.99, "currency": "USD",
-            "image_url": "https://ae01.alicdn.com/kf/headphones.jpg",
-            "gallery_urls": ["https://ae01.alicdn.com/kf/headphones.jpg"],
-            "category": "tecnologia", "resolved_url": url,
-            "_field_sources": {field: "aliexpress_affiliate_api" for field in ("title", "price", "currency", "image_url", "category")},
-        }
         product = import_url(url)
-        with (
-            patch.object(product_sources, "_public_product_page", side_effect=RuntimeError("403 Forbidden")),
-            patch.object(product_sources, "_aliexpress_product_detail", return_value=details) as detail,
-        ):
+        with patch.object(product_sources, "_public_product_page", side_effect=RuntimeError("403 Forbidden")):
             result = product_sources.enrich_product(product)
-        detail.assert_called_once_with("1005001234567890")
-        self.assertTrue(result["source_metadata"]["catalog_refresh_verified"])
-        self.assertIn("403 Forbidden", result["source_metadata"]["public_page_error"])
-        self.assertEqual(result["source_metadata"]["field_sources"]["title"], "aliexpress_affiliate_api")
+        self.assertEqual(result["source_metadata"]["enrichment_status"], "partial")
+        self.assertIn("403 Forbidden", result["source_metadata"]["enrichment_error"])
+        self.assertIn("price", result["source_metadata"]["missing_fields"])
+        self.assertNotIn("affiliate_api_error", result["source_metadata"])
+
+    def test_gaming_laptop_is_classified_as_technology_not_toys(self):
+        title = "Portátil para Juegos Alienware 18 Area-51 RTX5070 Intel Core Ultra 9-275HX"
+        self.assertEqual(product_sources._category(None, title), "tecnologia")
+        self.assertEqual(product_sources._category(None, "Juguetes para niños"), "juguetes")
+
 
 if __name__ == "__main__":
     unittest.main()
