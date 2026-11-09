@@ -85,7 +85,9 @@ def import_url(
     resolved_url = url
 
     supplied_id = str(external_id or "").strip()
-    external_id = supplied_id[:150] if supplied_id else _external_id(resolved_url, platform)
+    detected_id = _external_id(resolved_url, platform)
+    external_id = supplied_id[:150] if supplied_id and not supplied_id.upper().startswith("URL-") else detected_id
+    external_id_source = "user" if supplied_id and not supplied_id.upper().startswith("URL-") else "url" if not detected_id.startswith("URL-") else "pending_redirect"
     raw_title = (title or "").strip()
     final_title = raw_title or f"Producto {platform.title()} {external_id}"
     final_image = (image_url or "").strip() or None
@@ -143,6 +145,7 @@ def import_url(
             "category_source": "user" if final_category else None,
             "original_url": url,
             "resolved_url": resolved_url or url,
+            "external_id_source": external_id_source,
             "gallery_urls": [final_image] if final_image else [],
             "missing_fields": missing_fields,
             "field_sources": {
