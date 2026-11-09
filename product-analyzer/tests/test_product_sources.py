@@ -614,5 +614,26 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertIn("category", result["source_metadata"]["missing_fields"])
         self.assertFalse(result["source_metadata"]["catalog_refresh_verified"])
 
+
+    def test_aliexpress_affiliate_api_fallback_survives_public_page_block(self):
+        url = "https://www.aliexpress.com/item/1005001234567890.html"
+        details = {
+            "title": "Auriculares Bluetooth", "price": 19.99, "currency": "USD",
+            "image_url": "https://ae01.alicdn.com/kf/headphones.jpg",
+            "gallery_urls": ["https://ae01.alicdn.com/kf/headphones.jpg"],
+            "category": "tecnologia", "resolved_url": url,
+            "_field_sources": {field: "aliexpress_affiliate_api" for field in ("title", "price", "currency", "image_url", "category")},
+        }
+        product = import_url(url)
+        with (
+            patch.object(product_sources, "_public_product_page", side_effect=RuntimeError("403 Forbidden")),
+            patch.object(product_sources, "_aliexpress_product_detail", return_value=details) as detail,
+        ):
+            result = product_sources.enrich_product(product)
+        detail.assert_called_once_with("1005001234567890")
+        self.assertTrue(result["source_metadata"]["catalog_refresh_verified"])
+        self.assertIn("403 Forbidden", result["source_metadata"]["public_page_error"])
+        self.assertEqual(result["source_metadata"]["field_sources"]["title"], "aliexpress_affiliate_api")
+
 if __name__ == "__main__":
     unittest.main()
