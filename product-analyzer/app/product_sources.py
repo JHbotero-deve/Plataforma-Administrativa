@@ -431,6 +431,26 @@ def _retry_due(metadata):
         return True
 
 
+def _row_enrichment_due(row, force=False):
+    metadata = row.get("source_metadata") or {}
+    version_changed = str(metadata.get("enrichment_version") or "") != str(ENRICHMENT_VERSION)
+    retry_due = _retry_due(metadata)
+    if force or version_changed:
+        return True
+    if metadata.get("enrichment_retry_after") and not retry_due:
+        return False
+    return bool(row.get("catalog_expired") or retry_due)
+
+
+def _row_force_refresh(row, force=False):
+    metadata = row.get("source_metadata") or {}
+    return bool(
+        force
+        or row.get("catalog_expired")
+        or str(metadata.get("enrichment_version") or "") != str(ENRICHMENT_VERSION)
+    )
+
+
 def _enrich_pending_row(row, force=False):
     source_metadata = row["source_metadata"] or {}
     category = row["category"]
@@ -468,16 +488,23 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
             )
             ORDER BY p.is_active DESC,(p.catalog_expires_at IS NOT NULL AND p.catalog_expires_at <= NOW()) DESC,p.catalog_expires_at ASC NULLS LAST,p.updated_at ASC LIMIT %s""", (str(ENRICHMENT_VERSION), max(limit, limit * 5)))
         candidates = cur.fetchall()
-    due_rows = [row for row in candidates if force or row.get("catalog_expired") or str((row.get("source_metadata") or {}).get("enrichment_version") or "") != str(ENRICHMENT_VERSION) or _retry_due(row.get("source_metadata") or {})]
+    due_rows = [row for row in candidates if _row_enrichment_due(row, force=force)]
     rows = due_rows[:limit]
     if not rows:
         print(f"[url-enrichment] candidatos={len(candidates)} listos_para_reintento={len(due_rows)} intentadas=0 recuperadas=0")
         return 0
     with ThreadPoolExecutor(max_workers=max(1, min(int(max_workers), len(rows)))) as executor:
-        enriched_rows = list(executor.map(_enrich_pending_row, rows, [bool(force or row.get("catalog_expired") or str((row.get("source_metadata") or {}).get("enrichment_version") or "") != str(ENRICHMENT_VERSION)) for row in rows]))
+        enriched_rows = list(executor.map(_enrich_pending_row, rows, [_row_force_refresh(row, force=force) for row in rows]))
     recovered = 0
     for row, enriched in zip(rows, enriched_rows):
         metadata = enriched.get("source_metadata") or {}
+        if metadata.get("enrichment_status") != "complete":
+            missing = metadata.get("missing_fields") or []
+            error = str(metadata.get("enrichment_error") or "")
+            error_type = error.split(":", 1)[0] if ":" in error else "metadatos públicos incompletos"
+            status = re.search(r"\\b[45]\\d{2}\\b", error)
+            reason = f"{error_type} HTTP {status.group(0)}" if status else error_type
+            print(f"[url-enrichment] producto={row['id']} tienda={row['platform']} estado=parcial faltan={','.join(missing) or 'sin identificar'} causa={reason[:70]}")
         gallery = enriched.get("gallery_urls") or row.get("image_gallery") or []
         seller = enriched.get("seller") or {}
         seller_id = None
