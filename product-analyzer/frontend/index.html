@@ -2280,8 +2280,13 @@
         const displayProducts = top.length ? top : items.slice().sort((a, b) => Number(b.opportunity_score || 0) - Number(a.opportunity_score || 0));
         if (topResult.status === "fulfilled" || itemsResult.status === "fulfilled") {
           radarProducts = displayProducts;
-          $("featured").innerHTML = displayProducts.length ? displayProducts.map(card).join("") : '<div class="empty">No hay productos reales disponibles.</div>';
+          $("featured").innerHTML = displayProducts.length ? displayProducts.map(card).join("") : (
+            itemsResult.status === "rejected"
+              ? '<div class="empty">No se pudo consultar el catálogo: ' + esc(itemsResult.reason?.message || "Error desconocido") + '</div>'
+              : '<div class="empty">El catálogo está conectado, pero todavía no tiene productos importados.</div>'
+          );
         }
+        if (itemsResult.status === "rejected" && itemsResult.reason?.status === 401) requireSession(itemsResult.reason);
         if (intelResult.status === "fulfilled") renderIntelligence(intelResult.value);
         if (pipelineResult.status === "fulfilled") {
           const pipeline = pipelineResult.value;
@@ -2293,7 +2298,7 @@
           const stale = Number(amazon.stale || 0) + Number(aliexpress.stale || 0);
           $("pipelineMeta").textContent = "Catálogo observado " + date(pipeline.observed_at) + " · Amazon " + Number(amazon.product_count || 0) + " · AliExpress " + Number(aliexpress.product_count || 0) + " · URLs " + urls + "/" + active + " · por revalidar " + stale;
         }
-        status(itemsResult.status === "fulfilled" ? "ok" : "error", itemsResult.status === "fulfilled" ? "Central conectado" : "Productos no disponibles");
+        status(itemsResult.status === "fulfilled" ? "ok" : "error", itemsResult.status === "fulfilled" ? "Central conectado" : itemsResult.reason?.status === 401 ? "Sesión administrativa requerida" : "Error cargando catálogo");
       }
       async function submitImport(e) {
         e.preventDefault();
