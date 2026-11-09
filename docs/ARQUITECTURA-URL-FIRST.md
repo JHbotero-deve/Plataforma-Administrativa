@@ -88,10 +88,10 @@ Estado de la rama de recuperación URL-first:
 
 - `product-analyzer/app/url_import.py` valida el enlace y conserva la URL original; no realiza búsquedas ni llamadas a APIs de marketplaces.
 - `product-analyzer/app/product_sources.py` sigue redirecciones con validación de cada host y extrae metadatos públicos HTML, Open Graph y JSON-LD. Los campos manuales tienen prioridad.
-- `product-analyzer/app/marketplace_ingestion.py` ejecuta discovery oficial opcional por Amazon y AliExpress, vuelve a verificar cada URL pública y solo persiste/puntúa fichas completas y confirmadas.
-- `amazon_creators.py`, `promotion_bots.py` y `affiliate_links.py` contienen los clientes oficiales; sus errores se aíslan por marketplace y no bloquean la ruta URL-first.
-- El worker ejecuta la recuperación URL-first cada 15 minutos y dispara discovery en un hilo independiente cada 2 horas, evitando que una búsqueda externa retrase la lectura de URLs.
-- Telegram `/buscar <término>` consulta primero el catálogo local y después las fuentes oficiales disponibles; `/buscar <URL>`, `/producto <URL>` y `/agregar <URL>` importan directamente el enlace.
+- `product-analyzer/app/marketplace_ingestion.py` queda fuera del flujo operativo; Central Radar no ejecuta discovery ni búsquedas de marketplaces.
+- Los clientes de búsqueda y detalle de marketplaces no se invocan desde Central Radar; la importación depende de la URL pública y de los datos manuales.
+- El worker ejecuta únicamente la recuperación URL-first y el modelado programado; no dispara tareas de búsqueda externa.
+- Telegram `/buscar <término>` consulta exclusivamente el catálogo local; `/buscar <URL>`, `/producto <URL>` y `/agregar <URL>` importan directamente el enlace.
 - Los candidatos sin verificación pública se muestran como pendientes, sin precio inventado, puntuación ni publicación.
 - El endpoint administrativo heredado `/admin/inject` devuelve HTTP 410 y no ejecuta búsquedas externas.
 - El worker procesa URLs parciales, puntúa fichas utilizables y publica productos completos al precio real de la fuente, sin fabricar descuentos ni costes.
@@ -101,12 +101,12 @@ La lectura de páginas públicas puede fallar por login, CAPTCHA, límites o fal
 ## Criterios para dar la migración por terminada
 
 - [x] El worker no ejecuta búsquedas de catálogo mediante APIs de marketplaces.
-- [x] La importación por URL es el flujo primario; el discovery oficial es opcional y separado.
+- [x] La importación por URL es el único flujo de adquisición de Central Radar; no existe discovery automático.
 - [x] El enriquecimiento se basa en la página pública enlazada y en datos suministrados explícitamente por el usuario.
-- [x] No se requieren claves de API de Amazon o AliExpress para importar, analizar o mostrar productos recibidos por URL.
+- [x] No se requieren ni se consultan APIs de búsqueda o detalle de Amazon/AliExpress para importar, analizar o mostrar productos recibidos por URL.
 - [x] Los errores de acceso, CAPTCHA, login y falta de metadatos se registran como estados parciales o fallidos con causa.
 - [x] Se conservan URL original, URL resuelta y procedencia de datos.
-- [ ] Las pruebas cubren URL válida, enlaces cortos, redirecciones, dominios prohibidos, SSRF, metadatos ausentes, respuestas bloqueadas y errores aislados de APIs oficiales.
+- [ ] Las pruebas cubren URL válida, enlaces cortos, redirecciones, dominios prohibidos, SSRF, metadatos ausentes y respuestas bloqueadas.
 - [ ] La tienda pública y el administrador existen como experiencias separadas; el administrador tiene menú lateral y la tienda implementa el diseño visual aprobado.
 - [ ] Los despliegues se validan en preview antes de publicar en producción.
 
