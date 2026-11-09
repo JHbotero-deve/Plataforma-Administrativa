@@ -430,7 +430,7 @@ def list_products(
         with conn.cursor() as cur:
             query = """
                 SELECT p.id,
-                       CASE WHEN p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                       CASE WHEN p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
                                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ? 'title')
                                   AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto amazon %%'
                                   AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto aliexpress %%'
@@ -441,41 +441,41 @@ def list_products(
                                   AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%nombre real del producto%%'
                             THEN p.title ELSE NULL END AS title,
                        pl.name AS platform,
-                       CASE WHEN p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                       CASE WHEN p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
                             THEN c.name ELSE NULL END AS category,
-                       CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.current_price ELSE NULL END AS current_price,
-                       CASE WHEN p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.currency ELSE NULL END AS currency,
-                       CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.rating ELSE NULL END AS rating,
-                       CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
-                       CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
-                       CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                       CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user') THEN p.current_price ELSE NULL END AS current_price,
+                       CASE WHEN p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user') THEN p.currency ELSE NULL END AS currency,
+                       CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
+                       CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
+                       CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
+                       CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
                                   AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
                                   AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
                                   AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
                             THEN p.image_url ELSE NULL END AS image_url,
-                       CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                       CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
                                   AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
                                   AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
                                   AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
                             THEN COALESCE(p.image_gallery, '[]'::jsonb) ELSE '[]'::jsonb END AS image_gallery,
                        p.product_url, p.affiliate_url, p.updated_at, p.source_metadata,
-                       CASE WHEN p.source_metadata->'field_sources'->>'description' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                       CASE WHEN p.source_metadata->'field_sources'->>'description' IN ('public_product_page', 'user')
                             THEN p.description ELSE NULL END AS description,
-                       CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.previous_price ELSE NULL END AS previous_price,
-                       CASE WHEN p.source_metadata->'field_sources'->>'stock' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.stock ELSE NULL END AS stock,
+                       CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS previous_price,
+                       CASE WHEN p.source_metadata->'field_sources'->>'stock' IN ('public_product_page', 'user') THEN p.stock ELSE NULL END AS stock,
                        p.sku, p.catalog_expires_at, p.model_url, p.model_shape,
-                       CASE WHEN p.source_metadata->'field_sources'->>'seller' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                       CASE WHEN p.source_metadata->'field_sources'->>'seller' IN ('public_product_page', 'user')
                             THEN seller.name ELSE NULL END AS seller_name,
                        p.source_metadata->>'seller_url' AS seller_url,
                        COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) AS missing_fields,
                        p.source_metadata->'field_sources' AS field_sources,
                        CASE WHEN COALESCE(p.source_metadata->>'catalog_status', 'current') = 'current'
                                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
-                                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                   AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                                   AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
                                   AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto amazon %%'
                                   AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto aliexpress %%'
                                   AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto url-%%'
@@ -486,11 +486,11 @@ def list_products(
                                   AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
                                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url', 'category'])
                             THEN 'verified' ELSE 'incomplete' END AS data_quality,
-                       CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                   AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                       CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                                   AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
                                   AND COALESCE(p.source_metadata->>'catalog_status', 'current') = 'current'
                                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                                   AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto amazon %%'
@@ -535,28 +535,28 @@ def public_product(product_id: int):
         with conn.cursor() as cur:
             cur.execute(f"""SELECT pc.id AS publication_id,pc.product_id,pc.title,pc.subtitle,pc.price_display,
                 pc.sale_price,pc.opportunity_score,pc.footer,
-                CASE WHEN p.source_metadata->'field_sources'->>'description' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.description ELSE NULL END AS description,
+                CASE WHEN p.source_metadata->'field_sources'->>'description' IN ('public_product_page', 'user') THEN p.description ELSE NULL END AS description,
                 pc.sale_price AS current_price,
-                CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.previous_price ELSE NULL END AS previous_price,
-                CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.previous_price ELSE NULL END AS original_price,
-                CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') AND p.previous_price>0 AND pc.sale_price>0 THEN ROUND((p.previous_price-pc.sale_price)/p.previous_price*100,2) ELSE NULL END AS discount_pct,p.currency,
+                CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS previous_price,
+                CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS original_price,
+                CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') AND p.previous_price>0 AND pc.sale_price>0 THEN ROUND((p.previous_price-pc.sale_price)/p.previous_price*100,2) ELSE NULL END AS discount_pct,p.currency,
                 CASE WHEN NULLIF(pc.image_url, '') IS NOT NULL THEN pc.image_url
-                     WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                     WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
                           AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
                           AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
                           AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
                      THEN p.image_url ELSE NULL END AS image_url,
-                CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
                      THEN COALESCE(p.image_gallery, '[]'::jsonb) ELSE '[]'::jsonb END AS image_gallery,
                 COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) AS product_url,
                 p.affiliate_url,p.sku,p.external_id,
-                CASE WHEN p.source_metadata->'field_sources'->>'stock' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.stock ELSE NULL END AS stock,
+                CASE WHEN p.source_metadata->'field_sources'->>'stock' IN ('public_product_page', 'user') THEN p.stock ELSE NULL END AS stock,
                 pl.name AS platform,
-                CASE WHEN p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                CASE WHEN p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
                      THEN c.name ELSE NULL END AS category,
-                CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.rating ELSE NULL END AS rating,
-                CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,p.updated_at,
-                CASE WHEN p.source_metadata->'field_sources'->>'seller' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN seller.name ELSE NULL END AS seller_name,
+                CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
+                CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,p.updated_at,
+                CASE WHEN p.source_metadata->'field_sources'->>'seller' IN ('public_product_page', 'user') THEN seller.name ELSE NULL END AS seller_name,
                 p.source_metadata->>'seller_url' AS seller_url
                 FROM published_cards pc JOIN products p ON p.id=pc.product_id JOIN platforms pl ON pl.id=p.platform_id
                 LEFT JOIN categories c ON c.id=p.category_id
@@ -699,7 +699,7 @@ def import_product_from_url(payload: ProductImport):
     try:
         product_id = upsert_product(conn, product["platform"], category, product)
         score = None
-        verified_sources = {"public_product_page", "aliexpress_affiliate_api", "user"}
+        verified_sources = {"public_product_page", "user"}
         field_sources = (product.get("source_metadata") or {}).get("field_sources") or {}
         if all(field_sources.get(field) in verified_sources for field in ("title", "price", "currency", "image_url", "category")) and product.get("price") is not None and category and product.get("image_url") and product.get("title") and not product["title"].startswith("Producto "):
             with conn.cursor() as cur:
@@ -1002,20 +1002,20 @@ def top_opportunities(limit: int = Query(20, ge=1, le=100)):
                 SELECT p.id,
                        p.title, pl.name AS platform, c.name AS category,
                        p.current_price, p.currency,
-                       CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.rating ELSE NULL END AS rating,
-                       CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
-                       CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'aliexpress_affiliate_api', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
+                       CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
+                       CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
+                       CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
                        s.price_score, s.demand_score, s.trend_score, s.opportunity_score,
                        p.product_url, p.image_url, p.updated_at, p.catalog_expires_at,
                        p.model_url, p.model_shape, p.source_metadata,
                        COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) AS missing_fields,
                        CASE WHEN COALESCE(p.source_metadata->>'catalog_status', 'current') = 'current'
                                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
-                                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                   AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                                   AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
                                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url', 'category'])
                             THEN 'verified' ELSE 'incomplete' END AS data_quality
                 FROM product_scores s
@@ -1039,11 +1039,11 @@ def top_opportunities(limit: int = Query(20, ge=1, le=100)):
                   AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%producto verificado con%%'
                   AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%titulo real del producto%%'
                   AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%nombre real del producto%%'
-                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
-                                   AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                                   AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url', 'category'])
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                   AND COALESCE(p.source_metadata->>'catalog_status', 'current') = 'current'
