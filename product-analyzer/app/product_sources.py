@@ -1,7 +1,6 @@
 """Enriquecimiento de productos desde metadatos públicos y exportaciones autorizadas."""
 import json
 import math
-import os
 import re
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
@@ -11,7 +10,6 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import requests
 
-from affiliate_links import aliexpress_api_request
 from db import _affiliate_url
 from url_import import ASIN_RE
 
@@ -117,7 +115,7 @@ def _number(value):
 
 def _category(value, title=""):
     text = unicodedata.normalize("NFKD", f"{value or ''} {title or ''}").encode("ascii", "ignore").decode().lower()
-    if any(word in text for word in ("smartphone", "iphone", "android", "laptop", "notebook", "computer", "tablet", "monitor", "keyboard", "mouse", "technology", "electronics", "electronica", "tecnologia", "celular")):
+    if any(word in text for word in ("smartphone", "iphone", "android", "laptop", "notebook", "computer", "tablet", "monitor", "keyboard", "mouse", "technology", "electronics", "electronica", "tecnologia", "celular", "portatil", "gaming", "videojuego", "videojuegos", "consola", "pc gamer", "alienware", "geforce", "rtx", "core ultra")):
         return "tecnologia"
     if any(word in text for word in ("home decor", "kitchen", "furniture", "household", "decoracion", "cocina", "muebles", "hogar", "lampara")):
         return "hogar"
@@ -127,7 +125,7 @@ def _category(value, title=""):
         return "belleza"
     if any(word in text for word in ("personal care", "wellness", "self care", "bienestar", "cuidado personal")):
         return "bienestar"
-    if any(word in text for word in ("toy", "toys", "game", "juguete", "juegos")):
+    if any(word in text for word in ("toy", "toys", "juguete", "juguetes", "muneco", "munecos", "peluche", "peluches")):
         return "juguetes"
     if any(word in text for word in ("office", "stationery", "school supplies", "papeleria", "oficina", "estudio")):
         return "oficina"
@@ -274,94 +272,6 @@ def _public_product_page(url, platform):
     }
 
 
-def _safe_aliexpress_image(value):
-    try:
-        parsed = urlsplit(str(value or "").strip())
-        host = (parsed.hostname or "").lower().rstrip(".")
-        if (
-            parsed.scheme != "https"
-            or parsed.username
-            or parsed.password
-            or parsed.port not in (None, 443)
-            or not (host == "alicdn.com" or host.endswith(".alicdn.com") or host == "aliexpress-media.com" or host.endswith(".aliexpress-media.com"))
-        ):
-            return None
-        return parsed.geturl()
-    except ValueError:
-        return None
-
-
-def _aliexpress_product_detail(product_id):
-    parameters = {
-        "product_ids": str(product_id),
-        "target_currency": (os.getenv("ALIEXPRESS_TARGET_CURRENCY") or "USD").strip().upper(),
-        "target_language": (os.getenv("ALIEXPRESS_TARGET_LANGUAGE") or "ES").strip().upper(),
-        "country": (os.getenv("ALIEXPRESS_SHIP_TO_COUNTRY") or "CO").strip().upper(),
-        "fields": ",".join((
-            "product_id", "product_title", "product_detail_url", "promotion_link",
-            "product_main_image_url", "product_small_image_urls", "target_sale_price",
-            "target_sale_price_currency", "target_original_price",
-            "target_original_price_currency", "first_level_category_name",
-            "second_level_category_name", "shop_id", "shop_url", "evaluate_rate",
-            "lastest_volume", "relevant_market_commission_rate", "commission_rate",
-            "discount",
-        )),
-    }
-    tracking_id = (os.getenv("ALIEXPRESS_TRACKING_ID") or os.getenv("ALIEXPRESS_AFFILIATE_TRACKING_ID") or "").strip()
-    if tracking_id:
-        parameters["tracking_id"] = tracking_id
-    payload = aliexpress_api_request("aliexpress.affiliate.productdetail.get", parameters)
-    root = payload.get("aliexpress_affiliate_productdetail_get_response", payload)
-    response = root.get("resp_result", root) if isinstance(root, dict) else {}
-    code = response.get("resp_code")
-    if code not in (None, "", 0, "0", 200, "200"):
-        raise RuntimeError(f"AliExpress rechazó la consulta de detalle ({code}: {response.get('resp_msg') or 'sin descripción'}).")
-    result = response.get("result") or {}
-    products = result.get("products") or []
-    if isinstance(products, dict):
-        products = products.get("product") or products.get("products") or []
-    if isinstance(products, dict):
-        products = [products]
-    if not isinstance(products, list):
-        products = []
-    raw = next((item for item in products if isinstance(item, dict) and str(item.get("product_id") or "") == str(product_id)), None)
-    if raw is None and products and isinstance(products[0], dict):
-        raw = products[0]
-    if raw is None:
-        raise RuntimeError(f"AliExpress no devolvió detalles para el producto {product_id}.")
-    gallery = raw.get("product_small_image_urls") or []
-    if isinstance(gallery, dict):
-        gallery = gallery.get("string") or gallery.get("url") or []
-    if isinstance(gallery, str):
-        gallery = [gallery]
-    if not isinstance(gallery, list):
-        gallery = []
-    gallery = list(dict.fromkeys(image for value in gallery if (image := _safe_aliexpress_image(value))))[:10]
-    image_url = _safe_aliexpress_image(raw.get("product_main_image_url")) or (gallery[0] if gallery else None)
-    if image_url and image_url not in gallery:
-        gallery.insert(0, image_url)
-    title = str(raw.get("product_title") or "").strip()[:500] or None
-    price = _number(raw.get("target_sale_price") or raw.get("sale_price"))
-    currency = str(raw.get("target_sale_price_currency") or raw.get("sale_price_currency") or "").strip().upper() or None
-    category_name = raw.get("second_level_category_name") or raw.get("first_level_category_name")
-    category = _category(category_name)
-    detail_url = str(raw.get("product_detail_url") or "").strip()
-    try:
-        parsed_url = urlsplit(detail_url)
-        if parsed_url.scheme != "https" or not _allowed_host((parsed_url.hostname or "").lower().rstrip("."), "aliexpress") or parsed_url.username or parsed_url.password or parsed_url.port not in (None, 443):
-            detail_url = None
-    except ValueError:
-        detail_url = None
-    fields = {"title": title, "price": price, "currency": currency, "image_url": image_url, "category": category}
-    return {
-        **fields,
-        "gallery_urls": gallery,
-        "resolved_url": detail_url,
-        "_field_sources": {key: "aliexpress_affiliate_api" for key, value in fields.items() if value is not None},
-    }
-
-
-
 def enrich_product(product, force=False):
     """Enriquece y revalida productos con la página pública de su URL."""
     url = str(product.get("product_url") or "").strip()
@@ -386,7 +296,7 @@ def enrich_product(product, force=False):
             product["category"] = inferred_category
             metadata["category_source"] = "title_inference"
     title = str(product.get("title") or "").strip()
-    complete = bool(title and not _is_placeholder_title(title) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and not _is_placeholder_image_url(product.get("image_url")) and product.get("category") and (field_sources.get("category") in {"public_product_page", "aliexpress_affiliate_api", "user"} or "category" in manual_fields))
+    complete = bool(title and not _is_placeholder_title(title) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and not _is_placeholder_image_url(product.get("image_url")) and product.get("category") and (field_sources.get("category") in {"public_product_page", "user"} or "category" in manual_fields))
     if complete and not force:
         for field in manual_fields:
             if product.get(field) is not None:
@@ -397,45 +307,19 @@ def enrich_product(product, force=False):
         return product
     try:
         legacy_url_only = metadata.get("metadata_source") == "url_only"
-        try:
-            page = _public_product_page(url, platform)
-        except Exception as exc:
-            if platform != "aliexpress":
-                raise
-            item_match = ALIEXPRESS_ITEM_RE.search(urlsplit(url).path)
-            item_id = item_match.group(1) if item_match else str(product.get("external_id") or "")
-            if not item_id or item_id.startswith("URL-"):
-                raise
-            page = {"resolved_url": url, "title": None, "price": None, "currency": None, "image_url": None, "gallery_urls": [], "category": None}
-            metadata["public_page_error"] = f"{type(exc).__name__}: {str(exc)[:180]}"
+        page = _public_product_page(url, platform)
         resolved_url = page.get("resolved_url") or url
         page_sources = dict(page.get("_field_sources") or {})
         public_page_has_data = any(page.get(key) for key in ("title", "price", "image_url", "description"))
-        if platform == "aliexpress":
-            item_match = ALIEXPRESS_ITEM_RE.search(urlsplit(resolved_url).path) or ALIEXPRESS_ITEM_RE.search(urlsplit(url).path)
-            item_id = item_match.group(1) if item_match else str(product.get("external_id") or "")
-            if item_id and not item_id.startswith("URL-") and any(not page.get(key) for key in ("title", "price", "currency", "image_url", "category")):
-                try:
-                    details = _aliexpress_product_detail(item_id)
-                    for key in ("title", "price", "currency", "image_url", "category"):
-                        if not page.get(key) and details.get(key) is not None:
-                            page[key] = details[key]
-                            page_sources[key] = "aliexpress_affiliate_api"
-                    page["gallery_urls"] = list(dict.fromkeys((page.get("gallery_urls") or []) + (details.get("gallery_urls") or [])))[:10]
-                    if not page.get("resolved_url") and details.get("resolved_url"):
-                        page["resolved_url"] = details["resolved_url"]
-                    metadata.pop("affiliate_api_error", None)
-                except Exception as exc:
-                    metadata["affiliate_api_error"] = f"{type(exc).__name__}: {str(exc)[:180]}"
-        resolved_url = page.get("resolved_url") or resolved_url
+
         has_page_data = any(page.get(key) for key in ("title", "price", "image_url", "description"))
-        metadata["metadata_source"] = "public_product_page" if public_page_has_data else "aliexpress_affiliate_api" if page_sources else "public_product_page_empty"
+        metadata["metadata_source"] = "public_product_page" if public_page_has_data else "public_product_page_empty"
         for field, key in (("title", "title"), ("price", "price"), ("previous_price", "previous_price"), ("currency", "currency"), ("image_url", "image_url"), ("description", "description"), ("rating", "rating"), ("reviews_count", "reviews_count"), ("category", "category")):
             current = product.get(field)
             missing_title = field == "title" and _is_placeholder_title(current)
             missing_currency = field == "currency" and str(current or "").upper() in {"", "UNK", "N/D"}
             replace_legacy = legacy_url_only and field in {"price", "currency"}
-            replace_unverified_category = field == "category" and field_sources.get("category") not in {"public_product_page", "aliexpress_affiliate_api", "user"}
+            replace_unverified_category = field == "category" and field_sources.get("category") not in {"public_product_page", "user"}
             should_update = force or current is None or current == "" or missing_title or missing_currency or replace_legacy or replace_unverified_category
             if should_update and field not in manual_fields and page.get(key) is not None:
                 product[field] = page[key]
@@ -467,10 +351,12 @@ def enrich_product(product, force=False):
             if page.get(key) is not None and field not in manual_fields:
                 field_sources[field] = page_sources.get(key, "public_product_page")
         metadata["field_sources"] = field_sources
-        category_verified = field_sources.get("category") in {"public_product_page", "aliexpress_affiliate_api", "user"}
+        category_verified = field_sources.get("category") in {"public_product_page", "user"}
         has_complete_data = bool(product.get("title") and not _is_placeholder_title(product.get("title")) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and not _is_placeholder_image_url(product.get("image_url")) and product.get("category") and category_verified)
+        manual_complete = all(field_sources.get(field) == "user" and product.get(field) not in (None, "") for field in ("title", "price", "currency", "image_url", "category"))
+        catalog_current = refresh_verified or manual_complete
         metadata.update({
-            "catalog_status": "current" if refresh_verified else "stale",
+            "catalog_status": "current" if catalog_current else "stale",
             "catalog_refresh_verified": refresh_verified,
             "original_url": metadata.get("original_url") or url,
             "resolved_url": resolved_url,
@@ -479,8 +365,11 @@ def enrich_product(product, force=False):
             "enriched_at": datetime.now(timezone.utc).isoformat(),
         })
         metadata.pop("network_enrichment_disabled", None)
-        metadata.pop("enrichment_error", None)
-        if not has_complete_data or not refresh_verified:
+        if has_complete_data:
+            metadata.pop("enrichment_error", None)
+        else:
+            metadata["enrichment_error"] = "La página pública no expone todos los metadatos necesarios; completa los campos manualmente o reintenta más tarde."
+        if not has_complete_data or not catalog_current:
             metadata["enrichment_retry_after"] = (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat()
         else:
             metadata.pop("enrichment_retry_after", None)
@@ -512,7 +401,7 @@ def enrich_product(product, force=False):
         missing.append("price")
     if not product.get("currency") or product.get("currency") in {"UNK", "N/D"}:
         missing.append("currency")
-    if not product.get("category") or metadata.get("field_sources", {}).get("category") not in {"public_product_page", "aliexpress_affiliate_api", "user"}:
+    if not product.get("category") or metadata.get("field_sources", {}).get("category") not in {"public_product_page", "user"}:
         missing.append("category")
     if not product.get("image_url") or _is_placeholder_image_url(product.get("image_url")):
         missing.append("image_url")
@@ -635,7 +524,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
                 bool(row.get("catalog_expired")),
                 row["id"],
             ))
-        if metadata.get("metadata_source") in {"public_product_page", "aliexpress_affiliate_api"} and any(enriched.get(key) for key in ("price", "image_url")):
+        if metadata.get("metadata_source") == "public_product_page" and any(enriched.get(key) for key in ("price", "image_url")):
             recovered += 1
     conn.commit()
     complete = sum(1 for item in enriched_rows if (item.get("source_metadata") or {}).get("enrichment_status") == "complete")

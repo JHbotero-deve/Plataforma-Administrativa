@@ -244,7 +244,8 @@ def _top_products(limit=25):
                   AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
-                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
+                  AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
+                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url', 'category'])
                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                   AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                   AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
@@ -465,7 +466,7 @@ def _model_active_products():
     """Enriquece desde URLs y puntúa solo productos activos con datos suficientes."""
     conn = get_connection()
     try:
-        enriched = enrich_pending_products(conn, limit=20, max_workers=4, force=True)
+        enriched = enrich_pending_products(conn, limit=20, max_workers=4, force=False)
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -633,50 +634,17 @@ def _handle(token, chat_id, text):
                 return _send(token, chat_id, "<b>No pude importar el enlace</b>\n" + html.escape(str(payload)))
             return _send_imported(token, chat_id, result, payload, score, "<b>Producto importado desde URL</b>")
         local_products = _search_products(term[:100] if term else "", limit=8)
-        external = {"products": [], "errors": []}
-        if term and len(local_products) < 8:
-            try:
-                from marketplace_ingestion import search_and_import
-                external = search_and_import(term, limit=8 - len(local_products))
-            except Exception as exc:
-                external["errors"].append(f"{type(exc).__name__}: {str(exc)[:160]}")
-        if not local_products and not external["products"]:
-            message = "No hay coincidencias en el catálogo."
-            if external["errors"]:
-                message += "\nBúsqueda oficial no disponible: " + html.escape("; ".join(external["errors"][:2]))
-            else:
-                message += "\nNo hubo resultados en las fuentes oficiales."
-            message += "\nImporta directamente con /agregar <URL> o /producto <URL>."
+        if not local_products:
+            message = "No hay coincidencias en el catálogo local."
+            message += "\nImporta directamente con /agregar URL o /producto URL."
             return _send(token, chat_id, message)
-        if local_products:
-            heading = f"<b>Resultados del catálogo ({len(local_products)})</b>"
-            if not _send(token, chat_id, heading):
+        heading = f"<b>Resultados del catálogo ({len(local_products)})</b>"
+        if not _send(token, chat_id, heading):
+            return False
+        for index, product in enumerate(local_products, 1):
+            product["title"] = f"{index}. {product['title']}"
+            if not _send_product(token, chat_id, product):
                 return False
-            for index, product in enumerate(local_products, 1):
-                product["title"] = f"{index}. {product['title']}"
-                if not _send_product(token, chat_id, product):
-                    return False
-        for candidate in external["products"]:
-            if candidate.get("verified") and candidate.get("id"):
-                rows = _products_by_ids([candidate["id"]], limit=1)
-                if rows:
-                    if not _send_product(token, chat_id, rows[0]):
-                        return False
-                    continue
-            link = _product_link(candidate.get("product_url"))
-            title = html.escape(str(candidate.get("title") or "Candidato sin título")[:180])
-            platform = html.escape(str(candidate.get("platform") or "marketplace").title())
-            message = (
-                "<b>Candidato encontrado; lectura pública pendiente</b>\n"
-                f"{title}\nPlataforma: {platform}\n"
-                "Precio y oportunidad: pendientes de verificación pública."
-            )
-            if link:
-                message += '\n<a href="' + html.escape(link, quote=True) + '">Abrir producto original</a>'
-            if not _send(token, chat_id, message):
-                return False
-        if external["errors"]:
-            return _send(token, chat_id, "<b>Fuentes con error</b>\n" + html.escape("; ".join(external["errors"][:2])))
         return True
 
     if command in ("/agregar", "/producto"):
@@ -714,9 +682,9 @@ def _handle(token, chat_id, text):
                     f"Pendientes de recuperación: {recovery}\n"
                     f"Reintentos pendientes: {retry}\n"
                     f"Pendientes por límite de lote: {remaining}\n"
-                    f"Datos recuperados desde URL/API de respaldo: {enriched}\n"
+                    f"Datos recuperados desde URLs públicas: {enriched}\n"
                     f"Errores al puntuar: {errors}\n"
-                    "El sistema prioriza los datos de la URL pública y usa la API oficial de detalle de AliExpress solo como respaldo cuando faltan campos; no depende de APIs de búsqueda para importar una URL."
+                    "El sistema usa exclusivamente las URLs públicas y los datos manuales; no consulta APIs de búsqueda ni detalle de marketplaces."
                 )
             except Exception as exc:
                 print(f"[telegram-bot] batch modeling error: {type(exc).__name__}: {exc}")
@@ -735,7 +703,11 @@ def _handle(token, chat_id, text):
                            COUNT(*) FILTER (WHERE is_active = TRUE) AS active,
                            COUNT(*) FILTER (WHERE is_active = FALSE) AS inactive,
                            COUNT(*) FILTER (WHERE source_metadata->>'catalog_status' = 'stale' OR (catalog_expires_at IS NOT NULL AND catalog_expires_at <= NOW())) AS stale,
-                           COUNT(*) FILTER (WHERE product_url IS NOT NULL AND product_url <> '') AS with_url
+                           COUNT(*) FILTER (WHERE product_url IS NOT NULL AND product_url <> '') AS with_url,
+                           COUNT(*) FILTER (WHERE is_active = TRUE AND current_price IS NULL) AS missing_price,
+                           COUNT(*) FILTER (WHERE is_active = TRUE AND image_url IS NULL) AS missing_image,
+                           COUNT(*) FILTER (WHERE is_active = TRUE AND category_id IS NULL) AS missing_category,
+                           COUNT(*) FILTER (WHERE is_active = TRUE AND source_metadata->>'enrichment_status' IN ('partial','retry','blocked')) AS pending_recovery
                     FROM products
                 """)
                 counts = cur.fetchone()
@@ -744,6 +716,10 @@ def _handle(token, chat_id, text):
                 inactive = int(counts["inactive"] or 0)
                 stale = int(counts["stale"] or 0)
                 with_url = int(counts["with_url"] or 0)
+                missing_price = int(counts.get("missing_price") or 0)
+                missing_image = int(counts.get("missing_image") or 0)
+                missing_category = int(counts.get("missing_category") or 0)
+                pending_recovery = int(counts.get("pending_recovery") or 0)
                 cur.execute(
                     """
                     SELECT COUNT(DISTINCT p.id) AS modeled
@@ -752,6 +728,13 @@ def _handle(token, chat_id, text):
                     WHERE p.is_active = TRUE AND p.current_price IS NOT NULL AND p.currency NOT IN ('UNK', 'N/D')
                       AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
                       AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                      AND p.image_url IS NOT NULL AND p.category_id IS NOT NULL
+                      AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                      AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                      AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                      AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                      AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
+                      AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url', 'category'])
                     """
                 )
                 modeled = cur.fetchone()["modeled"]
@@ -759,7 +742,9 @@ def _handle(token, chat_id, text):
                 f"<b>Estado del catálogo</b>\nProductos registrados: {total}\n"
                 f"Productos activos: {active}\nProductos inactivos: {inactive}\n"
                 f"Productos por revalidar: {stale}\nProductos con URL: {with_url}\n"
-                f"Productos modelados: {modeled}"
+                f"Pendientes de recuperación: {pending_recovery}\n"
+                f"Sin precio: {missing_price} | Sin imagen: {missing_image} | Sin categoría: {missing_category}\n"
+                f"Productos modelados y verificados: {modeled}"
             )
             if not total:
                 message += "\nAgrega el primer producto con /agregar URL."

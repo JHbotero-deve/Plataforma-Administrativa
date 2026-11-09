@@ -1,6 +1,4 @@
 import os
-import re
-import threading
 import time
 
 import schedule
@@ -8,7 +6,6 @@ import schedule
 from analysis import score_product
 from db import get_connection
 from init_db import init_database
-from marketplace_ingestion import run_marketplace_ingestion
 from notifications import send_telegram_alert
 from pricing import publish_catalog_product
 from product_sources import enrich_pending_products
@@ -134,6 +131,7 @@ def run_pipeline():
                   AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
                 ORDER BY p.updated_at DESC
                 LIMIT 500
@@ -188,48 +186,6 @@ def run_pipeline():
     print("== Ciclo completo ==")
 
 
-def _run_marketplace_discovery_safely():
-    try:
-        limit = int(os.getenv("MARKETPLACE_DISCOVERY_LIMIT", "8"))
-        results = run_marketplace_ingestion(target_per_platform=limit)
-        for platform, result in results.items():
-            print(
-                f"[marketplace-discovery] {platform}: recibidos={result['received']} "
-                f"verificados={result['verified_and_saved']} "
-                f"pendientes={result['pending_public_verification']} "
-                f"estado={result['status']}"
-            )
-            for error in result.get("errors", [])[:3]:
-                safe_error = re.sub(
-                    r"(?i)(?<![A-Za-z0-9])(?:app[_ -]?key|app[_ -]?secret|client[_ -]?id|client[_ -]?secret|access[_ -]?token|authorization)(\s*[:=]\s*)[^&\s,]+",
-                    "[credential redacted]",
-                    str(error),
-                )
-                print(f"[marketplace-discovery] {platform} error={safe_error[:180]}")
-    except Exception as exc:
-        print(f"[marketplace-discovery] ciclo omitido sin bloquear URLs: {type(exc).__name__}: {str(exc)[:180]}")
-
-
-_MARKETPLACE_DISCOVERY_LOCK = threading.Lock()
-
-
-def _start_marketplace_discovery():
-    if not _MARKETPLACE_DISCOVERY_LOCK.acquire(blocking=False):
-        print("[marketplace-discovery] ciclo anterior sigue en ejecución; se omite este disparo")
-        return
-
-    def run():
-        try:
-            _run_marketplace_discovery_safely()
-        finally:
-            _MARKETPLACE_DISCOVERY_LOCK.release()
-
-    try:
-        threading.Thread(target=run, name="marketplace-discovery", daemon=True).start()
-    except Exception:
-        _MARKETPLACE_DISCOVERY_LOCK.release()
-        raise
-
 def _run_pipeline_safely():
     try:
         run_pipeline()
@@ -255,8 +211,6 @@ def run_worker():
     except Exception as exc:
         print(f"[worker] no se pudo precargar el catálogo; continúa el procesamiento: {type(exc).__name__}")
     _run_pipeline_safely()
-    _start_marketplace_discovery()
-    schedule.every(2).hours.do(_start_marketplace_discovery)
     schedule.every(15).minutes.do(_run_pipeline_safely)
     while True:
         schedule.run_pending()

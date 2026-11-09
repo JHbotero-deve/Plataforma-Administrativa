@@ -26,10 +26,12 @@ class StorefrontSectionTests(unittest.TestCase):
         self.assertIn('loading="eager" fetchpriority="high"', html)
         self.assertIn('loading="lazy"', html)
 
-    def test_public_cards_require_verified_category_and_accept_affiliate_api_provenance(self):
+    def test_public_cards_require_verified_category_and_reject_api_provenance(self):
         import storefront_sections
         quality_filter = storefront_sections.PUBLIC_CARD_QUALITY_FILTER
         self.assertIn("'aliexpress_affiliate_api'", quality_filter)
+        self.assertIn("field_sources'->>'title' IN ('public_product_page', 'user')", quality_filter)
+        self.assertNotIn("field_sources'->>'title' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')", quality_filter)
         self.assertIn("field_sources'->>'category'", quality_filter)
         self.assertIn("'category'", quality_filter)
 
