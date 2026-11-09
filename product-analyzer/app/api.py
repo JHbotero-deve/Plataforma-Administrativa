@@ -463,7 +463,8 @@ def list_products(
                        CASE WHEN p.source_metadata->'field_sources'->>'description' IN ('public_product_page', 'user')
                             THEN p.description ELSE NULL END AS description,
                        CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS previous_price,
-                       p.stock, p.sku, p.catalog_expires_at, p.model_url, p.model_shape,
+                       CASE WHEN p.source_metadata->'field_sources'->>'stock' IN ('public_product_page', 'user') THEN p.stock ELSE NULL END AS stock,
+                       p.sku, p.catalog_expires_at, p.model_url, p.model_shape,
                        CASE WHEN p.source_metadata->'field_sources'->>'seller' IN ('public_product_page', 'user')
                             THEN seller.name ELSE NULL END AS seller_name,
                        p.source_metadata->>'seller_url' AS seller_url,
