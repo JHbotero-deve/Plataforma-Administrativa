@@ -638,6 +638,10 @@
       mix-blend-mode: normal !important
     }
 
+    .radar-gallery { position: relative; width: 100%; height: 100%; display: grid; place-items: center }
+    .radar-gallery-controls { position: absolute; top: 10px; right: 10px; z-index: 5; display: flex; align-items: center; gap: 5px; padding: 4px 6px; border: 1px solid #e4e2da; border-radius: 999px; background: rgba(255,253,248,.96); color: #535950; font-size: 10px }
+    .radar-gallery-controls button { width: 24px; height: 24px; border: 0; border-radius: 50%; background: #e8eee4; color: #3d5639; font-size: 17px; line-height: 1; cursor: pointer }
+
     .radar-card .badge {
       position: absolute;
       top: 10px;
@@ -1851,7 +1855,10 @@
       const money = (v, c) => { if (v == null || Number.isNaN(Number(v))) return "—"; const n = Number(v); const cur = String(c || "COP").toUpperCase(); if (cur === "USD" || cur === "US$" || cur === "$") { const cop = n * 3329.61; return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(cop) + " COP"; } try { return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n) + " COP" } catch { return n.toLocaleString("es-CO") + " COP" } };
       const date = v => v ? new Date(v).toLocaleString("es-CO") : "—";
       const isMarketplaceImage = value => { try { const host = new URL(String(value || "")).hostname.toLowerCase(); return /(^|\.)amazon\./i.test(host) || /(^|\.)amazon$/i.test(host) || /(^|\.)media-amazon\.com$/i.test(host) || /(^|\.)ssl-images-amazon\.com$/i.test(host) || /(^|\.)images-amazon\.com$/i.test(host) || /(^|\.)amzn\.(?:to|eu|asia|com|ca|de|co\.uk)$/i.test(host) || host === "a.co" || /(^|\.)aliexpress\./i.test(host) || /(^|\.)alii\.pub$/i.test(host) || /(^|\.)taobao\.com$/i.test(host) || /(^|\.)aliexpress-media\.com$/i.test(host) || /(^|\.)alicdn\.com$/i.test(host); } catch { return false; } };
-      const productImage = p => { const mongo = p?.source_metadata?.mongo_image_id; if (mongo) return "mongo://" + mongo; return [p?.image_url, ...(Array.isArray(p?.image_gallery) ? p.image_gallery : [])].find(Boolean) || ""; };
+      const productImages = p => { const seen = new Set(); return [p?.image_url, ...(Array.isArray(p?.image_gallery) ? p.image_gallery : [])].map(value => String(value || "").trim()).filter(value => { if (!value || /^mongo:\/\//i.test(value)) return false; try { const url = new URL(value, location.origin); if (url.username || url.password || !(url.protocol === "https:" || url.origin === location.origin)) return false; if (seen.has(url.href)) return false; seen.add(url.href); return true; } catch { return false; } }); };
+      const productImage = p => productImages(p)[0] || "";
+      function setGalleryImage(gallery, index = 0, retry = false) { const image = gallery?.querySelector("[data-gallery-image]"); let sources = []; try { sources = JSON.parse(gallery?.dataset.galleryImages || "[]"); } catch { } if (!image || !sources.length) { if (image) image.hidden = true; const fallback = gallery?.querySelector("[data-gallery-fallback]"); if (fallback) fallback.hidden = false; return; } const current = ((index % sources.length) + sources.length) % sources.length; gallery.dataset.galleryIndex = String(current); if (!retry) gallery.dataset.galleryAttempts = "0"; image.hidden = false; image.onload = () => { gallery.dataset.galleryAttempts = "0"; const fallback = gallery.querySelector("[data-gallery-fallback]"); if (fallback) fallback.hidden = true; const counter = gallery.querySelector("[data-gallery-count]"); if (counter) counter.textContent = (current + 1) + " / " + sources.length; }; image.src = sources[current]; }
+      document.addEventListener("error", event => { const image = event.target; if (!image.matches?.("[data-gallery-image]")) return; const gallery = image.closest("[data-gallery]"); if (!gallery) return; let sources = []; try { sources = JSON.parse(gallery.dataset.galleryImages || "[]"); } catch { } const attempts = Number(gallery.dataset.galleryAttempts || 0) + 1; if (attempts >= sources.length) { image.hidden = true; const fallback = gallery.querySelector("[data-gallery-fallback]"); if (fallback) fallback.hidden = false; return; } gallery.dataset.galleryAttempts = String(attempts); setGalleryImage(gallery, Number(gallery.dataset.galleryIndex || 0) + 1, true); }, true);
       async function get(path) { const protectedRead = /^\/(mongo\/health|pipeline\/(summary|metrics)|intelligence\/overview|opportunities\/top|catalog\/active|products\/compare)(\/|\?|$)/.test(path); const headers = protectedRead ? adminHeaders({ Accept: "application/json" }) : authHeaders({ Accept: "application/json" }); const r = await fetch(API + path, requestOptions({ headers })); if (!r.ok) { const data = await r.json().catch(() => ({})); throw Object.assign(new Error(data.detail || "HTTP " + r.status), { status: r.status }) } return r.json() }
       function status(kind, label) { $("status").innerHTML = '<span class="dot ' + (kind === "ok" ? "ok" : kind === "warn" ? "warn" : "") + '"></span>' + esc(label) }
       updateOfflineStatus();
@@ -1869,12 +1876,10 @@
       function card(p) {
         const id = p.id;
         const score = p.opportunity_score == null ? "—" : Math.round(Number(p.opportunity_score));
-        const gallery = Array.isArray(p.image_gallery) ? p.image_gallery.filter(Boolean) : [];
-        const primary = productImage(p);
-        const images = [primary, ...gallery].filter((url, i, a) => url && a.indexOf(url) === i);
+        const images = productImages(p);
         const image = images.length
-          ? '<img src="' + esc(images[0]) + '" alt="' + esc(p.title) + '" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="noimg" style="display:none">Sin imagen</span>'
-          : '<span class="noimg">Sin imagen</span>';
+          ? '<div class="radar-gallery" data-gallery data-gallery-images="' + esc(JSON.stringify(images)) + '" data-gallery-index="0"><img data-gallery-image src="' + esc(images[0]) + '" alt="' + esc(p.title) + '" loading="lazy" referrerpolicy="no-referrer"><span class="noimg" data-gallery-fallback hidden>Imagen no disponible</span>' + (images.length > 1 ? '<div class="radar-gallery-controls"><button type="button" data-gallery-step="-1" aria-label="Imagen anterior">‹</button><span data-gallery-count>1 / ' + images.length + '</span><button type="button" data-gallery-step="1" aria-label="Imagen siguiente">›</button></div>' : '') + '</div>'
+          : '<span class="noimg">Imagen no disponible</span>';
         const platform = String(p.platform || "Origen").toLowerCase();
         const label = platform === "amazon" ? "Amazon" : platform === "aliexpress" ? "AliExpress" : platform === "tiktok" ? "TikTok" : "Central";
         const destination = p.affiliate_url || p.product_url || "/tienda";
@@ -2020,6 +2025,8 @@
         modal.onclick = e => { if (e.target === modal) modal.style.display = "none" };
       }
       document.addEventListener("click", e => {
+        const step = e.target.closest("[data-gallery-step]");
+        if (step) { e.preventDefault(); e.stopPropagation(); const gallery = step.closest("[data-gallery]"); if (gallery) setGalleryImage(gallery, Number(gallery.dataset.galleryIndex || 0) + Number(step.dataset.galleryStep)); return; }
         const b = e.target.closest(".radar-specs");
         if (!b) return;
         const p = radarProducts.find(x => String(x.id) === String(b.dataset.id));
