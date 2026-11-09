@@ -135,10 +135,12 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
                 seller_id = COALESCE(EXCLUDED.seller_id, products.seller_id),
                 title = CASE
                     WHEN EXCLUDED.source_metadata->>'import_method' = 'authorized_cli_url'
-                     AND (EXCLUDED.title IS NULL OR LOWER(EXCLUDED.title) = 'producto' OR LOWER(EXCLUDED.title) LIKE 'producto %')
+                     AND (EXCLUDED.title IS NULL OR LOWER(EXCLUDED.title) IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url') OR LOWER(EXCLUDED.title) LIKE 'producto amazon %' OR LOWER(EXCLUDED.title) LIKE 'producto aliexpress %' OR LOWER(EXCLUDED.title) LIKE 'producto url-%')
                      AND products.title IS NOT NULL
-                     AND LOWER(products.title) <> 'producto'
-                     AND LOWER(products.title) NOT LIKE 'producto %'
+                     AND LOWER(products.title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
+                     AND LOWER(products.title) NOT LIKE 'producto amazon %'
+                     AND LOWER(products.title) NOT LIKE 'producto aliexpress %'
+                     AND LOWER(products.title) NOT LIKE 'producto url-%'
                     THEN products.title
                     ELSE EXCLUDED.title
                 END,
