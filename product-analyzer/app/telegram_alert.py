@@ -498,6 +498,9 @@ def _model_active_products():
                   AND LOWER(p.title) NOT LIKE '%%oferta destacada global%%'
                   AND p.image_url IS NOT NULL
                   AND p.image_url <> ''
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
+                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
                 ORDER BY p.updated_at DESC
                 LIMIT 500
                 """
