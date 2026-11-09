@@ -703,7 +703,7 @@ def _handle(token, chat_id, text):
                     f"Pendientes de recuperación: {recovery}\n"
                     f"Reintentos pendientes: {retry}\n"
                     f"Pendientes por límite de lote: {remaining}\n"
-                    f"Datos recuperados desde URLs: {enriched}\n"
+                    f"Datos recuperados desde URL/API de respaldo: {enriched}\n"
                     f"Errores al puntuar: {errors}\n"
                     "El sistema prioriza los datos de la URL pública y usa la API oficial de detalle de AliExpress solo como respaldo cuando faltan campos; no depende de APIs de búsqueda para importar una URL."
                 )
