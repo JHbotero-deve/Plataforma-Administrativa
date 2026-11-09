@@ -34,6 +34,44 @@ class ApiCatalogQualityTests(unittest.TestCase):
         self.assertIn("AS data_quality", query)
         connection.close.assert_called_once()
 
+    def test_import_url_does_not_assume_usd_and_tracks_manual_metadata(self):
+        payload = api.ProductImport(
+            url="https://www.amazon.com/dp/B012345678",
+            description="Descripción manual",
+            previous_price=25,
+            rating=4.5,
+            reviews_count=8,
+            sales_estimate=20,
+            gallery_urls=["https://images.amazon.com/manual.jpg"],
+        )
+        self.assertIsNone(payload.currency)
+        connection, cursor = self._connection()
+        cursor.fetchone.return_value = {"id": 7, "title": "Producto de prueba"}
+        product = {
+            "platform": "amazon", "external_id": "B012345678",
+            "title": "Producto de prueba", "category": None, "price": None,
+            "currency": None, "image_url": None, "product_url": payload.url,
+            "gallery_urls": [], "source_metadata": {"field_sources": {}, "manual_fields": []},
+        }
+        captured = {}
+        def capture_enrichment(value):
+            captured.update(value)
+            return value
+        with (
+            patch.object(api, "import_url", return_value=product),
+            patch.object(api, "enrich_product", side_effect=capture_enrichment),
+            patch.object(api, "get_connection", return_value=connection),
+            patch.object(api, "upsert_product", return_value=7),
+            patch.object(api, "publish_catalog_product", return_value=None),
+        ):
+            api.import_product_from_url(payload)
+        sources = captured["source_metadata"]["field_sources"]
+        self.assertNotIn("currency", sources)
+        for field in ("description", "previous_price", "rating", "reviews_count", "sales_estimate"):
+            self.assertEqual(sources[field], "user")
+        self.assertEqual(sources["image_url"], "user")
+        self.assertIn("image_url", captured["source_metadata"]["manual_fields"])
+
     def test_top_opportunities_excludes_incomplete_unverified_and_stale_products(self):
         connection, cursor = self._connection()
         with patch.object(api, "get_connection", return_value=connection):
