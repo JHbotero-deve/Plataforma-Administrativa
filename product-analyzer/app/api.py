@@ -429,21 +429,42 @@ def list_products(
     try:
         with conn.cursor() as cur:
             query = """
-                SELECT p.id, p.title, pl.name AS platform, c.name AS category,
+                SELECT p.id,
+                       CASE WHEN p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ? 'title')
+                            THEN p.title ELSE NULL END AS title,
+                       pl.name AS platform,
+                       CASE WHEN p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
+                                  OR p.source_metadata->>'category_source' = 'title_inference'
+                            THEN c.name ELSE NULL END AS category,
                        CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user') THEN p.current_price ELSE NULL END AS current_price,
                        CASE WHEN p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user') THEN p.currency ELSE NULL END AS currency,
                        CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
                        CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
                        CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
                        CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user') THEN p.image_url ELSE NULL END AS image_url,
-                       COALESCE(p.image_gallery, '[]'::jsonb) AS image_gallery, p.product_url, p.affiliate_url, p.updated_at, p.source_metadata, p.description,
+                       CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                                  THEN COALESCE(p.image_gallery, '[]'::jsonb) ELSE '[]'::jsonb END AS image_gallery,
+                       p.product_url, p.affiliate_url, p.updated_at, p.source_metadata,
+                       CASE WHEN p.source_metadata->'field_sources'->>'description' IN ('public_product_page', 'user')
+                            THEN p.description ELSE NULL END AS description,
                        CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS previous_price,
                        p.stock, p.sku, p.catalog_expires_at, p.model_url, p.model_shape,
-                       seller.name AS seller_name, p.source_metadata->>'seller_url' AS seller_url,
+                       CASE WHEN p.source_metadata->'field_sources'->>'seller' IN ('public_product_page', 'user')
+                            THEN seller.name ELSE NULL END AS seller_name,
+                       p.source_metadata->>'seller_url' AS seller_url,
+                       COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) AS missing_fields,
+                       p.source_metadata->'field_sources' AS field_sources,
+                       CASE WHEN COALESCE(p.source_metadata->>'catalog_status', 'current') = 'current'
+                                  AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                                  AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
+                            THEN 'verified' ELSE 'incomplete' END AS data_quality,
                        CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
                                   AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
                                   AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
                                   AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                                  AND COALESCE(p.source_metadata->>'catalog_status', 'current') = 'current'
+                                  AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
                                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
                             THEN s.opportunity_score ELSE NULL END AS opportunity_score
                 FROM products p
