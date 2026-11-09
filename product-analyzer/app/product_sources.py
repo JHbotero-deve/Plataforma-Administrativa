@@ -296,7 +296,7 @@ def enrich_product(product, force=False):
             product["category"] = inferred_category
             metadata["category_source"] = "title_inference"
     title = str(product.get("title") or "").strip()
-    complete = bool(title and not _is_placeholder_title(title) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and not _is_placeholder_image_url(product.get("image_url")) and product.get("category") and (field_sources.get("category") in {"public_product_page", "public_product_page", "user"} or "category" in manual_fields))
+    complete = bool(title and not _is_placeholder_title(title) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and not _is_placeholder_image_url(product.get("image_url")) and product.get("category") and (field_sources.get("category") in {"public_product_page", "user"} or "category" in manual_fields))
     if complete and not force:
         for field in manual_fields:
             if product.get(field) is not None:
@@ -313,13 +313,13 @@ def enrich_product(product, force=False):
         public_page_has_data = any(page.get(key) for key in ("title", "price", "image_url", "description"))
 
         has_page_data = any(page.get(key) for key in ("title", "price", "image_url", "description"))
-        metadata["metadata_source"] = "public_product_page" if public_page_has_data else "public_product_page" if page_sources else "public_product_page_empty"
+        metadata["metadata_source"] = "public_product_page" if public_page_has_data else "public_product_page_empty"
         for field, key in (("title", "title"), ("price", "price"), ("previous_price", "previous_price"), ("currency", "currency"), ("image_url", "image_url"), ("description", "description"), ("rating", "rating"), ("reviews_count", "reviews_count"), ("category", "category")):
             current = product.get(field)
             missing_title = field == "title" and _is_placeholder_title(current)
             missing_currency = field == "currency" and str(current or "").upper() in {"", "UNK", "N/D"}
             replace_legacy = legacy_url_only and field in {"price", "currency"}
-            replace_unverified_category = field == "category" and field_sources.get("category") not in {"public_product_page", "public_product_page", "user"}
+            replace_unverified_category = field == "category" and field_sources.get("category") not in {"public_product_page", "user"}
             should_update = force or current is None or current == "" or missing_title or missing_currency or replace_legacy or replace_unverified_category
             if should_update and field not in manual_fields and page.get(key) is not None:
                 product[field] = page[key]
@@ -351,7 +351,7 @@ def enrich_product(product, force=False):
             if page.get(key) is not None and field not in manual_fields:
                 field_sources[field] = page_sources.get(key, "public_product_page")
         metadata["field_sources"] = field_sources
-        category_verified = field_sources.get("category") in {"public_product_page", "public_product_page", "user"}
+        category_verified = field_sources.get("category") in {"public_product_page", "user"}
         has_complete_data = bool(product.get("title") and not _is_placeholder_title(product.get("title")) and product.get("price") and product.get("currency") and product.get("currency") not in {"UNK", "N/D"} and product.get("image_url") and not _is_placeholder_image_url(product.get("image_url")) and product.get("category") and category_verified)
         manual_complete = all(field_sources.get(field) == "user" and product.get(field) not in (None, "") for field in ("title", "price", "currency", "image_url", "category"))
         catalog_current = refresh_verified or manual_complete
@@ -401,7 +401,7 @@ def enrich_product(product, force=False):
         missing.append("price")
     if not product.get("currency") or product.get("currency") in {"UNK", "N/D"}:
         missing.append("currency")
-    if not product.get("category") or metadata.get("field_sources", {}).get("category") not in {"public_product_page", "public_product_page", "user"}:
+    if not product.get("category") or metadata.get("field_sources", {}).get("category") not in {"public_product_page", "user"}:
         missing.append("category")
     if not product.get("image_url") or _is_placeholder_image_url(product.get("image_url")):
         missing.append("image_url")
