@@ -442,7 +442,6 @@ def list_products(
                             THEN p.title ELSE NULL END AS title,
                        pl.name AS platform,
                        CASE WHEN p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
-                                  OR p.source_metadata->>'category_source' = 'title_inference'
                             THEN c.name ELSE NULL END AS category,
                        CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user') THEN p.current_price ELSE NULL END AS current_price,
                        CASE WHEN p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user') THEN p.currency ELSE NULL END AS currency,
@@ -492,6 +491,12 @@ def list_products(
                                   AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
                                   AND COALESCE(p.source_metadata->>'catalog_status', 'current') = 'current'
                                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto amazon %%'
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto aliexpress %%'
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto url-%%'
+                                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
+                                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
+                                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
                                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
                             THEN s.opportunity_score ELSE NULL END AS opportunity_score
                 FROM products p
