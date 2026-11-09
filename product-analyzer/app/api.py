@@ -643,7 +643,7 @@ class ProductImport(BaseModel):
     description: Optional[str] = Field(default=None, max_length=5000)
     price: Optional[float] = Field(default=None, gt=0)
     previous_price: Optional[float] = Field(default=None, gt=0)
-    currency: str = Field(default="USD", min_length=3, max_length=10)
+    currency: Optional[str] = Field(default=None, min_length=3, max_length=10)
     image_url: Optional[str] = Field(default=None, max_length=2000)
     gallery_urls: list[str] = Field(default_factory=list, max_length=10)
     rating: Optional[float] = Field(default=None, ge=0, le=5)
@@ -686,8 +686,21 @@ def import_product_from_url(payload: ProductImport):
             "sales_estimate": payload.sales_estimate,
             "gallery_urls": list(dict.fromkeys((product.get("gallery_urls") or []) + payload.gallery_urls))[:10],
         })
+        metadata = dict(product.get("source_metadata") or {})
+        manual_fields = set(metadata.get("manual_fields") or [])
+        field_sources = dict(metadata.get("field_sources") or {})
+        for field, value in (("description", payload.description), ("previous_price", payload.previous_price), ("rating", payload.rating), ("reviews_count", payload.reviews_count), ("sales_estimate", payload.sales_estimate)):
+            if value is not None:
+                manual_fields.add(field)
+                field_sources[field] = "user"
         if not product.get("image_url") and product.get("gallery_urls"):
             product["image_url"] = product["gallery_urls"][0]
+            if payload.gallery_urls:
+                manual_fields.add("image_url")
+                field_sources["image_url"] = "user"
+        metadata["manual_fields"] = sorted(manual_fields)
+        metadata["field_sources"] = field_sources
+        product["source_metadata"] = metadata
         product = enrich_product(product)
         category = category or product.get("category")
     except ValueError as exc:
