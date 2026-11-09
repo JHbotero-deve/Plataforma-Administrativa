@@ -1686,6 +1686,7 @@
             <div class="import-manual-grid">
               <label class="wide">Nombre real del producto<input class="field" id="importTitle" maxlength="500" placeholder="Ej. Audífonos inalámbricos ANC"></label>
               <label>Precio actual<input class="field" id="importPrice" type="number" min="0.01" step="0.01" placeholder="129900"></label>
+              <label>Precio anterior<input class="field" id="importPreviousPrice" type="number" min="0.01" step="0.01" placeholder="199900"></label>
               <label>Moneda<select class="field" id="importCurrency"><option value="">Detectar automáticamente</option><option value="COP">COP</option><option value="USD">USD</option><option value="EUR">EUR</option><option value="MXN">MXN</option></select></label>
               <label class="wide">URL de imagen principal<input class="field" id="importImage" type="url" maxlength="2000" placeholder="https://..."></label>
               <label class="wide">Descripción<textarea class="field" id="importDescription" maxlength="5000" rows="3" placeholder="Descripción real del producto"></textarea></label>
@@ -1694,9 +1695,7 @@
         </form>
         <p class="import-help">Pega una URL pública de Amazon o AliExpress. Central intenta extraer nombre, descripción, fotos y
           precios. Si la tienda bloquea la lectura, completa los datos manualmente para que el producto pueda entrar al catálogo.</p>
-        <p class="import-help">Solo se publican ofertas con al menos 40% de descuento real y margen positivo. Solo publica ofertas con al menos 40% de descuento real y margen positivo; el costo y la
-          ganancia quedan visibles únicamente en administración. Si la tienda exige iniciar sesión o no entrega el
-          precio original, el producto se guarda sin publicarse.</p>
+        <p class="import-help">Solo se publican ofertas con al menos 40% de descuento real y margen positivo. Si la tienda no entrega el precio anterior, puedes completarlo manualmente; el costo y la ganancia quedan visibles únicamente en administración.</p>
         <div class="import-fallback"><a class="btn small" href="https://central-7ykr.vercel.app/tarjetas">Abrir creador
             de tarjetas</a></div>
         <div class="import-result" id="importResult" role="status" aria-live="polite"></div>
@@ -2136,11 +2135,11 @@
           if (!saved) return;
           if (typeof saved.url === "string") $("url").value = saved.url;
           if (typeof saved.category === "string" && [...$("category").options].some(option => option.value === saved.category)) $("category").value = saved.category;
-          for (const id of ["importTitle", "importPrice", "importCurrency", "importImage", "importDescription"]) if (typeof saved[id] === "string") $(id).value = saved[id];
+          for (const id of ["importTitle", "importPrice", "importPreviousPrice", "importCurrency", "importImage", "importDescription"]) if (typeof saved[id] === "string") $(id).value = saved[id];
         } catch { }
       }
       function saveImportDraft() {
-        try { localStorage.setItem(importDraftKey, JSON.stringify({ url: $("url").value, category: $("category").value, importTitle: $("importTitle").value, importPrice: $("importPrice").value, importCurrency: $("importCurrency").value, importImage: $("importImage").value, importDescription: $("importDescription").value, updated_at: new Date().toISOString() })) }
+        try { localStorage.setItem(importDraftKey, JSON.stringify({ url: $("url").value, category: $("category").value, importTitle: $("importTitle").value, importPrice: $("importPrice").value, importPreviousPrice: $("importPreviousPrice").value, importCurrency: $("importCurrency").value, importImage: $("importImage").value, importDescription: $("importDescription").value, updated_at: new Date().toISOString() })) }
         catch { $("importResult").textContent = "No se pudo guardar el borrador local; mantén esta página abierta hasta completar la importación." }
       }
       function schedulePublicationDraft(form) {
@@ -2364,6 +2363,7 @@
           category: $("category").value || null,
           title: $("importTitle").value.trim() || null,
           price: priceValue ? Number(priceValue) : null,
+          previous_price: $("importPreviousPrice").value.trim() ? Number($("importPreviousPrice").value) : null,
           currency: $("importCurrency").value || null,
           image_url: $("importImage").value.trim() || null,
           description: $("importDescription").value.trim() || null
