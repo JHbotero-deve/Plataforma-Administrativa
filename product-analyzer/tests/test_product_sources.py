@@ -461,5 +461,80 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(recovered, 1)
         connection.commit.assert_called_once()
 
+    def test_amazon_asin_wins_over_frontend_placeholder_external_id(self):
+        product = import_url(
+            "https://www.amazon.com/dp/B0H5FJXKRG/ref=cm_sw_r_as_gl_apa_gl_i_dl?tag=jh0c35-20",
+            external_id="URL-9E182600AABCO3FEDCBFDBOF",
+        )
+        self.assertEqual(product["external_id"], "B0H5FJXKRG")
+        self.assertEqual(product["source_metadata"]["external_id_source"], "url")
+        self.assertEqual(product["source_metadata"]["original_url"], "https://www.amazon.com/dp/B0H5FJXKRG/ref=cm_sw_r_as_gl_apa_gl_i_dl?tag=jh0c35-20")
+
+    def test_amazon_shortlink_keeps_provisional_id_until_redirect_is_resolved(self):
+        product = import_url("https://link.amazon/B04ZSERdW", external_id="URL-OLD")
+        self.assertTrue(product["external_id"].startswith("URL-"))
+        self.assertEqual(product["source_metadata"]["external_id_source"], "pending_redirect")
+        page = {
+            "resolved_url": "https://www.amazon.com/dp/B012345678",
+            "title": "Producto Amazon de prueba",
+            "price": 19.99,
+            "currency": "USD",
+            "image_url": "https://images.example/amazon.jpg",
+            "gallery_urls": ["https://images.example/amazon.jpg", "https://images.example/amazon-2.jpg"],
+            "description": "Descripción pública del producto",
+            "category": "tecnologia",
+        }
+        with patch.object(product_sources, "_public_product_page", return_value=page):
+            result = product_sources.enrich_product(product)
+        self.assertEqual(result["external_id"], "B012345678")
+        self.assertEqual(result["source_metadata"]["external_id_source"], "resolved_url")
+        self.assertEqual(result["product_url"], page["resolved_url"])
+        self.assertEqual(result["source_metadata"]["original_url"], "https://link.amazon/B04ZSERdW")
+        self.assertEqual(result["description"], "Descripción pública del producto")
+        self.assertEqual(len(result["gallery_urls"]), 2)
+
+    def test_aliexpress_affiliate_shortlink_extracts_item_id_after_redirect(self):
+        product = import_url("https://s.click.aliexpress.com/e/_mtoJ8OF", external_id="URL-OLD")
+        self.assertTrue(product["external_id"].startswith("URL-"))
+        self.assertEqual(product["source_metadata"]["external_id_source"], "pending_redirect")
+        page = {
+            "resolved_url": "https://www.aliexpress.com/item/1005001234567890.html",
+            "title": "Producto AliExpress de prueba",
+            "price": 12.5,
+            "currency": "USD",
+            "image_url": "https://images.example/aliexpress.jpg",
+            "gallery_urls": ["https://images.example/aliexpress.jpg", "https://images.example/aliexpress-2.jpg"],
+            "description": "Descripción pública de AliExpress",
+            "category": "tecnologia",
+        }
+        with patch.object(product_sources, "_public_product_page", return_value=page):
+            result = product_sources.enrich_product(product)
+        self.assertEqual(result["external_id"], "1005001234567890")
+        self.assertEqual(result["source_metadata"]["external_id_source"], "resolved_url")
+        self.assertEqual(result["product_url"], page["resolved_url"])
+        self.assertEqual(result["source_metadata"]["original_url"], "https://s.click.aliexpress.com/e/_mtoJ8OF")
+        self.assertEqual(result["description"], "Descripción pública de AliExpress")
+        self.assertEqual(len(result["gallery_urls"]), 2)
+
+    def test_link_amazon_short_domain_follows_redirect_to_product_page(self):
+        redirect = MagicMock(status_code=302, headers={"Location": "https://www.amazon.com/dp/B012345678"})
+        page = MagicMock(status_code=200, text='<html><meta property="og:title" content="Producto Amazon"></html>')
+        with patch.object(product_sources.requests, "get", side_effect=[redirect, page]) as request:
+            result = product_sources._public_product_page("https://link.amazon/B04ZSERdW", "amazon")
+        self.assertEqual(result["resolved_url"], "https://www.amazon.com/dp/B012345678")
+        self.assertEqual(request.call_count, 2)
+        redirect.close.assert_called_once()
+        page.close.assert_called_once()
+
+    def test_aliexpress_click_short_domain_follows_redirect_to_item(self):
+        redirect = MagicMock(status_code=302, headers={"Location": "https://www.aliexpress.com/item/1005001234567890.html"})
+        page = MagicMock(status_code=200, text='<html><meta property="og:title" content="Producto AliExpress"></html>')
+        with patch.object(product_sources.requests, "get", side_effect=[redirect, page]) as request:
+            result = product_sources._public_product_page("https://s.click.aliexpress.com/e/_mtoJ8OF", "aliexpress")
+        self.assertEqual(result["resolved_url"], "https://www.aliexpress.com/item/1005001234567890.html")
+        self.assertEqual(request.call_count, 2)
+        redirect.close.assert_called_once()
+        page.close.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main()

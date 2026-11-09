@@ -14,7 +14,7 @@ import requests
 from db import _affiliate_url
 from url_import import ASIN_RE
 
-ENRICHMENT_VERSION = 11
+ENRICHMENT_VERSION = 12
 ALIEXPRESS_ITEM_RE = re.compile(r"/item/(\d+)(?:\.html)?", re.I)
 
 MAX_REDIRECTS = 12
@@ -382,6 +382,7 @@ def enrich_product(product, force=False):
     match = ASIN_RE.search(path) if platform == "amazon" else ALIEXPRESS_ITEM_RE.search(path)
     if match and (not product.get("external_id") or str(product["external_id"]).startswith("URL-")):
         product["external_id"] = match.group(1).upper() if platform == "amazon" else match.group(1)
+        metadata["external_id_source"] = "resolved_url"
     missing = []
     if _is_placeholder_title(product.get("title")):
         missing.append("title")
