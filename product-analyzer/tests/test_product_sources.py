@@ -431,6 +431,32 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertTrue(result["source_metadata"]["catalog_refresh_verified"])
 
 
+    def test_expired_partial_product_respects_retry_cooldown(self):
+        row = {
+            "catalog_expired": True,
+            "source_metadata": {
+                "enrichment_version": product_sources.ENRICHMENT_VERSION,
+                "enrichment_status": "partial",
+                "enrichment_retry_after": "2999-01-01T00:00:00+00:00",
+            },
+        }
+        self.assertFalse(product_sources._row_enrichment_due(row))
+        row["source_metadata"]["enrichment_retry_after"] = "2000-01-01T00:00:00+00:00"
+        self.assertTrue(product_sources._row_enrichment_due(row))
+        self.assertTrue(product_sources._row_enrichment_due(row, force=True))
+
+    def test_expired_complete_product_without_retry_date_is_revalidated(self):
+        row = {
+            "catalog_expired": True,
+            "source_metadata": {
+                "enrichment_version": product_sources.ENRICHMENT_VERSION,
+                "enrichment_status": "complete",
+            },
+        }
+        self.assertTrue(product_sources._row_enrichment_due(row))
+        self.assertTrue(product_sources._row_force_refresh(row))
+
+
     def test_complete_old_enrichment_version_is_queued_for_revalidation(self):
         self.assertTrue(product_sources._retry_due({
             "enrichment_status": "complete",
@@ -469,14 +495,22 @@ class ProductSourcesTests(unittest.TestCase):
             "source_metadata": {
                 "enrichment_version": product_sources.ENRICHMENT_VERSION,
                 "enrichment_status": "partial", "metadata_source": "public_product_page",
-                "catalog_refresh_verified": False,
+                "catalog_refresh_verified": False, "missing_fields": ["title", "price"],
+                "enrichment_error": "HTTPError: 403 Forbidden",
             },
         }
         connection = MagicMock()
         cursor = connection.cursor.return_value.__enter__.return_value
         cursor.fetchall.return_value = [row]
-        with patch.object(product_sources, "_enrich_pending_row", return_value=enriched) as enrich:
+        with (
+            patch.object(product_sources, "_enrich_pending_row", return_value=enriched) as enrich,
+            patch("builtins.print") as output,
+        ):
             recovered = product_sources.enrich_pending_products(connection, limit=1)
+        messages = " ".join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn("producto=91", messages)
+        self.assertIn("faltan=title,price", messages)
+        self.assertIn("HTTPError HTTP 403", messages)
         query = cursor.execute.call_args_list[0].args[0]
         self.assertIn("COALESCE(p.source_metadata->>'enrichment_version', '') <> %s", query)
         self.assertNotIn("p.is_active=TRUE AND COALESCE(p.source_metadata->>'enrichment_version'", query)
