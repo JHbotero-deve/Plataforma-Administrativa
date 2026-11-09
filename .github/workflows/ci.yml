@@ -200,6 +200,7 @@ jobs:
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_publication_quality.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_marketplace_safety.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_analysis.py'
+          PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_db_upsert.py'
           PYTHONPATH=product-analyzer/app python -m unittest discover -s product-analyzer/tests -p 'test_api_media_proxy.py'
           python -m unittest discover -s product-analyzer/tests -p 'test_catalog_cli.py'
           python -m py_compile scripts/importar-lote-central.py scripts/importar-url-central.py
