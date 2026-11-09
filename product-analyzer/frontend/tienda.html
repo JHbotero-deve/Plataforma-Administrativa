@@ -616,13 +616,17 @@
     }
 
     .variant {
-      width: 27px;
-      height: 27px;
-      border-radius: 50%;
+      flex: 0 0 48px;
+      width: 48px;
+      height: 48px;
+      border-radius: 11px;
       border: 2px solid rgba(255, 255, 255, .18);
-      background: #2b3036;
-      cursor: pointer
+      background: #2b3036 center/cover no-repeat;
+      cursor: pointer;
+      transition: border-color .18s, transform .18s
     }
+
+    .variant:hover { transform: translateY(-2px) }
 
     .variant.active {
       outline: 2px solid var(--accent);
@@ -759,6 +763,19 @@
     .card-actions .wide {
       grid-column: 1/-1
     }
+
+    .store-product-card { display: flex; flex-direction: column; min-width: 0; border-color: #252c34; background: linear-gradient(155deg, #151b22, #0c1015); box-shadow: 0 12px 34px rgba(0,0,0,.24) }
+    .store-product-card:hover { border-color: rgba(255,138,0,.42); box-shadow: 0 18px 42px rgba(0,0,0,.34) }
+    .store-product-card .card-media { height: auto; aspect-ratio: 4/3; background: linear-gradient(145deg, #f5f4ef, #e8e8e2); }
+    .store-product-card .card-media:before { width: 58%; border-color: rgba(255,138,0,.12) }
+    .store-product-card .card-media img { width: 100%; height: 100%; padding: 15px; object-fit: contain; filter: none; }
+    .store-product-card .card-body { display: flex; flex: 1; flex-direction: column; gap: 5px; padding: 17px; }
+    .store-product-card .card-body .category { color: #ff9b57; font-size: 9px; }
+    .store-product-card h3 { min-height: 44px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 17px; line-height: 1.25; }
+    .store-product-card .card-body small { min-height: 0; line-height: 1.45; }
+    .store-product-card .card-price { margin: auto 0 12px; padding-top: 8px; }
+    .store-product-card .card-actions { margin-top: auto; }
+    .store-product-card .badge { background: rgba(8,10,13,.84); backdrop-filter: blur(10px); }
 
     .empty {
       padding: 60px 30px;
@@ -1419,7 +1436,7 @@ function card(p){
   else if(ext) main='<a class="btn primary wide" href="'+esc(ext)+'" target="_blank" rel="nofollow sponsored noopener">Comprar en '+esc(purchaseChannel(p))+'</a>';
   else main='<a class="btn primary wide" href="'+productUrl(p)+'">Ver ficha</a>';
   const visual=modelMarkup(p,"card-model")||imageGalleryMarkup(p,images,"",true);
-  return '<article class="card"><div class="card-media">'+visual+'<span class="badge">'+(modelSrc(p)?"MODELO 3D":discount>=40?Math.round(discount)+'% DTO':esc(p.platform||"Central"))+'</span></div><div class="card-body"><div class="category">'+esc(p.category||"Producto")+'</div><h3>'+esc(p.title)+'</h3><small>'+esc(p.subtitle||"Producto publicado por Central")+'</small><small>Vendedor: '+esc(p.seller_name||"No informado")+'</small><div class="card-price">'+esc(price)+'</div>'+(discount>=40&&original>0?'<small style="text-decoration:line-through;color:#888">Antes: '+esc(money(original,p.currency))+'</small>':'')+'<div class="card-actions">'+main+'<a class="btn" href="'+productUrl(p)+'">Ficha</a></div></div></article>'
+  return '<article class="card store-product-card"><div class="card-media">'+visual+'<span class="badge">'+(modelSrc(p)?"MODELO 3D":discount>=40?Math.round(discount)+'% DTO':esc(p.platform||"Central"))+'</span></div><div class="card-body"><div class="category">'+esc(p.category||"Producto")+'</div><h3>'+esc(p.title)+'</h3><small>'+esc(p.subtitle||"Producto publicado por Central")+'</small><small>Vendedor: '+esc(p.seller_name||"No informado")+'</small><div class="card-price">'+esc(price)+'</div>'+(discount>=40&&original>0?'<small style="text-decoration:line-through;color:#888">Antes: '+esc(money(original,p.currency))+'</small>':'')+'<div class="card-actions">'+main+'<a class="btn" href="'+productUrl(p)+'">Ficha</a></div></div></article>'
 }
 function renderGrid(){
   const host=$("grid"),q=$("search").value.trim(),selected=$("category").value;
