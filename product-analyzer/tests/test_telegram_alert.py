@@ -30,6 +30,7 @@ class TelegramPollingLockTests(unittest.TestCase):
             patch("builtins.print") as output,
         ):
             self.assertIsNone(telegram_alert._acquire_polling_lock())
+        self.assertTrue(connection.autocommit)
         self.assertEqual(connection.cursor.call_count, 2)
         self.assertIn("pg_stat_activity", cursor.execute.call_args_list[1].args[0])
         messages = " ".join(str(call.args[0]) for call in output.call_args_list)
@@ -37,6 +38,16 @@ class TelegramPollingLockTests(unittest.TestCase):
         self.assertIn("app=psycopg2", messages)
         self.assertNotIn("SELECT", messages)
         connection.close.assert_called_once()
+
+    def test_polling_lock_keeps_a_dedicated_autocommit_connection(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = {"locked": True}
+        with patch.object(telegram_alert, "get_connection", return_value=connection):
+            lock_connection = telegram_alert._acquire_polling_lock()
+        self.assertIs(lock_connection, connection)
+        self.assertTrue(connection.autocommit)
+        connection.close.assert_not_called()
 
 
 class TelegramCommandTests(unittest.TestCase):
@@ -56,6 +67,10 @@ class TelegramCommandTests(unittest.TestCase):
             result = telegram_alert._model_active_products()
 
         self.assertEqual(result, (1, 9, 0, 500, 0, 0, 0))
+        count_query = cursor.execute.call_args_list[1].args[0]
+        self.assertIn("catalog_expires_at IS NULL OR catalog_expires_at > NOW()", count_query)
+        self.assertIn("catalog_status", count_query)
+        self.assertIn("LOWER(COALESCE(image_url, '')) NOT LIKE", count_query)
         connection.close.assert_called_once()
 
     def test_plain_aliexpress_message_preserves_the_title_before_short_url(self):
@@ -212,6 +227,8 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertEqual(send.call_count, 2)
         self.assertIn("Iniciando modelado", send.call_args_list[0].args[2])
         self.assertIn("Productos puntuados: 3", send.call_args_list[1].args[2])
+        self.assertIn("API oficial de detalle de AliExpress", send.call_args_list[1].args[2])
+        self.assertIn("no depende de APIs de búsqueda", send.call_args_list[1].args[2])
 
     def test_catalog_status_reports_total_active_inactive_and_url_counts(self):
         connection = MagicMock()
