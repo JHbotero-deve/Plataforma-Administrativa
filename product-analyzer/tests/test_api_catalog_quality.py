@@ -25,6 +25,13 @@ class ApiCatalogQualityTests(unittest.TestCase):
         for field in ("price", "currency", "rating", "reviews_count", "sales_estimate", "image_url", "previous_price"):
             self.assertIn(f"field_sources'->>'{field}'", query)
         self.assertIn("missing_fields", query)
+        self.assertIn("THEN p.title ELSE NULL END AS title", query)
+        self.assertIn("THEN p.description ELSE NULL END AS description", query)
+        self.assertIn("THEN seller.name ELSE NULL END AS seller_name", query)
+        self.assertIn("THEN COALESCE(p.image_gallery, '[]'::jsonb) ELSE '[]'::jsonb END AS image_gallery", query)
+        self.assertIn("THEN p.stock ELSE NULL END AS stock", query)
+        self.assertIn("THEN c.name ELSE NULL END AS category", query)
+        self.assertIn("AS data_quality", query)
         connection.close.assert_called_once()
 
     def test_top_opportunities_excludes_incomplete_unverified_and_stale_products(self):
@@ -34,6 +41,10 @@ class ApiCatalogQualityTests(unittest.TestCase):
         query, parameters = cursor.execute.call_args.args
         self.assertIn("field_sources", query)
         self.assertIn("missing_fields", query)
+        self.assertIn("field_sources'->>'title' IN ('public_product_page', 'user')", query)
+        self.assertIn("field_sources'->>'price' IN ('public_product_page', 'user')", query)
+        self.assertIn("field_sources'->>'image_url' IN ('public_product_page', 'user')", query)
+        self.assertIn("LOWER(COALESCE(p.title, '')) NOT LIKE 'producto amazon %%'", query)
         self.assertIn("p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW()", query)
         self.assertIn("%enlace-de-la-imagen.jpg%", query)
         self.assertIn("p.product_url IS NOT NULL", query)
@@ -46,7 +57,7 @@ class ApiCatalogQualityTests(unittest.TestCase):
         with patch.object(api, "get_connection", return_value=connection):
             self.assertEqual(api.list_products(limit=50, offset=0), [])
         query = cursor.execute.call_args.args[0]
-        self.assertIn("COALESCE(p.image_gallery, '[]'::jsonb) AS image_gallery", query)
+        self.assertIn("THEN COALESCE(p.image_gallery, '[]'::jsonb) ELSE '[]'::jsonb END AS image_gallery", query)
         self.assertIn("field_sources'->>'image_url'", query)
 
     def test_public_product_detail_rejects_stale_cards_and_hides_unverified_discounts(self):
@@ -60,7 +71,10 @@ class ApiCatalogQualityTests(unittest.TestCase):
         self.assertIn("missing_fields", query)
         self.assertIn("field_sources", query)
         self.assertIn("previous_price", query)
-        self.assertIn("COALESCE(p.image_gallery, '[]'::jsonb) AS image_gallery", query)
+        self.assertIn("THEN p.description ELSE NULL END AS description", query)
+        self.assertIn("THEN seller.name ELSE NULL END AS seller_name", query)
+        self.assertIn("THEN COALESCE(p.image_gallery, '[]'::jsonb) ELSE '[]'::jsonb END AS image_gallery", query)
+        self.assertIn("THEN p.stock ELSE NULL END AS stock", query)
         connection.close.assert_called_once()
 
     def test_affiliate_click_and_sitemap_exclude_stale_cards(self):

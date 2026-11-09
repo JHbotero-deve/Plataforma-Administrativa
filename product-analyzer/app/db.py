@@ -11,12 +11,12 @@ from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
+
 def _database_url() -> str:
     db_url = (os.getenv("DATABASE_URL") or "").strip()
     if not db_url:
         raise RuntimeError("DATABASE_URL es obligatoria; Central usa PostgreSQL de Railway como unica base de datos.")
 
-    # psycopg2 expects a PostgreSQL URL, not SQLAlchemy's driver-qualified URL.
     for prefix in ("postgresql+psycopg://", "postgres+psycopg://"):
         if db_url.startswith(prefix):
             db_url = "postgresql://" + db_url[len(prefix):]
@@ -43,6 +43,7 @@ def _env_value(name: str, default: str = "") -> str:
         if key.strip().replace("\u00a0", "").casefold() == target and candidate and str(candidate).strip():
             return str(candidate).strip()
     return default
+
 
 def _affiliate_url(product: dict, platform_name: str | None = None) -> str | None:
     url = (product.get("product_url") or "").strip()
@@ -82,8 +83,9 @@ def _affiliate_url(product: dict, platform_name: str | None = None) -> str | Non
                 return affiliate_url
         return None
     return None
+
+
 def upsert_product(conn, platform_name: str, category_name: str, product: dict):
-    # Conservar enlaces afiliados existentes sin llamar a servicios de marketplace.
     affiliate_url = _affiliate_url(product, platform_name)
     product["affiliate_url"] = affiliate_url
     with conn.cursor() as cur:
@@ -129,21 +131,55 @@ def upsert_product(conn, platform_name: str, category_name: str, product: dict):
                 %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW() + INTERVAL '48 hours', NOW()
             )
             ON CONFLICT (platform_id, external_id) DO UPDATE SET
-                category_id = EXCLUDED.category_id,
+                category_id = COALESCE(EXCLUDED.category_id, products.category_id),
                 seller_id = COALESCE(EXCLUDED.seller_id, products.seller_id),
-                title = EXCLUDED.title,
+                title = CASE
+                    WHEN EXCLUDED.source_metadata->>'import_method' = 'authorized_cli_url'
+                     AND (EXCLUDED.title IS NULL OR LOWER(EXCLUDED.title) IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url') OR LOWER(EXCLUDED.title) LIKE 'producto amazon %' OR LOWER(EXCLUDED.title) LIKE 'producto aliexpress %' OR LOWER(EXCLUDED.title) LIKE 'producto url-%')
+                     AND products.title IS NOT NULL
+                     AND LOWER(products.title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
+                     AND LOWER(products.title) NOT LIKE 'producto amazon %'
+                     AND LOWER(products.title) NOT LIKE 'producto aliexpress %'
+                     AND LOWER(products.title) NOT LIKE 'producto url-%'
+                    THEN products.title
+                    ELSE EXCLUDED.title
+                END,
                 description = COALESCE(EXCLUDED.description, products.description),
                 image_url = COALESCE(EXCLUDED.image_url, products.image_url),
                 image_gallery = CASE WHEN EXCLUDED.image_gallery <> '[]'::jsonb THEN EXCLUDED.image_gallery ELSE products.image_gallery END,
                 product_url = COALESCE(EXCLUDED.product_url, products.product_url),
                 affiliate_url = COALESCE(EXCLUDED.affiliate_url, products.affiliate_url),
                 current_price = COALESCE(EXCLUDED.current_price, products.current_price),
-                previous_price = CASE WHEN EXCLUDED.source_metadata->>'import_method' = 'authorized_cli_url' THEN EXCLUDED.previous_price ELSE COALESCE(EXCLUDED.previous_price, products.previous_price) END,
+                previous_price = COALESCE(EXCLUDED.previous_price, products.previous_price),
                 currency = COALESCE(EXCLUDED.currency, products.currency),
-                rating = CASE WHEN EXCLUDED.source_metadata->>'import_method' = 'authorized_cli_url' THEN EXCLUDED.rating ELSE COALESCE(EXCLUDED.rating, products.rating) END,
-                reviews_count = CASE WHEN EXCLUDED.source_metadata->>'import_method' = 'authorized_cli_url' THEN EXCLUDED.reviews_count ELSE COALESCE(EXCLUDED.reviews_count, products.reviews_count) END,
-                sales_estimate = CASE WHEN EXCLUDED.source_metadata->>'import_method' = 'authorized_cli_url' THEN EXCLUDED.sales_estimate ELSE COALESCE(EXCLUDED.sales_estimate, products.sales_estimate) END,
-                source_metadata = EXCLUDED.source_metadata,
+                rating = COALESCE(EXCLUDED.rating, products.rating),
+                reviews_count = COALESCE(EXCLUDED.reviews_count, products.reviews_count),
+                sales_estimate = COALESCE(EXCLUDED.sales_estimate, products.sales_estimate),
+                source_metadata = CASE
+                    WHEN EXCLUDED.source_metadata->>'import_method' = 'authorized_cli_url'
+                     AND EXCLUDED.source_metadata->>'metadata_source' = 'url_only'
+                    THEN COALESCE(products.source_metadata, '{}'::jsonb) || jsonb_build_object(
+                        'last_import_url', EXCLUDED.source_metadata->>'original_url'
+                    )
+                    WHEN EXCLUDED.source_metadata->>'import_method' = 'authorized_cli_url'
+                    THEN jsonb_set(
+                        jsonb_set(
+                            COALESCE(products.source_metadata, '{}'::jsonb) || EXCLUDED.source_metadata,
+                            '{field_sources}',
+                            COALESCE(products.source_metadata->'field_sources', '{}'::jsonb) || COALESCE(EXCLUDED.source_metadata->'field_sources', '{}'::jsonb),
+                            TRUE
+                        ),
+                        '{missing_fields}',
+                        COALESCE(EXCLUDED.source_metadata->'missing_fields', '[]'::jsonb) - ARRAY(
+                            SELECT jsonb_object_keys(
+                                COALESCE(products.source_metadata->'field_sources', '{}'::jsonb) ||
+                                COALESCE(EXCLUDED.source_metadata->'field_sources', '{}'::jsonb)
+                            )
+                        ),
+                        TRUE
+                    )
+                    ELSE EXCLUDED.source_metadata
+                END,
                 catalog_batch_id = NOW(),
                 catalog_expires_at = NOW() + INTERVAL '48 hours',
                 is_active = TRUE,

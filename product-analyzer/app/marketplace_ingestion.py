@@ -1,4 +1,5 @@
 """Descubre candidatos mediante APIs oficiales y verifica cada URL públicamente."""
+import logging
 import math
 
 from amazon_creators import search_products as search_amazon
@@ -7,6 +8,8 @@ from db import get_connection, upsert_product
 from product_sources import enrich_product
 from promotion_bots import _search_bucket
 
+
+logger = logging.getLogger(__name__)
 DISCOVERY_QUERIES = (
     ("tecnologia", "auriculares bluetooth"),
     ("hogar", "organizador cocina"),
@@ -138,6 +141,10 @@ def run_marketplace_ingestion(target_per_platform=8):
             except Exception as exc:
                 errors.append(f"{category}: {type(exc).__name__}: {str(exc)[:160]}")
                 if _is_provider_auth_error(exc):
+                    logger.warning(
+                        "[marketplace-discovery] %s: credenciales rechazadas (%s); se omite el proveedor en este ciclo.",
+                        platform, str(exc)[:160],
+                    )
                     break
                 continue
             received += len(candidates)
@@ -156,12 +163,13 @@ def run_marketplace_ingestion(target_per_platform=8):
                         pending += 1
                 except Exception as exc:
                     errors.append(f"{category}/{candidate.get('external_id')}: {type(exc).__name__}: {str(exc)[:160]}")
+        configuration_error = any(_is_provider_auth_error(error) for error in errors)
         results[platform] = {
             "received": received,
             "verified_and_saved": verified,
             "pending_public_verification": pending,
             "errors": errors[:8],
-            "status": "completed" if received else ("error" if errors else "empty"),
+            "status": "configuration_error" if configuration_error else ("completed" if received else ("error" if errors else "empty")),
         }
     print("[marketplace-discovery] " + " | ".join(
         f"{platform}: recibidos={item['received']} verificados={item['verified_and_saved']} "

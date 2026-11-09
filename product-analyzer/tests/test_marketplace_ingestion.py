@@ -34,8 +34,8 @@ class MarketplaceIngestionTests(unittest.TestCase):
         self.assertEqual(calls, ["amazon", "aliexpress"])
         self.assertEqual(len(result["amazon"]["errors"]), 1)
         self.assertEqual(len(result["aliexpress"]["errors"]), 1)
-        self.assertEqual(result["amazon"]["status"], "error")
-        self.assertEqual(result["aliexpress"]["status"], "error")
+        self.assertEqual(result["amazon"]["status"], "configuration_error")
+        self.assertEqual(result["aliexpress"]["status"], "configuration_error")
 
     def test_search_keeps_aliexpress_failure_independent_from_amazon(self):
         verified = {
