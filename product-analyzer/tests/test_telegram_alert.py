@@ -225,8 +225,8 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertEqual(send.call_count, 2)
         self.assertIn("Iniciando modelado", send.call_args_list[0].args[2])
         self.assertIn("Productos puntuados: 3", send.call_args_list[1].args[2])
-        self.assertIn("API oficial de detalle de AliExpress", send.call_args_list[1].args[2])
-        self.assertIn("no depende de APIs de búsqueda", send.call_args_list[1].args[2])
+        self.assertIn("exclusivamente las URLs públicas", send.call_args_list[1].args[2])
+        self.assertIn("no consulta APIs de búsqueda ni detalle", send.call_args_list[1].args[2])
 
     def test_catalog_status_reports_total_active_inactive_and_url_counts(self):
         connection = MagicMock()
