@@ -462,7 +462,7 @@ def _model_product(argument):
 
 
 def _model_active_products():
-    """Puntúa el catálogo local sin consultar Amazon ni AliExpress."""
+    """Enriquece desde URLs y puntúa solo productos activos con datos suficientes."""
     conn = get_connection()
     try:
         enriched = enrich_pending_products(conn, limit=20, max_workers=4, force=True)
@@ -516,31 +516,23 @@ def _model_active_products():
                           AND LOWER(title) NOT LIKE 'producto aliexpress %%'
                           AND LOWER(title) NOT LIKE 'producto url-%%'
                           AND LOWER(title) NOT IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url')
-                          AND LOWER(title) <> 'producto'
                           AND LOWER(title) NOT LIKE '%%oferta destacada global%%'
                           AND LOWER(title) NOT LIKE '%%producto verificado con%%'
                           AND LOWER(title) NOT LIKE '%%titulo real del producto%%'
                           AND LOWER(title) NOT LIKE '%%nombre real del producto%%'
-                          AND LOWER(title) NOT LIKE '%%oferta destacada global%%'
                           AND image_url IS NOT NULL
                           AND image_url <> ''
+                          AND LOWER(COALESCE(image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+                          AND LOWER(COALESCE(image_url, '')) NOT LIKE '%%placeholder%%'
+                          AND LOWER(COALESCE(image_url, '')) NOT LIKE '%%example.com%%'
+                          AND (catalog_expires_at IS NULL OR catalog_expires_at > NOW())
+                          AND COALESCE(source_metadata->>'catalog_status', 'current') <> 'stale'
                     ) AS eligible,
                     COUNT(*) AS active_total
                 FROM products
                 WHERE is_active = TRUE
                 """
             )
-            counts = cur.fetchone()
-            eligible_total = int(counts["eligible"] or 0)
-            active_total = int(counts["active_total"] or 0)
-            cur.execute("""
-                SELECT
-                    COUNT(*) AS recovery,
-                    COUNT(*) FILTER (WHERE source_metadata->>'enrichment_status' IN ('retry','partial','blocked')) AS retry
-                FROM products
-                WHERE is_active = TRUE AND product_url IS NOT NULL
-                  AND (current_price IS NULL OR image_url IS NULL OR LOWER(title) LIKE 'producto amazon %%' OR LOWER(title) LIKE 'producto aliexpress %%' OR LOWER(title) LIKE 'producto url-%%' OR LOWER(title) IN ('producto', 'producto amazon', 'producto aliexpress', 'producto url') OR LOWER(title) LIKE '%%oferta destacada global%%' OR LOWER(title) LIKE '%%producto verificado con%%' OR LOWER(title) LIKE '%%titulo real del producto%%' OR LOWER(title) LIKE '%%nombre real del producto%%' OR LOWER(COALESCE(image_url, '')) LIKE '%%enlace-de-la-imagen.jpg%%' OR LOWER(COALESCE(image_url, '')) LIKE '%%placeholder%%' OR LOWER(COALESCE(image_url, '')) LIKE '%%example.com%%' OR category_id IS NULL)
-            """)
             enrichment_counts = cur.fetchone() or {}
             recovery = int(enrichment_counts.get("recovery") or 0)
             retry = int(enrichment_counts.get("retry") or 0)
@@ -710,7 +702,7 @@ def _handle(token, chat_id, text):
                     f"Pendientes por límite de lote: {remaining}\n"
                     f"Datos recuperados desde URLs: {enriched}\n"
                     f"Errores al puntuar: {errors}\n"
-                    "El sistema recupera metadatos de páginas públicas por URL; no consulta APIs externas de búsqueda o detalle de marketplaces."
+                    "El sistema prioriza los datos de la URL pública y usa la API oficial de detalle de AliExpress solo como respaldo cuando faltan campos; no depende de APIs de búsqueda para importar una URL."
                 )
             except Exception as exc:
                 print(f"[telegram-bot] batch modeling error: {type(exc).__name__}: {exc}")
@@ -784,6 +776,7 @@ def _clear_webhook(token):
 def _acquire_polling_lock():
     conn = get_connection()
     try:
+        conn.autocommit = True
         with conn.cursor() as cur:
             cur.execute("SELECT pg_try_advisory_lock(%s) AS locked", (834271,))
             locked = bool(cur.fetchone()["locked"])
