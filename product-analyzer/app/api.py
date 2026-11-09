@@ -432,6 +432,13 @@ def list_products(
                 SELECT p.id,
                        CASE WHEN p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
                                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ? 'title')
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto amazon %%'
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto aliexpress %%'
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto url-%%'
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%oferta destacada global%%'
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%producto verificado con%%'
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%titulo real del producto%%'
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%nombre real del producto%%'
                             THEN p.title ELSE NULL END AS title,
                        pl.name AS platform,
                        CASE WHEN p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
@@ -442,9 +449,16 @@ def list_products(
                        CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
                        CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
                        CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
-                       CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user') THEN p.image_url ELSE NULL END AS image_url,
                        CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
-                                  THEN COALESCE(p.image_gallery, '[]'::jsonb) ELSE '[]'::jsonb END AS image_gallery,
+                                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
+                                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
+                                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+                            THEN p.image_url ELSE NULL END AS image_url,
+                       CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
+                                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
+                                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+                            THEN COALESCE(p.image_gallery, '[]'::jsonb) ELSE '[]'::jsonb END AS image_gallery,
                        p.product_url, p.affiliate_url, p.updated_at, p.source_metadata,
                        CASE WHEN p.source_metadata->'field_sources'->>'description' IN ('public_product_page', 'user')
                             THEN p.description ELSE NULL END AS description,
@@ -461,6 +475,14 @@ def list_products(
                                   AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
                                   AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
                                   AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto amazon %%'
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto aliexpress %%'
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE 'producto url-%%'
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%oferta destacada global%%'
+                                  AND LOWER(COALESCE(p.title, '')) NOT LIKE '%%producto verificado con%%'
+                                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
+                                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
+                                  AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
                                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
                             THEN 'verified' ELSE 'incomplete' END AS data_quality,
                        CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
