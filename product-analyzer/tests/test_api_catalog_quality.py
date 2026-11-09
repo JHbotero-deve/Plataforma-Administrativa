@@ -65,6 +65,8 @@ class ApiCatalogQualityTests(unittest.TestCase):
         self.assertIn("missing_fields", query)
         self.assertIn("field_sources", query)
         self.assertIn("previous_price", query)
+        self.assertIn("THEN p.description ELSE NULL END AS description", query)
+        self.assertIn("THEN seller.name ELSE NULL END AS seller_name", query)
         self.assertIn("COALESCE(p.image_gallery, '[]'::jsonb) AS image_gallery", query)
         connection.close.assert_called_once()
 
