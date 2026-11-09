@@ -457,6 +457,10 @@ def list_products(
                        p.source_metadata->'field_sources' AS field_sources,
                        CASE WHEN COALESCE(p.source_metadata->>'catalog_status', 'current') = 'current'
                                   AND (p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW())
+                                  AND p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
+                                  AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
                                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
                             THEN 'verified' ELSE 'incomplete' END AS data_quality,
                        CASE WHEN p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
