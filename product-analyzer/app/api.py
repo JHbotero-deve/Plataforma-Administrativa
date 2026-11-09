@@ -9,7 +9,7 @@ import secrets
 import time
 import requests
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import Response
