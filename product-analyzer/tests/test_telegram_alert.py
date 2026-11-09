@@ -67,6 +67,10 @@ class TelegramCommandTests(unittest.TestCase):
             result = telegram_alert._model_active_products()
 
         self.assertEqual(result, (1, 9, 0, 500, 0, 0, 0))
+        count_query = cursor.execute.call_args_list[1].args[0]
+        self.assertIn("catalog_expires_at IS NULL OR catalog_expires_at > NOW()", count_query)
+        self.assertIn("catalog_status", count_query)
+        self.assertIn("LOWER(COALESCE(image_url, '')) NOT LIKE", count_query)
         connection.close.assert_called_once()
 
     def test_plain_aliexpress_message_preserves_the_title_before_short_url(self):
@@ -223,6 +227,8 @@ class TelegramCommandTests(unittest.TestCase):
         self.assertEqual(send.call_count, 2)
         self.assertIn("Iniciando modelado", send.call_args_list[0].args[2])
         self.assertIn("Productos puntuados: 3", send.call_args_list[1].args[2])
+        self.assertIn("API oficial de detalle de AliExpress", send.call_args_list[1].args[2])
+        self.assertIn("no depende de APIs de búsqueda", send.call_args_list[1].args[2])
 
     def test_catalog_status_reports_total_active_inactive_and_url_counts(self):
         connection = MagicMock()
