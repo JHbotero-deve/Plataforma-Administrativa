@@ -30,6 +30,7 @@ class TelegramPollingLockTests(unittest.TestCase):
             patch("builtins.print") as output,
         ):
             self.assertIsNone(telegram_alert._acquire_polling_lock())
+        self.assertTrue(connection.autocommit)
         self.assertEqual(connection.cursor.call_count, 2)
         self.assertIn("pg_stat_activity", cursor.execute.call_args_list[1].args[0])
         messages = " ".join(str(call.args[0]) for call in output.call_args_list)
@@ -37,6 +38,16 @@ class TelegramPollingLockTests(unittest.TestCase):
         self.assertIn("app=psycopg2", messages)
         self.assertNotIn("SELECT", messages)
         connection.close.assert_called_once()
+
+    def test_polling_lock_keeps_a_dedicated_autocommit_connection(self):
+        connection = MagicMock()
+        cursor = connection.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = {"locked": True}
+        with patch.object(telegram_alert, "get_connection", return_value=connection):
+            lock_connection = telegram_alert._acquire_polling_lock()
+        self.assertIs(lock_connection, connection)
+        self.assertTrue(connection.autocommit)
+        connection.close.assert_not_called()
 
 
 class TelegramCommandTests(unittest.TestCase):
