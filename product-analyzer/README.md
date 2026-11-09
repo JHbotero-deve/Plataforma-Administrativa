@@ -23,7 +23,7 @@ Este README conserva las decisiones de diseño como especificación persistente.
 1. Panel administrativo, Telegram o CLI envían una URL y los metadatos disponibles.
 2. La API valida URL, categoría, moneda, precio e imágenes HTTP/HTTPS.
 3. El catálogo se almacena en PostgreSQL y conserva la fuente y los datos suministrados.
-4. La capa de análisis puntúa solo productos con información suficiente.
+4. La capa de análisis puntúa solo productos con título, precio, moneda, imagen y categoría completos y verificados, independientemente de que cada campo proceda de la página pública, del respaldo oficial admitido o de datos manuales.
 5. La publicación comercial exige los datos reales y las reglas de precio, descuento y margen.
 6. La tienda consulta publicaciones y secciones; no muestra registros incompletos como si fueran productos listos para comprar.
 
@@ -31,7 +31,7 @@ Este README conserva las decisiones de diseño como especificación persistente.
 
 Los campos que no se recibieron se mantienen vacíos. Un registro URL-only puede tener un identificador técnico y un título interno de referencia, pero no se presenta como nombre comercial ni se publica. No se permiten valores de respaldo para precio, imagen, reseñas, calificación o ventas.
 
-Las APIs externas de búsqueda/detalle de Amazon y AliExpress no se usan para adquirir productos. El enriquecedor procesa URLs públicas y extrae metadatos HTML/Open Graph/JSON-LD cuando la página los permite; los enlaces cortos se resuelven con validación de cada redirección. Si hay login, CAPTCHA, bloqueo o faltan metadatos, el producto permanece parcial. No se evaden controles de acceso.
+La URL es la entrada principal y la página pública se consulta primero. El enriquecedor extrae metadatos HTML/Open Graph/JSON-LD y resuelve enlaces cortos validando cada redirección. Si faltan campos esenciales, puede usar como respaldo una API oficial de detalle del mismo producto cuando exista una integración implementada y esté configurada; actualmente existe ese respaldo para AliExpress. La API es opcional: no se exige para importar, no sustituye la URL y su ausencia o fallo no detiene el proceso. Si ninguna fuente entrega los datos requeridos, el producto queda parcial y se informan los campos faltantes. No se evaden login, CAPTCHA ni controles de acceso.
 
 ## Despliegue frontend — Vercel
 
