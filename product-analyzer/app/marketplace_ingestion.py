@@ -156,12 +156,13 @@ def run_marketplace_ingestion(target_per_platform=8):
                         pending += 1
                 except Exception as exc:
                     errors.append(f"{category}/{candidate.get('external_id')}: {type(exc).__name__}: {str(exc)[:160]}")
+        configuration_error = any(_is_provider_auth_error(error) for error in errors)
         results[platform] = {
             "received": received,
             "verified_and_saved": verified,
             "pending_public_verification": pending,
             "errors": errors[:8],
-            "status": "completed" if received else ("error" if errors else "empty"),
+            "status": "configuration_error" if configuration_error else ("completed" if received else ("error" if errors else "empty")),
         }
     print("[marketplace-discovery] " + " | ".join(
         f"{platform}: recibidos={item['received']} verificados={item['verified_and_saved']} "
