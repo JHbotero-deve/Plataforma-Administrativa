@@ -513,6 +513,7 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertIn("HTTPError HTTP 403", messages)
         query = cursor.execute.call_args_list[0].args[0]
         self.assertIn("COALESCE(p.source_metadata->>'enrichment_version', '') <> %s", query)
+        self.assertIn("pl.name IN ('amazon','aliexpress')", query)
         self.assertNotIn("p.is_active=TRUE AND COALESCE(p.source_metadata->>'enrichment_version'", query)
         self.assertNotIn("p.is_active=TRUE AND (p.current_price IS NULL", query)
         enrich.assert_called_once()
