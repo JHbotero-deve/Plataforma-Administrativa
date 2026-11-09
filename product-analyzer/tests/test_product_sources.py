@@ -106,6 +106,30 @@ class ProductSourcesTests(unittest.TestCase):
         fetch.assert_not_called()
         self.assertEqual(result["source_metadata"]["enrichment_status"], "complete")
 
+    def test_manual_complete_product_stays_current_when_marketplace_blocks_page(self):
+        product = {
+            "platform": "amazon",
+            "external_id": "B012345678",
+            "product_url": "https://www.amazon.com/dp/B012345678",
+            "title": "Audifonos inalambricos",
+            "price": 129900,
+            "currency": "COP",
+            "image_url": "https://images.example/audifonos.jpg",
+            "category": "accesorios",
+            "source_metadata": {
+                "manual_fields": ["title", "price", "currency", "image_url", "category"],
+                "field_sources": {field: "user" for field in ("title", "price", "currency", "image_url", "category")},
+            },
+        }
+        with patch.object(product_sources, "_public_product_page", side_effect=RuntimeError("login required")):
+            result = product_sources.enrich_product(product, force=True)
+        metadata = result["source_metadata"]
+        self.assertEqual(metadata["catalog_status"], "current")
+        self.assertEqual(metadata["enrichment_status"], "complete")
+        self.assertFalse(metadata["catalog_refresh_verified"])
+        self.assertNotIn("enrichment_retry_after", metadata)
+        self.assertEqual(metadata["missing_fields"], [])
+
     def test_enrich_pending_products_retries_old_versions_and_stale_rows(self):
         connection = MagicMock()
         cursor = connection.cursor.return_value.__enter__.return_value
