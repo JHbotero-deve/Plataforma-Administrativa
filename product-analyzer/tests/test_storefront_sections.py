@@ -26,6 +26,13 @@ class StorefrontSectionTests(unittest.TestCase):
         self.assertIn('loading="eager" fetchpriority="high"', html)
         self.assertIn('loading="lazy"', html)
 
+    def test_public_cards_require_verified_category_and_accept_affiliate_api_provenance(self):
+        import storefront_sections
+        quality_filter = storefront_sections.PUBLIC_CARD_QUALITY_FILTER
+        self.assertIn("'aliexpress_affiliate_api'", quality_filter)
+        self.assertIn("field_sources'->>'category'", quality_filter)
+        self.assertIn("'category'", quality_filter)
+
     def test_target_count_accepts_only_integers_between_one_hundred_and_five_hundred(self):
         self.assertEqual(normalize_target_count(100), 100)
         self.assertEqual(normalize_target_count(500), 500)
