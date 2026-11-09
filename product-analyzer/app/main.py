@@ -131,6 +131,7 @@ def run_pipeline():
                   AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
                   AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                  AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
                   AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
                 ORDER BY p.updated_at DESC
                 LIMIT 500
