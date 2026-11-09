@@ -495,14 +495,22 @@ class ProductSourcesTests(unittest.TestCase):
             "source_metadata": {
                 "enrichment_version": product_sources.ENRICHMENT_VERSION,
                 "enrichment_status": "partial", "metadata_source": "public_product_page",
-                "catalog_refresh_verified": False,
+                "catalog_refresh_verified": False, "missing_fields": ["title", "price"],
+                "enrichment_error": "HTTPError: 403 Forbidden",
             },
         }
         connection = MagicMock()
         cursor = connection.cursor.return_value.__enter__.return_value
         cursor.fetchall.return_value = [row]
-        with patch.object(product_sources, "_enrich_pending_row", return_value=enriched) as enrich:
+        with (
+            patch.object(product_sources, "_enrich_pending_row", return_value=enriched) as enrich,
+            patch("builtins.print") as output,
+        ):
             recovered = product_sources.enrich_pending_products(connection, limit=1)
+        messages = " ".join(str(call.args[0]) for call in output.call_args_list)
+        self.assertIn("producto=91", messages)
+        self.assertIn("faltan=title,price", messages)
+        self.assertIn("HTTPError HTTP 403", messages)
         query = cursor.execute.call_args_list[0].args[0]
         self.assertIn("COALESCE(p.source_metadata->>'enrichment_version', '') <> %s", query)
         self.assertNotIn("p.is_active=TRUE AND COALESCE(p.source_metadata->>'enrichment_version'", query)
