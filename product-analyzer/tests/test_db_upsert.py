@@ -38,6 +38,8 @@ class ProductUpsertTests(unittest.TestCase):
         })
         self.assertIn("category_id = COALESCE(EXCLUDED.category_id, products.category_id)", query)
         self.assertIn("THEN products.title", query)
+        self.assertIn("LOWER(EXCLUDED.title) LIKE 'producto amazon %'", query)
+        self.assertNotIn("LOWER(EXCLUDED.title) LIKE 'producto %'", query)
         self.assertIn("'last_import_url'", query)
         self.assertIn("COALESCE(EXCLUDED.current_price, products.current_price)", query)
         self.assertIn("COALESCE(EXCLUDED.image_url, products.image_url)", query)
