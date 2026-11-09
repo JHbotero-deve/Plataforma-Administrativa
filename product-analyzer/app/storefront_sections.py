@@ -23,10 +23,10 @@ AND (
     p.source_metadata IS NULL
     OR COALESCE(p.source_metadata->>'metadata_source', '') NOT IN ('url_only', 'public_product_page', 'public_product_page_empty', 'legacy_marketplace_api', 'aliexpress_affiliate_api')
     OR (
-        p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
-        AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
-        AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
-        AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+        p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+        AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+        AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
+        AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
         AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
     )
 )
