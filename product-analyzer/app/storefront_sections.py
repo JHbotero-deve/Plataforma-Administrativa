@@ -6,7 +6,7 @@ from db import get_connection
 
 PUBLIC_CARD_QUALITY_FILTER = """
 AND COALESCE(p.source_metadata->>'catalog_status', 'current') <> 'stale'
-AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url'])
+AND NOT (COALESCE(p.source_metadata->'missing_fields', '[]'::jsonb) ?| ARRAY['title', 'price', 'currency', 'image_url', 'category'])
 AND p.current_price > 0
 AND p.currency NOT IN ('UNK', 'N/D')
 AND pc.sale_price > 0
@@ -21,12 +21,13 @@ AND LOWER(COALESCE(pc.image_url, p.image_url, '')) NOT LIKE '%%placeholder%%'
 AND LOWER(COALESCE(pc.image_url, p.image_url, '')) NOT LIKE '%%example.com%%'
 AND (
     p.source_metadata IS NULL
-    OR COALESCE(p.source_metadata->>'metadata_source', '') NOT IN ('url_only', 'public_product_page', 'public_product_page_empty', 'legacy_marketplace_api')
+    OR COALESCE(p.source_metadata->>'metadata_source', '') NOT IN ('url_only', 'public_product_page', 'public_product_page_empty', 'legacy_marketplace_api', 'aliexpress_affiliate_api')
     OR (
         p.source_metadata->'field_sources'->>'title' IN ('public_product_page', 'user')
         AND p.source_metadata->'field_sources'->>'price' IN ('public_product_page', 'user')
         AND p.source_metadata->'field_sources'->>'currency' IN ('public_product_page', 'user')
         AND p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+        AND p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'aliexpress_affiliate_api', 'user')
     )
 )
 """
