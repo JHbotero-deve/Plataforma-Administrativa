@@ -25,6 +25,11 @@ class ApiCatalogQualityTests(unittest.TestCase):
         for field in ("price", "currency", "rating", "reviews_count", "sales_estimate", "image_url", "previous_price"):
             self.assertIn(f"field_sources'->>'{field}'", query)
         self.assertIn("missing_fields", query)
+        self.assertIn("THEN p.title ELSE NULL END AS title", query)
+        self.assertIn("THEN p.description ELSE NULL END AS description", query)
+        self.assertIn("THEN seller.name ELSE NULL END AS seller_name", query)
+        self.assertIn("THEN COALESCE(p.image_gallery, '[]'::jsonb) ELSE '[]'::jsonb END AS image_gallery", query)
+        self.assertIn("AS data_quality", query)
         connection.close.assert_called_once()
 
     def test_top_opportunities_excludes_incomplete_unverified_and_stale_products(self):
