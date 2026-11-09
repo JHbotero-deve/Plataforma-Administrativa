@@ -653,15 +653,26 @@
     }
 
     .radar-card-actions {
-      position: absolute;
-      left: 10px;
-      right: 10px;
-      bottom: 10px;
-      z-index: 8;
+      position: static;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 6px
+      gap: 7px;
+      margin-top: 14px
     }
+    .radar-detail-panel { width: min(620px,100%); max-height: min(88vh,760px); overflow: auto; padding: 22px; border: 1px solid rgba(255,255,255,.14); border-radius: 20px; background: #11151b; color: #f7f7f4; box-shadow: 0 30px 80px rgba(0,0,0,.5) }
+    .radar-detail-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px }
+    .radar-detail-head small { color:#ff8a00; font:700 10px "JetBrains Mono"; letter-spacing:.08em }
+    .radar-detail-head h2 { margin:8px 0 12px; overflow-wrap:anywhere }
+    .radar-detail-head button { flex:0 0 36px; width:36px; height:36px; border:1px solid #343b45; border-radius:50%; background:#1b222b; color:#fff; font-size:23px; cursor:pointer }
+    .radar-quality { display:inline-flex; padding:5px 9px; border-radius:999px; font-size:11px; font-weight:700 }
+    .radar-quality.is-verified { background:#173d2a; color:#9ee5b5 }
+    .radar-quality.is-pending { background:#49371b; color:#ffd58a }
+    .radar-detail-list { display:grid; gap:0; margin-top:18px; border-top:1px solid #343b45 }
+    .radar-detail-row { display:grid; grid-template-columns:minmax(105px,.6fr) minmax(0,1fr); gap:14px; padding:11px 0; border-bottom:1px solid #343b45; font-size:13px }
+    .radar-detail-row b { color:#aab3bf }
+    .radar-detail-row span { overflow-wrap:anywhere }
+    .radar-missing { display:grid; gap:5px; margin-top:14px; padding:12px; border:1px solid #69512a; border-radius:10px; color:#ffd58a; font-size:12px }
+    .radar-detail-note { margin:14px 0 0; color:#aab3bf; font-size:12px }
 
     .radar-action {
       min-height: 34px;
@@ -1886,17 +1897,17 @@
         return '<article class="card radar-card" data-product="' + esc(id) + '">' +
           '<div class="card-media">' + image +
           '<span class="badge">' + esc(label) + '</span>' +
+          '</div>' +
+          '<div class="card-body">' +
+          '<div class="card-topline"><span class="category">' + esc(p.platform || "Producto") + '</span><span class="rating">Score ' + esc(p.data_quality === "verified" ? score : "Pendiente") + '</span></div>' +
+          '<h3>' + esc(p.title || "Producto pendiente de validar") + '</h3>' +
+          '<small>' + esc(p.category || "Categoría sin verificar") + ' · ' + esc(p.seller_name || "Vendedor sin verificar") + '</small>' +
+          '<div class="card-price">' + esc(p.current_price == null ? "Precio no verificado" : money(p.current_price, p.currency)) + '</div>' +
           '<div class="radar-card-actions">' +
-          '<button type="button" class="radar-action radar-specs" data-id="' + esc(id) + '">Detalles</button>' +
+          '<button type="button" class="radar-action radar-specs" data-id="' + esc(id) + '">Ver detalles</button>' +
           '<a class="radar-action radar-open" href="' + esc(destination) + '" target="_blank" rel="noopener noreferrer">' + esc(p.product_url || p.affiliate_url ? "Abrir " + label : "Abrir producto") + '</a>' +
           '<button type="button" class="radar-action radar-publish" data-publish-product="' + esc(id) + '">' + (publishedProductIds.has(String(id)) ? "Actualizar publicación" : "Publicar en tienda") + '</button>' +
           '</div>' +
-          '</div>' +
-          '<div class="card-body">' +
-          '<div class="card-topline"><span class="category">' + esc(p.platform || "Producto") + '</span><span class="rating">Score ' + esc(score) + '</span></div>' +
-          '<h3>' + esc(p.title) + '</h3>' +
-          '<small>' + esc(p.category || "Oportunidad detectada") + ' · Vendedor: ' + esc(p.seller_name || "No informado") + '</small>' +
-          '<div class="card-price">' + money(p.current_price, p.currency) + '</div>' +
           '</div></article>';
       }
       function renderIntelligence(i) {
@@ -2009,20 +2020,32 @@
         if (!modal) {
           modal = document.createElement("div");
           modal.id = "radarSpecsModal";
-          modal.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.62);display:none;align-items:center;justify-content:center;padding:20px";
+          modal.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:16px";
+          modal.setAttribute("role", "dialog");
+          modal.setAttribute("aria-modal", "true");
+          modal.tabIndex = -1;
           document.body.appendChild(modal);
         }
-        modal.innerHTML = '<div style="width:min(560px,100%);max-height:90vh;overflow:auto;background:#11151b;color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,.45)"><div style="display:flex;justify-content:space-between;gap:16px"><div><div style="font:10px JetBrains Mono;color:#ff8a00;text-transform:uppercase">Especificaciones</div><h2 style="margin:8px 0 4px">' + esc(p.title) + '</h2></div><button id="closeRadarSpecs" style="border:0;background:transparent;color:#fff;font-size:24px;cursor:pointer">×</button></div><div style="display:grid;gap:10px;margin-top:18px">' +
-          '<div><b>Precio:</b> ' + money(p.current_price, p.currency) + '</div>' +
-          '<div><b>Plataforma:</b> ' + esc(p.platform || "—") + '</div>' +
-          '<div><b>Categoría:</b> ' + esc(p.category || "—") + '</div>' +
-          '<div><b>Score:</b> ' + Math.round(Number(p.opportunity_score || 0)) + '/100</div>' +
-          '<div><b>Vendedor:</b> ' + esc(p.seller_name || "No informado") + '</div>' +
-          '<div><b>Descripción:</b> ' + esc(p.description || p.subtitle || "Sin descripción disponible.") + '</div>' +
-          '</div></div>';
+        const missing = Array.isArray(p.missing_fields) ? p.missing_fields : [];
+        const labels = { title: "Título", price: "Precio", currency: "Moneda", image_url: "Imagen", category: "Categoría" };
+        const quality = p.data_quality === "verified";
+        const value = (label, item) => '<div class="radar-detail-row"><b>' + esc(label) + '</b><span>' + esc(item == null || item === "" ? "No verificado" : String(item)) + '</span></div>';
+        const close = () => { modal.style.display = "none"; document.body.style.overflow = ""; };
+        modal.innerHTML = '<div class="radar-detail-panel"><header class="radar-detail-head"><div><small>FICHA DEL PRODUCTO</small><h2>' + esc(p.title || "Producto pendiente de validar") + '</h2><span class="radar-quality ' + (quality ? "is-verified" : "is-pending") + '">' + (quality ? "Datos verificados" : "Información incompleta") + '</span></div><button type="button" id="closeRadarSpecs" aria-label="Cerrar detalles">×</button></header><div class="radar-detail-list">' +
+          value("Precio", p.current_price == null ? null : money(p.current_price, p.currency)) +
+          value("Plataforma", p.platform) + value("Categoría", p.category) +
+          value("Score", quality && p.opportunity_score != null ? Math.round(Number(p.opportunity_score)) + "/100" : null) +
+          value("Vendedor", p.seller_name) + value("Descripción", p.description) +
+          value("Valoración", p.rating == null ? null : p.rating + (p.reviews_count == null ? "" : " · " + p.reviews_count + " reseñas")) +
+          '</div>' + (missing.length ? '<div class="radar-missing"><b>Datos pendientes:</b><span>' + esc(missing.map(x => labels[x] || x).join(", ")) + '</span></div>' : '') +
+          '<p class="radar-detail-note">' + (quality ? "Los datos principales tienen una fuente verificada." : "Esta ficha no se debe usar para publicar ni puntuar hasta completar la validación.") + '</p></div>';
         modal.style.display = "flex";
-        document.getElementById("closeRadarSpecs").onclick = () => modal.style.display = "none";
-        modal.onclick = e => { if (e.target === modal) modal.style.display = "none" };
+        document.body.style.overflow = "hidden";
+        document.getElementById("closeRadarSpecs").onclick = close;
+        modal.onclick = event => { if (event.target === modal) close(); };
+        modal.onkeydown = event => { if (event.key === "Escape") close(); };
+        modal.focus();
+        document.getElementById("closeRadarSpecs").focus();
       }
       document.addEventListener("click", e => {
         const step = e.target.closest("[data-gallery-step]");
