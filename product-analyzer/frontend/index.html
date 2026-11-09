@@ -697,6 +697,7 @@
       color: #3d5639;
       border-color: #dce5d7
     }
+    .radar-publish:disabled { opacity: .55; cursor: not-allowed; transform: none }
 
     .radar-card .card-body {
       background: #fffdf8;
@@ -1906,7 +1907,7 @@
           '<div class="radar-card-actions">' +
           '<button type="button" class="radar-action radar-specs" data-id="' + esc(id) + '">Ver detalles</button>' +
           '<a class="radar-action radar-open" href="' + esc(destination) + '" target="_blank" rel="noopener noreferrer">' + esc(p.product_url || p.affiliate_url ? "Abrir " + label : "Abrir producto") + '</a>' +
-          '<button type="button" class="radar-action radar-publish" data-publish-product="' + esc(id) + '">' + (publishedProductIds.has(String(id)) ? "Actualizar publicación" : "Publicar en tienda") + '</button>' +
+          '<button type="button" class="radar-action radar-publish" data-publish-product="' + esc(id) + '"' + (p.data_quality === "verified" ? "" : " disabled title=\"Completa y verifica título, precio, moneda e imagen antes de publicar\"") + '>' + (p.data_quality === "verified" ? (publishedProductIds.has(String(id)) ? "Actualizar publicación" : "Publicar en tienda") : "Pendiente de validar") + '</button>' +
           '</div>' +
           '</div></article>';
       }
