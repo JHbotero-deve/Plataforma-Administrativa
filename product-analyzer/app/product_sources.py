@@ -397,15 +397,26 @@ def enrich_product(product, force=False):
         return product
     try:
         legacy_url_only = metadata.get("metadata_source") == "url_only"
-        page = _public_product_page(url, platform)
+        try:
+            page = _public_product_page(url, platform)
+        except Exception as exc:
+            if platform != "aliexpress":
+                raise
+            item_match = ALIEXPRESS_ITEM_RE.search(urlsplit(url).path)
+            item_id = item_match.group(1) if item_match else str(product.get("external_id") or "")
+            if not item_id or item_id.startswith("URL-"):
+                raise
+            page = {"resolved_url": url, "title": None, "price": None, "currency": None, "image_url": None, "gallery_urls": [], "category": None}
+            metadata["public_page_error"] = f"{type(exc).__name__}: {str(exc)[:180]}"
         resolved_url = page.get("resolved_url") or url
         page_sources = dict(page.get("_field_sources") or {})
         public_page_has_data = any(page.get(key) for key in ("title", "price", "image_url", "description"))
         if platform == "aliexpress":
-            item_match = ALIEXPRESS_ITEM_RE.search(urlsplit(resolved_url).path)
-            if item_match and any(not page.get(key) for key in ("title", "price", "currency", "image_url", "category")):
+            item_match = ALIEXPRESS_ITEM_RE.search(urlsplit(resolved_url).path) or ALIEXPRESS_ITEM_RE.search(urlsplit(url).path)
+            item_id = item_match.group(1) if item_match else str(product.get("external_id") or "")
+            if item_id and not item_id.startswith("URL-") and any(not page.get(key) for key in ("title", "price", "currency", "image_url", "category")):
                 try:
-                    details = _aliexpress_product_detail(item_match.group(1))
+                    details = _aliexpress_product_detail(item_id)
                     for key in ("title", "price", "currency", "image_url", "category"):
                         if not page.get(key) and details.get(key) is not None:
                             page[key] = details[key]
