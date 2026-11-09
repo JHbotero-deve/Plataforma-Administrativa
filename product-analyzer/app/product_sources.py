@@ -137,7 +137,7 @@ def _category(value, title=""):
         return "ropa"
     if any(word in text for word in ("fashion", "moda")):
         return "moda"
-    if any(word in text for word in ("accessories", "accessory", "bag", "backpack", "watch", "jewelry", "phone case", "bolso", "mochila", "reloj", "joya", "funda", "lentes", "gorra", "cinturon", "accesorios", "earbuds", "headphones", "headset")):
+    if any(word in text for word in ("accessories", "accessory", "bag", "backpack", "watch", "jewelry", "phone case", "bolso", "mochila", "reloj", "joya", "funda", "lentes", "gorra", "cinturon", "accesorios", "auricular", "audifono", "audifonos", "earbuds", "headphones", "headset")):
         return "accesorios"
     return None
 def _normalized_url(url):
