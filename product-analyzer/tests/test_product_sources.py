@@ -431,6 +431,32 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertTrue(result["source_metadata"]["catalog_refresh_verified"])
 
 
+    def test_expired_partial_product_respects_retry_cooldown(self):
+        row = {
+            "catalog_expired": True,
+            "source_metadata": {
+                "enrichment_version": product_sources.ENRICHMENT_VERSION,
+                "enrichment_status": "partial",
+                "enrichment_retry_after": "2999-01-01T00:00:00+00:00",
+            },
+        }
+        self.assertFalse(product_sources._row_enrichment_due(row))
+        row["source_metadata"]["enrichment_retry_after"] = "2000-01-01T00:00:00+00:00"
+        self.assertTrue(product_sources._row_enrichment_due(row))
+        self.assertTrue(product_sources._row_enrichment_due(row, force=True))
+
+    def test_expired_complete_product_without_retry_date_is_revalidated(self):
+        row = {
+            "catalog_expired": True,
+            "source_metadata": {
+                "enrichment_version": product_sources.ENRICHMENT_VERSION,
+                "enrichment_status": "complete",
+            },
+        }
+        self.assertTrue(product_sources._row_enrichment_due(row))
+        self.assertTrue(product_sources._row_force_refresh(row))
+
+
     def test_complete_old_enrichment_version_is_queued_for_revalidation(self):
         self.assertTrue(product_sources._retry_due({
             "enrichment_status": "complete",
