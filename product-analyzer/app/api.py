@@ -532,11 +532,20 @@ def public_product(product_id: int):
                 CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS previous_price,
                 CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS original_price,
                 CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') AND p.previous_price>0 AND pc.sale_price>0 THEN ROUND((p.previous_price-pc.sale_price)/p.previous_price*100,2) ELSE NULL END AS discount_pct,p.currency,
-                COALESCE(NULLIF(pc.image_url, ''), NULLIF(p.image_url, '')) AS image_url,
-                COALESCE(p.image_gallery, '[]'::jsonb) AS image_gallery,
+                CASE WHEN NULLIF(pc.image_url, '') IS NOT NULL THEN pc.image_url
+                     WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                          AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%placeholder%%'
+                          AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%example.com%%'
+                          AND LOWER(COALESCE(p.image_url, '')) NOT LIKE '%%enlace-de-la-imagen.jpg%%'
+                     THEN p.image_url ELSE NULL END AS image_url,
+                CASE WHEN p.source_metadata->'field_sources'->>'image_url' IN ('public_product_page', 'user')
+                     THEN COALESCE(p.image_gallery, '[]'::jsonb) ELSE '[]'::jsonb END AS image_gallery,
                 COALESCE(NULLIF(pc.product_url, ''), NULLIF(p.product_url, '')) AS product_url,
-                p.affiliate_url,p.sku,p.external_id,p.stock,
-                pl.name AS platform,c.name AS category,
+                p.affiliate_url,p.sku,p.external_id,
+                CASE WHEN p.source_metadata->'field_sources'->>'stock' IN ('public_product_page', 'user') THEN p.stock ELSE NULL END AS stock,
+                pl.name AS platform,
+                CASE WHEN p.source_metadata->'field_sources'->>'category' IN ('public_product_page', 'user')
+                     OR p.source_metadata->>'category_source' = 'title_inference' THEN c.name ELSE NULL END AS category,
                 CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
                 CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,p.updated_at,
                 CASE WHEN p.source_metadata->'field_sources'->>'seller' IN ('public_product_page', 'user') THEN seller.name ELSE NULL END AS seller_name,
