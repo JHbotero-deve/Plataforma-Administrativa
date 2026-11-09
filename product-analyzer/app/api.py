@@ -936,7 +936,7 @@ def top_opportunities(limit: int = Query(20, ge=1, le=100)):
                        CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,
                        CASE WHEN p.source_metadata->'field_sources'->>'sales_estimate' IN ('public_product_page', 'user') THEN p.sales_estimate ELSE NULL END AS sales_estimate,
                        s.price_score, s.demand_score, s.trend_score, s.opportunity_score,
-                       p.product_url, p.image_url, p.updated_at, p.catalog_expires_at,
+                       p.product_url, p.image_url, p.image_gallery, p.updated_at, p.catalog_expires_at,
                        p.model_url, p.model_shape, p.source_metadata
                 FROM product_scores s
                 JOIN products p ON p.id = s.product_id

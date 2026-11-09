@@ -638,6 +638,44 @@
       mix-blend-mode: normal !important
     }
 
+    .radar-gallery-controls {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      pointer-events: none
+    }
+
+    .radar-gallery-controls button {
+      position: absolute;
+      top: 50%;
+      width: 32px;
+      height: 32px;
+      transform: translateY(-50%);
+      border: 1px solid #e4e2da;
+      border-radius: 50%;
+      background: rgba(255, 253, 248, .94);
+      color: #30372f;
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+      pointer-events: auto
+    }
+
+    .radar-gallery-controls button:first-child { left: 8px }
+    .radar-gallery-controls button:last-child { right: 8px }
+
+    .radar-gallery-count {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 4px 8px;
+      border: 1px solid #e4e2da;
+      border-radius: 999px;
+      background: rgba(255, 253, 248, .94);
+      color: #535950;
+      font: 600 10px "JetBrains Mono"
+    }
+
     .radar-card .badge {
       position: absolute;
       top: 10px;
@@ -1851,7 +1889,7 @@
       const money = (v, c) => { if (v == null || Number.isNaN(Number(v))) return "—"; const n = Number(v); const cur = String(c || "COP").toUpperCase(); if (cur === "USD" || cur === "US$" || cur === "$") { const cop = n * 3329.61; return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(cop) + " COP"; } try { return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n) + " COP" } catch { return n.toLocaleString("es-CO") + " COP" } };
       const date = v => v ? new Date(v).toLocaleString("es-CO") : "—";
       const isMarketplaceImage = value => { try { const host = new URL(String(value || "")).hostname.toLowerCase(); return /(^|\.)amazon\./i.test(host) || /(^|\.)amazon$/i.test(host) || /(^|\.)media-amazon\.com$/i.test(host) || /(^|\.)ssl-images-amazon\.com$/i.test(host) || /(^|\.)images-amazon\.com$/i.test(host) || /(^|\.)amzn\.(?:to|eu|asia|com|ca|de|co\.uk)$/i.test(host) || host === "a.co" || /(^|\.)aliexpress\./i.test(host) || /(^|\.)alii\.pub$/i.test(host) || /(^|\.)taobao\.com$/i.test(host) || /(^|\.)aliexpress-media\.com$/i.test(host) || /(^|\.)alicdn\.com$/i.test(host); } catch { return false; } };
-      const productImage = p => { const mongo = p?.source_metadata?.mongo_image_id; if (mongo) return "mongo://" + mongo; return [p?.image_url, ...(Array.isArray(p?.image_gallery) ? p.image_gallery : [])].find(Boolean) || ""; };
+      const productImages = p => [...new Set([p?.image_url, ...(Array.isArray(p?.image_gallery) ? p.image_gallery : [])].map(value => { try { const url = new URL(String(value || ""), location.origin); return !url.username && !url.password && (url.protocol === "https:" || url.origin === location.origin) ? url.href : ""; } catch { return ""; } }).filter(Boolean))];
       async function get(path) { const protectedRead = /^\/(mongo\/health|pipeline\/(summary|metrics)|intelligence\/overview|opportunities\/top|catalog\/active|products\/compare)(\/|\?|$)/.test(path); const headers = protectedRead ? adminHeaders({ Accept: "application/json" }) : authHeaders({ Accept: "application/json" }); const r = await fetch(API + path, requestOptions({ headers })); if (!r.ok) { const data = await r.json().catch(() => ({})); throw Object.assign(new Error(data.detail || "HTTP " + r.status), { status: r.status }) } return r.json() }
       function status(kind, label) { $("status").innerHTML = '<span class="dot ' + (kind === "ok" ? "ok" : kind === "warn" ? "warn" : "") + '"></span>' + esc(label) }
       updateOfflineStatus();
@@ -1869,11 +1907,9 @@
       function card(p) {
         const id = p.id;
         const score = p.opportunity_score == null ? "—" : Math.round(Number(p.opportunity_score));
-        const gallery = Array.isArray(p.image_gallery) ? p.image_gallery.filter(Boolean) : [];
-        const primary = productImage(p);
-        const images = [primary, ...gallery].filter((url, i, a) => url && a.indexOf(url) === i);
+        const images = productImages(p);
         const image = images.length
-          ? '<img src="' + esc(images[0]) + '" alt="' + esc(p.title) + '" loading="lazy" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span class="noimg" style="display:none">Sin imagen</span>'
+          ? '<img class="radar-gallery-image" data-images="' + esc(JSON.stringify(images)) + '" data-index="0" data-attempts="0" src="' + esc(images[0]) + '" alt="' + esc(p.title) + '" loading="lazy" referrerpolicy="no-referrer"><span class="noimg" style="display:none">Sin imagen</span>' + (images.length > 1 ? '<div class="radar-gallery-controls"><button type="button" data-gallery-step="-1" aria-label="Imagen anterior">‹</button><span class="radar-gallery-count">1 / ' + images.length + '</span><button type="button" data-gallery-step="1" aria-label="Imagen siguiente">›</button></div>' : '')
           : '<span class="noimg">Sin imagen</span>';
         const platform = String(p.platform || "Origen").toLowerCase();
         const label = platform === "amazon" ? "Amazon" : platform === "aliexpress" ? "AliExpress" : platform === "tiktok" ? "TikTok" : "Central";
@@ -2019,6 +2055,42 @@
         document.getElementById("closeRadarSpecs").onclick = () => modal.style.display = "none";
         modal.onclick = e => { if (e.target === modal) modal.style.display = "none" };
       }
+      const featuredGallery = $("featured");
+      featuredGallery.addEventListener("click", event => {
+        const button = event.target.closest("[data-gallery-step]");
+        if (!button) return;
+        const card = button.closest(".radar-card");
+        const image = card?.querySelector(".radar-gallery-image");
+        if (!image) return;
+        const images = JSON.parse(image.dataset.images || "[]");
+        if (images.length < 2) return;
+        const index = (Number(image.dataset.index || 0) + Number(button.dataset.galleryStep) + images.length) % images.length;
+        image.dataset.index = String(index);
+        image.dataset.attempts = "0";
+        image.hidden = false;
+        image.style.display = "";
+        image.src = images[index];
+        if (image.nextElementSibling) image.nextElementSibling.style.display = "none";
+        const count = card.querySelector(".radar-gallery-count");
+        if (count) count.textContent = (index + 1) + " / " + images.length;
+      });
+      featuredGallery.addEventListener("error", event => {
+        const image = event.target.closest?.(".radar-gallery-image");
+        if (!image) return;
+        const images = JSON.parse(image.dataset.images || "[]");
+        const attempts = Number(image.dataset.attempts || 0) + 1;
+        if (attempts >= images.length) {
+          image.style.display = "none";
+          if (image.nextElementSibling) image.nextElementSibling.style.display = "block";
+          return;
+        }
+        image.dataset.attempts = String(attempts);
+        const index = (Number(image.dataset.index || 0) + 1) % images.length;
+        image.dataset.index = String(index);
+        image.src = images[index];
+        const count = image.closest(".radar-card")?.querySelector(".radar-gallery-count");
+        if (count) count.textContent = (index + 1) + " / " + images.length;
+      }, true);
       document.addEventListener("click", e => {
         const b = e.target.closest(".radar-specs");
         if (!b) return;

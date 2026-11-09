@@ -675,6 +675,44 @@
       transition: .3s
     }
 
+    .product-gallery-controls {
+      position: absolute;
+      inset: 0;
+      z-index: 6;
+      pointer-events: none
+    }
+
+    .product-gallery-controls button {
+      position: absolute;
+      top: 50%;
+      width: 34px;
+      height: 34px;
+      transform: translateY(-50%);
+      border: 1px solid #ffffff35;
+      border-radius: 50%;
+      background: #080a0dcc;
+      color: #fff;
+      font-size: 21px;
+      line-height: 1;
+      cursor: pointer;
+      pointer-events: auto
+    }
+
+    .product-gallery-controls button:first-child { left: 10px }
+    .product-gallery-controls button:last-child { right: 10px }
+
+    .product-gallery-count {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      padding: 5px 9px;
+      border: 1px solid #ffffff24;
+      border-radius: 999px;
+      background: #080a0dcc;
+      color: #fff;
+      font: 600 10px "Space Grotesk"
+    }
+
     .card:hover .card-media img {
       transform: scale(1.045)
     }
@@ -1335,7 +1373,8 @@ let filtered=[], active=null, heroIndex=0, heroTimer=null, heroPaused=false;
 const HERO_INTERVAL=6000;
 
 function imageProxy(value){const url=String(value||"").trim();if(!url)return"";try{const parsed=new URL(url,location.origin);return !parsed.username&&!parsed.password&&(parsed.protocol==="https:"||parsed.origin===location.origin)?parsed.href:""}catch{return""}}
-function imageSrc(p){return imageProxy(p.image_url)||imageProxy((p.image_gallery||[]).find(Boolean)||"")}
+function imageList(p){return [...new Set([p.image_url,...(Array.isArray(p.image_gallery)?p.image_gallery:[])].map(imageProxy).filter(Boolean))]}
+function imageSrc(p){return imageList(p)[0]||""}
 function modelSrc(p){const value=String(p.model_url||"").trim();try{const parsed=new URL(value,location.origin);return !parsed.username&&!parsed.password&&(parsed.protocol==="https:"||parsed.origin===location.origin)&&/\.(?:glb|gltf)$/i.test(parsed.pathname)?parsed.href:""}catch{return""}}
 function modelMarkup(p,cls){const src=modelSrc(p);return src?'<model-viewer class="'+cls+'" src="'+esc(src)+'" alt="'+esc(p.title||"Modelo 3D")+'" camera-controls auto-rotate rotation-per-second="18deg" shadow-intensity="1" exposure="1" ar ar-modes="webxr scene-viewer quick-look" loading="lazy"></model-viewer><span class="model-hint">Arrastra para girar · 360°</span>':""}
 function saveCart(){localStorage.setItem("central_cart",JSON.stringify(cart));renderCart()}
@@ -1383,15 +1422,14 @@ function renderFeature(){
   active=p||null;
   const media=$("featureMedia");
   if(!p){media.innerHTML='<span class="feature-empty">No hay productos publicados</span>';$("featureTitle").textContent="Catálogo Central";$("featureDescription").textContent="Publica un producto desde Administración para verlo aquí.";return}
-  const src=imageSrc(p),model=modelMarkup(p,"feature-model");
-  media.innerHTML=model||(src?'<img class="feature-image" src="'+esc(src)+'" alt="'+esc(p.title)+'" referrerpolicy="no-referrer">' : '<span class="feature-empty">Imagen no disponible</span>');
+  const gallery=imageList(p),src=gallery[0]||"",model=modelMarkup(p,"feature-model");
+  media.innerHTML=model||(src?'<img class="feature-image feature-gallery-image" data-images="'+esc(JSON.stringify(gallery))+'" data-index="0" data-attempts="0" src="'+esc(src)+'" alt="'+esc(p.title)+'" referrerpolicy="no-referrer"><span class="no-image" hidden>Imagen no disponible</span>' : '<span class="feature-empty">Imagen no disponible</span>');
   $("featureSource").textContent="CENTRAL · "+String(p.platform||"producto").toUpperCase();
   $("featureTitle").textContent=p.title||"Producto";
   $("featureDescription").textContent=p.subtitle||p.description||"Producto publicado en Central.";
   $("featurePrice").textContent=p.price_display||money(p.sale_price??p.current_price,p.currency);
   $("featureMeta").innerHTML=[p.brand,p.category,p.platform,p.seller_name?"Vendedor: "+p.seller_name:"Vendedor no informado"].filter(Boolean).map(x=>'<span class="pill">'+esc(x)+'</span>').join("")+(Number(p.discount_pct)>=40?'<span class="pill">'+Math.round(Number(p.discount_pct))+'% de descuento</span>':"");
-  const gallery=(p.image_gallery||[]).map(imageProxy).filter(Boolean);
-  $("variants").innerHTML=gallery.length>1?gallery.slice(0,5).map((im,i)=>'<button class="variant '+(i===0?"active":"")+'" data-image="'+esc(im)+'" style="background-image:url(\''+esc(im).replace(/'/g,"%27")+'\');background-size:cover" aria-label="Imagen '+(i+1)+'"></button>').join(""):"";
+  $("variants").innerHTML=!model&&gallery.length>1?gallery.slice(0,8).map((im,i)=>'<button class="variant '+(i===0?"active":"")+'" data-image="'+esc(im)+'" data-index="'+i+'" style="background-image:url(&quot;'+esc(im)+'&quot;);background-size:cover" aria-label="Imagen '+(i+1)+'"></button>').join(""):"";
   const own=isOwn(p), ext=externalUrl(p);
   const action=$("featureAction");
   if(own){action.textContent="Añadir · pagar con Wompi";action.href="#";action.onclick=e=>{e.preventDefault();addToCart(p)}}
@@ -1399,15 +1437,15 @@ function renderFeature(){
   else{action.textContent="Ver ficha";action.href=productUrl(p);action.target="_self";action.onclick=null}
   $("featureFicha").href=productUrl(p);
   $("featureFicha").target="_self";
-  document.querySelectorAll(".variant").forEach(b=>b.onclick=()=>{media.innerHTML='<img class="feature-image" src="'+b.dataset.image+'" alt="'+esc(p.title)+'" referrerpolicy="no-referrer">';document.querySelectorAll(".variant").forEach(x=>x.classList.remove("active"));b.classList.add("active")});
+  document.querySelectorAll(".variant").forEach(b=>b.onclick=()=>{const image=media.querySelector(".feature-gallery-image");if(image){image.dataset.index=b.dataset.index;image.dataset.attempts="0";image.hidden=false;image.style.display="";image.src=b.dataset.image;if(image.nextElementSibling)image.nextElementSibling.hidden=true}document.querySelectorAll(".variant").forEach(x=>x.classList.remove("active"));b.classList.add("active")});
 }
 function card(p){
-  const own=isOwn(p), ext=externalUrl(p), price=p.price_display||money(p.sale_price??p.current_price,p.currency), src=imageSrc(p), discount=Number(p.discount_pct||0), original=Number(p.original_price||0);
+  const own=isOwn(p), ext=externalUrl(p), price=p.price_display||money(p.sale_price??p.current_price,p.currency), images=imageList(p), src=images[0]||"", discount=Number(p.discount_pct||0), original=Number(p.original_price||0);
   let main;
   if(own) main='<button class="btn primary wide add" data-id="'+esc(p.product_id||p.id)+'">Añadir · pagar con Wompi</button>';
   else if(ext) main='<a class="btn primary wide" href="'+esc(ext)+'" target="_blank" rel="nofollow sponsored noopener">Comprar en '+esc(purchaseChannel(p))+'</a>';
   else main='<a class="btn primary wide" href="'+productUrl(p)+'">Ver ficha</a>';
-  const visual=modelMarkup(p,"card-model")||(src?'<img src="'+esc(src)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer"><div class="no-image" hidden>Imagen no disponible</div>':'<div class="no-image">Imagen no disponible</div>');
+  const visual=modelMarkup(p,"card-model")||(src?'<img class="product-gallery-image" data-images="'+esc(JSON.stringify(images))+'" data-index="0" data-attempts="0" src="'+esc(src)+'" alt="'+esc(p.title)+'" loading="lazy" referrerpolicy="no-referrer"><div class="no-image" hidden>Imagen no disponible</div>'+(images.length>1?'<div class="product-gallery-controls"><button type="button" data-product-gallery-step="-1" aria-label="Imagen anterior">‹</button><span class="product-gallery-count">1 / '+images.length+'</span><button type="button" data-product-gallery-step="1" aria-label="Imagen siguiente">›</button></div>':''):'<div class="no-image">Imagen no disponible</div>');
   return '<article class="card"><div class="card-media">'+visual+'<span class="badge">'+(modelSrc(p)?"MODELO 3D":discount>=40?Math.round(discount)+'% DTO':esc(p.platform||"Central"))+'</span></div><div class="card-body"><div class="category">'+esc(p.category||"Producto")+'</div><h3>'+esc(p.title)+'</h3><small>'+esc(p.subtitle||"Producto publicado por Central")+'</small><small>Vendedor: '+esc(p.seller_name||"No informado")+'</small><div class="card-price">'+esc(price)+'</div>'+(discount>=40&&original>0?'<small style="text-decoration:line-through;color:#888">Antes: '+esc(money(original,p.currency))+'</small>':'')+'<div class="card-actions">'+main+'<a class="btn" href="'+productUrl(p)+'">Ficha</a></div></div></article>'
 }
 function renderGrid(){
@@ -1454,12 +1492,37 @@ $("stageCarousel").addEventListener("mouseenter",()=>{heroPaused=true});$("stage
 $("stageCarousel").addEventListener("focusin",()=>{heroPaused=true});$("stageCarousel").addEventListener("focusout",e=>{if(!$("stageCarousel").contains(e.relatedTarget))heroPaused=false});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")startHeroRotation()});
 document.addEventListener("click",e=>{
+  const galleryButton=e.target.closest("[data-product-gallery-step]");
+  if(galleryButton){
+    const card=galleryButton.closest(".card"),image=card?.querySelector(".product-gallery-image");
+    if(image){
+      const images=JSON.parse(image.dataset.images||"[]");
+      if(images.length>1){
+        const index=(Number(image.dataset.index||0)+Number(galleryButton.dataset.productGalleryStep)+images.length)%images.length;
+        image.dataset.index=String(index);image.dataset.attempts="0";image.hidden=false;image.style.display="";image.src=images[index];
+        if(image.nextElementSibling)image.nextElementSibling.hidden=true;
+        const count=card.querySelector(".product-gallery-count");if(count)count.textContent=(index+1)+" / "+images.length;
+      }
+    }
+    e.preventDefault();e.stopPropagation();return;
+  }
   const add=e.target.closest(".add"),minus=e.target.closest("[data-minus]"),plus=e.target.closest("[data-plus]"),rem=e.target.closest("[data-remove]");
   if(add){const p=products.find(x=>String(x.product_id||x.id)===String(add.dataset.id));if(p)addToCart(p)}
   if(minus){const x=cart.find(i=>String(i.product_id)===String(minus.dataset.minus));if(x){x.quantity--;if(x.quantity<=0)cart=cart.filter(i=>i!==x);saveCart()}}
   if(plus){const x=cart.find(i=>String(i.product_id)===String(plus.dataset.plus));if(x){x.quantity++;saveCart()}}
   if(rem){cart=cart.filter(i=>String(i.product_id)!==String(rem.dataset.remove));saveCart()}
 });
+document.addEventListener("error",e=>{
+  const image=e.target.closest?.(".product-gallery-image,.feature-gallery-image");
+  if(!image)return;
+  const images=JSON.parse(image.dataset.images||"[]"),attempts=Number(image.dataset.attempts||0)+1;
+  if(attempts>=images.length){image.hidden=true;image.style.display="none";if(image.nextElementSibling)image.nextElementSibling.hidden=false;return}
+  image.dataset.attempts=String(attempts);
+  const index=(Number(image.dataset.index||0)+1)%images.length;
+  image.dataset.index=String(index);image.src=images[index];
+  const card=image.closest(".card"),count=card?.querySelector(".product-gallery-count");
+  if(count)count.textContent=(index+1)+" / "+images.length;
+},true);
 function openCart(){$("drawer").classList.add("open")}function closeCart(){$("drawer").classList.remove("open")}
 $("cartBtn").onclick=openCart;$("cartTop").onclick=openCart;$("close").onclick=closeCart;
 $("drawer").onclick=e=>{if(e.target===$("drawer"))closeCart()};
