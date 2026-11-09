@@ -504,7 +504,9 @@ def public_product(product_id: int):
     try:
         with conn.cursor() as cur:
             cur.execute(f"""SELECT pc.id AS publication_id,pc.product_id,pc.title,pc.subtitle,pc.price_display,
-                pc.sale_price,pc.opportunity_score,pc.footer,p.description,pc.sale_price AS current_price,
+                pc.sale_price,pc.opportunity_score,pc.footer,
+                CASE WHEN p.source_metadata->'field_sources'->>'description' IN ('public_product_page', 'user') THEN p.description ELSE NULL END AS description,
+                pc.sale_price AS current_price,
                 CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS previous_price,
                 CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') THEN p.previous_price ELSE NULL END AS original_price,
                 CASE WHEN p.source_metadata->'field_sources'->>'previous_price' IN ('public_product_page', 'user') AND p.previous_price>0 AND pc.sale_price>0 THEN ROUND((p.previous_price-pc.sale_price)/p.previous_price*100,2) ELSE NULL END AS discount_pct,p.currency,
@@ -515,7 +517,8 @@ def public_product(product_id: int):
                 pl.name AS platform,c.name AS category,
                 CASE WHEN p.source_metadata->'field_sources'->>'rating' IN ('public_product_page', 'user') THEN p.rating ELSE NULL END AS rating,
                 CASE WHEN p.source_metadata->'field_sources'->>'reviews_count' IN ('public_product_page', 'user') THEN p.reviews_count ELSE NULL END AS reviews_count,p.updated_at,
-                seller.name AS seller_name,p.source_metadata->>'seller_url' AS seller_url
+                CASE WHEN p.source_metadata->'field_sources'->>'seller' IN ('public_product_page', 'user') THEN seller.name ELSE NULL END AS seller_name,
+                p.source_metadata->>'seller_url' AS seller_url
                 FROM published_cards pc JOIN products p ON p.id=pc.product_id JOIN platforms pl ON pl.id=p.platform_id
                 LEFT JOIN categories c ON c.id=p.category_id
                 LEFT JOIN sellers seller ON seller.id=p.seller_id
