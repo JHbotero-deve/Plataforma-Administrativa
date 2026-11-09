@@ -41,12 +41,13 @@ class ApiCatalogQualityTests(unittest.TestCase):
         connection.close.assert_called_once()
 
 
-    def test_products_endpoint_hides_unverified_image_gallery(self):
+    def test_products_endpoint_preserves_gallery_for_admin_cards(self):
         connection, cursor = self._connection()
         with patch.object(api, "get_connection", return_value=connection):
             self.assertEqual(api.list_products(limit=50, offset=0), [])
         query = cursor.execute.call_args.args[0]
-        self.assertIn("ELSE '[]'::jsonb END AS image_gallery", query)
+        self.assertIn("COALESCE(p.image_gallery, '[]'::jsonb) AS image_gallery", query)
+        self.assertIn("field_sources'->>'image_url'", query)
 
     def test_public_product_detail_rejects_stale_cards_and_hides_unverified_discounts(self):
         connection, cursor = self._connection()
@@ -59,7 +60,7 @@ class ApiCatalogQualityTests(unittest.TestCase):
         self.assertIn("missing_fields", query)
         self.assertIn("field_sources", query)
         self.assertIn("previous_price", query)
-        self.assertIn("ELSE '[]'::jsonb END AS image_gallery", query)
+        self.assertIn("COALESCE(p.image_gallery, '[]'::jsonb) AS image_gallery", query)
         connection.close.assert_called_once()
 
     def test_affiliate_click_and_sitemap_exclude_stale_cards(self):
