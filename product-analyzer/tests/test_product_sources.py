@@ -516,5 +516,25 @@ class ProductSourcesTests(unittest.TestCase):
         self.assertEqual(result["description"], "Descripción pública de AliExpress")
         self.assertEqual(len(result["gallery_urls"]), 2)
 
+    def test_link_amazon_short_domain_follows_redirect_to_product_page(self):
+        redirect = MagicMock(status_code=302, headers={"Location": "https://www.amazon.com/dp/B012345678"})
+        page = MagicMock(status_code=200, text='<html><meta property="og:title" content="Producto Amazon"></html>')
+        with patch.object(product_sources.requests, "get", side_effect=[redirect, page]) as request:
+            result = product_sources._public_product_page("https://link.amazon/B04ZSERdW", "amazon")
+        self.assertEqual(result["resolved_url"], "https://www.amazon.com/dp/B012345678")
+        self.assertEqual(request.call_count, 2)
+        redirect.close.assert_called_once()
+        page.close.assert_called_once()
+
+    def test_aliexpress_click_short_domain_follows_redirect_to_item(self):
+        redirect = MagicMock(status_code=302, headers={"Location": "https://www.aliexpress.com/item/1005001234567890.html"})
+        page = MagicMock(status_code=200, text='<html><meta property="og:title" content="Producto AliExpress"></html>')
+        with patch.object(product_sources.requests, "get", side_effect=[redirect, page]) as request:
+            result = product_sources._public_product_page("https://s.click.aliexpress.com/e/_mtoJ8OF", "aliexpress")
+        self.assertEqual(result["resolved_url"], "https://www.aliexpress.com/item/1005001234567890.html")
+        self.assertEqual(request.call_count, 2)
+        redirect.close.assert_called_once()
+        page.close.assert_called_once()
+
 if __name__ == "__main__":
     unittest.main()
