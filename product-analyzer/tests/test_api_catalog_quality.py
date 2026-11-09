@@ -41,6 +41,10 @@ class ApiCatalogQualityTests(unittest.TestCase):
         query, parameters = cursor.execute.call_args.args
         self.assertIn("field_sources", query)
         self.assertIn("missing_fields", query)
+        self.assertIn("field_sources'->>'title' IN ('public_product_page', 'user')", query)
+        self.assertIn("field_sources'->>'price' IN ('public_product_page', 'user')", query)
+        self.assertIn("field_sources'->>'image_url' IN ('public_product_page', 'user')", query)
+        self.assertIn("LOWER(COALESCE(p.title, '')) NOT LIKE 'producto amazon %%'", query)
         self.assertIn("p.catalog_expires_at IS NULL OR p.catalog_expires_at > NOW()", query)
         self.assertIn("%enlace-de-la-imagen.jpg%", query)
         self.assertIn("p.product_url IS NOT NULL", query)
