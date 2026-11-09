@@ -502,7 +502,7 @@ def enrich_pending_products(conn, limit=80, max_workers=4, force=False):
             missing = metadata.get("missing_fields") or []
             error = str(metadata.get("enrichment_error") or "")
             error_type = error.split(":", 1)[0] if ":" in error else "metadatos públicos incompletos"
-            status = re.search(r"\\b[45]\\d{2}\\b", error)
+            status = re.search(r"\b[45]\d{2}\b", error)
             reason = f"{error_type} HTTP {status.group(0)}" if status else error_type
             print(f"[url-enrichment] producto={row['id']} tienda={row['platform']} estado=parcial faltan={','.join(missing) or 'sin identificar'} causa={reason[:70]}")
         gallery = enriched.get("gallery_urls") or row.get("image_gallery") or []
